@@ -6,7 +6,8 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 const CHARS = ['Knight', 'Mage', 'Rogue', 'Rogue_Hooded', 'Barbarian', 'Skeleton_Minion', 'Skeleton_Warrior', 'Skeleton_Mage', 'Skeleton_Rogue'];
 const PROPS_CHAR = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Staff', 'Skeleton_Crossbow', 'Skeleton_Shield_Small_A', 'Skeleton_Shield_Large_A'];
 const DUNGEON = ['floor_tile_large', 'floor_tile_large_rocks', 'floor_tile_small_broken_A', 'floor_tile_small_weeds_A', 'floor_dirt_large', 'wall', 'wall_cracked', 'wall_broken', 'wall_half', 'pillar', 'pillar_decorated', 'torch_mounted', 'torch_lit', 'barrel_large', 'barrel_small', 'box_stacked', 'crates_stacked', 'chest', 'chest_gold', 'rubble_large', 'rubble_half', 'banner_patternA_red', 'banner_thin_blue', 'column', 'stairs', 'coin_stack_medium', 'candle_triple', 'table_long_broken', 'keg', 'bottle_A_brown', 'sword_shield_broken', 'trunk_large_A', 'shelf_small_candles'];
-const TOWN = ['building_tavern_blue', 'building_market_red', 'building_church_blue', 'building_blacksmith_green', 'building_home_A_yellow', 'building_home_B_red', 'building_home_A_blue', 'building_well_blue', 'building_windmill_yellow', 'building_tower_A_blue', 'tree_single_A', 'tree_single_B', 'trees_A_medium', 'trees_B_medium', 'rock_single_A', 'rock_single_C', 'fence_wood_straight', 'wall_straight', 'tent', 'barrel', 'crate_A_big', 'sack', 'weaponrack', 'wheelbarrow', 'flag_red', 'bucket_water', 'hills_A_trees', 'mountain_A_grass_trees', 'waterlily_A', 'waterplant_A', 'resource_lumber'];
+const TOWN = ['building_tavern_blue', 'building_market_red', 'building_church_blue', 'building_blacksmith_green', 'building_home_A_yellow', 'building_home_B_red', 'building_home_A_blue', 'building_well_blue', 'building_windmill_yellow', 'building_tower_A_blue', 'tree_single_A', 'tree_single_B', 'trees_A_medium', 'trees_B_medium', 'rock_single_A', 'rock_single_C', 'fence_wood_straight', 'wall_straight', 'tent', 'barrel', 'crate_A_big', 'sack', 'weaponrack', 'wheelbarrow', 'flag_red', 'bucket_water', 'hills_A_trees', 'mountain_A_grass_trees', 'waterlily_A', 'waterplant_A', 'resource_lumber',
+  'building_home_A_green', 'building_home_B_blue', 'building_home_B_green', 'building_home_A_red', 'building_home_B_yellow', 'building_grain', 'building_lumbermill_yellow', 'building_stage_A', 'building_watermill_blue', 'building_tower_B_red', 'building_market_yellow', 'building_archeryrange_green', 'fence_wood_straight_gate', 'trees_A_small', 'tree_single_A_cut', 'rock_single_B', 'hills_B_trees', 'crate_open', 'pallet', 'target', 'bucket_arrows', 'flag_blue', 'flag_yellow', 'cloud_big', 'crate_long_A', 'ladder', 'resource_stone', 'hill_single_A'];
 
 export const Assets = { models: {}, anims: {}, ready: false };
 
@@ -101,11 +102,23 @@ export class CharModel {
     this.play(opts.idle || 'Idle', 0);
   }
   setGear(weapon, offhand) {
-    const acc = CLASS_ACCESSORIES[this.name];
+    const acc = this.gearDef || CLASS_ACCESSORIES[this.name];
     if (!acc) return;
     for (const n of ALL_ACCESSORIES) if (this.parts[n]) this.parts[n].visible = false;
     if (weapon) for (const n of acc.weapon) if (this.parts[n]) this.parts[n].visible = true;
     if (offhand) for (const n of acc.offhand) if (this.parts[n]) this.parts[n].visible = true;
+  }
+  applyLook(cls, look) {
+    this.gearDef = cls.gear ? cls.gear[look.gear || 0] || cls.gear[0] : null;
+    if (cls.headgear && this.parts[cls.headgear]) this.parts[cls.headgear].visible = look.helm !== false;
+    for (const k in this.parts) {
+      if (/Cape|Cloak/.test(k)) this.parts[k].visible = look.capeOn !== false;
+      if (look.tint && look.tint !== '#ffffff' && /_(ArmLeft|ArmRight|Body|LegLeft|LegRight)$/.test(k)) {
+        const m = this.parts[k]; m.material = m.material.clone(); m.material.color.set(look.tint);
+      }
+    }
+    this.setCapeColor(look.cape || cls.cape);
+    this.setGear(true, true);
   }
   setCapeColor(c) {
     for (const k in this.parts) {

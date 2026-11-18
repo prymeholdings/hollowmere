@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { G, msg, maxHp, maxMp, armor, rollDamage, attackSpeed, critChance, stat, itemBonus, petDamage, petMaxHp, addXp, onKill, pickupItem } from './state.js';
+import { G, msg, maxHp, maxMp, armor, rollDamage, attackSpeed, critChance, critMult, stat, itemBonus, petDamage, petMaxHp, addXp, onKill, pickupItem } from './state.js';
 import { box, sphere, capsule, cyl, cone, humanoid, ring, rand, pick, flatDist, sfx, hex } from './util.js';
 import { itemColor } from './items.js';
 import { CharModel, prop } from './assets.js';
-import { CLASSES } from './skills.js';
+import { CLASSES, PET_COATS } from './skills.js';
 import { Settings } from './settings.js';
 
 const tmp = new THREE.Vector3();
@@ -55,8 +55,8 @@ export class Player extends Entity {
     super('player');
     const cls = CLASSES[G.cls] || CLASSES.Knight;
     const modelName = G.look?.hooded && cls.alt ? cls.alt : cls.model;
-    this.model = new CharModel(modelName);
-    this.model.setCapeColor(G.look?.cape || cls.cape);
+    this.model = new CharModel(modelName, { scale: 0.72 * (G.look?.height || 1) });
+    this.model.applyLook(cls, G.look || {});
     this.root.add(this.model.root);
     this.attacks = ATTACKS[G.cls] || ATTACKS.Knight;
     this.light = new THREE.PointLight(0xffd9a6, 14, 13, 1.4);
@@ -74,13 +74,13 @@ export class Player extends Entity {
     this.hitAnimCd = 0;
     this.refreshVisuals();
   }
-  refreshVisuals() { this.model.setGear(!!G.equipment.weapon, !!G.equipment.offhand); }
+  refreshVisuals() { this.model.setGear(!!G.equipment.weapon, true); }
   setTarget(t) { this.target = t; this.repath = 0; }
   moveTo(p) { this.target = null; this.path = G.level.findPath(this.pos, p); }
   takeDamage(d) {
     if (this.dead) return;
     d = d * 100 / (100 + armor());
-    if (Math.random() < Math.min(0.25, stat('dex') * 0.004)) { G.main.floatText(this.pos, 'Dodge', '#cccccc', 16, 2.2); return; }
+    if (Math.random() < Math.min(0.25, stat('dex') * 0.004) + (G.buffs.smoke > 0 ? 0.3 : 0)) { G.main.floatText(this.pos, 'Dodge', '#cccccc', 16, 2.2); return; }
     G.hp -= d;
     G.main.floatText(this.pos, Math.round(d), '#ff5555', 20, 2.2);
     G.main.hurtFlash(d / maxHp());
@@ -108,12 +108,12 @@ export class Player extends Entity {
     if (!e || e.dead) return;
     let d = rollDamage();
     const crit = Math.random() < critChance();
-    if (crit) d *= 2;
+    if (crit) d *= critMult();
     e.takeDamage(d, crit, 'phys');
     this.lastHit = e;
     G.main.fx.emit(e.pos.clone().setY(1), { count: crit ? 14 : 6, color: crit ? 0xffdd55 : 0xffffff, speed: 4, life: 0.25, size: 0.3 });
     if (crit) G.main.shake(0.12);
-    const leech = itemBonus('leech');
+    const leech = itemBonus('leech') + (G.skills.bloodthirst || 0) * 0.5;
     if (leech > 0) G.hp = Math.min(maxHp(), G.hp + d * leech / 100);
   }
   update(dt) {
@@ -121,8 +121,8 @@ export class Player extends Entity {
     if (this.dead) return;
     this.attackCd -= dt; this.castLock -= dt; this.hitAnimCd -= dt;
     if (this.pendingHit) { this.pendingHit.t -= dt; if (this.pendingHit.t <= 0) { this.doHit(this.pendingHit.e); this.pendingHit = null; } }
-    G.hp = Math.min(maxHp(), G.hp + dt * (0.3 + stat('vit') * 0.03));
-    G.mp = Math.min(maxMp(), G.mp + dt * (0.8 + stat('mag') * 0.06));
+    G.hp = Math.min(maxHp(), G.hp + dt * (0.3 + stat('vit') * 0.03 + (G.skills.second_wind || 0) * 0.6));
+    G.mp = Math.min(maxMp(), G.mp + dt * (0.8 + stat('mag') * 0.06) * (1 + (G.skills.arcane_flow || 0) * 0.12));
     if (this.spinT > 0) { this.spinT -= dt; }
     const tg = this.target;
     if (tg && this.castLock <= 0) {
@@ -134,14 +134,14 @@ export class Player extends Entity {
           this.path = [];
           this.face(tg.pos, dt);
           if (isEnemy) { if (this.attackCd <= 0) this.attack(tg); }
-          else { this.target = null; if (tg.type === 'interact' && !['merchant', 'quest', 'healer'].includes(tg.kind)) this.model.once('Interact', { timeScale: 2 }); G.main.interact(tg); }
+          else { this.target = null; if (tg.type === 'interact' && !['merchant', 'quest', 'healer', 'blacksmith', 'villager'].includes(tg.kind)) this.model.once('Interact', { timeScale: 2 }); G.main.interact(tg); }
         } else {
           this.repath -= dt;
           if (this.repath <= 0 || !this.path.length) { this.repath = 0.25; this.path = G.level.findPath(this.pos, tg.pos); }
         }
       }
     }
-    const speed = 6.2 * (G.buffs.speed > 0 ? 1.25 : 1);
+    const speed = 6.2 * (G.buffs.speed > 0 ? 1.25 : 1) * (1 + (G.skills.swift_feet || 0) * 0.04);
     const moving = this.castLock <= 0 && this.followPath(this.path, speed, dt);
     if (moving && this.model.oneShot && !this.dead) { /* let attacks finish while moving */ }
     this.model.play(moving ? 'Running_A' : 'Idle', 0.15, moving ? 1.1 : 1);
@@ -464,12 +464,13 @@ export class Pet extends Entity {
       for (const [x, z] of [[-0.15, -0.35], [0.15, -0.35], [-0.15, 0.35], [0.15, 0.35]]) { const l = box(0.1, 0.7, 0.1, 0xccddee); l.position.set(x, 0.35, z); g.add(l); }
     } else {
       // Pip, a small lantern-tailed fox
-      const b = box(0.38, 0.32, 0.7, 0xd97326); b.position.y = 0.38; g.add(b);
-      const hd = sphere(0.2, 0xe08033); hd.position.set(0, 0.6, 0.38); g.add(hd);
+      const coat = (PET_COATS.find((c) => c.key === G.look?.pet) || PET_COATS[0]).color;
+      const b = box(0.38, 0.32, 0.7, coat); b.position.y = 0.38; g.add(b);
+      const hd = sphere(0.2, coat); hd.position.set(0, 0.6, 0.38); g.add(hd);
       const snout = box(0.1, 0.1, 0.18, 0xf2e6d9); snout.position.set(0, 0.55, 0.58); g.add(snout);
-      for (const x of [-0.1, 0.1]) { const ear = cone(0.07, 0.18, 0xd97326); ear.position.set(x, 0.82, 0.35); g.add(ear); }
+      for (const x of [-0.1, 0.1]) { const ear = cone(0.07, 0.18, coat); ear.position.set(x, 0.82, 0.35); g.add(ear); }
       for (const [x, z] of [[-0.12, -0.25], [0.12, -0.25], [-0.12, 0.25], [0.12, 0.25]]) { const l = box(0.08, 0.25, 0.08, 0x592e14); l.position.set(x, 0.12, z); g.add(l); }
-      const tail = box(0.12, 0.12, 0.45, 0xd97326); tail.position.set(0, 0.55, -0.5); tail.rotation.x = 0.6; g.add(tail); this.tail = tail;
+      const tail = box(0.12, 0.12, 0.45, coat); tail.position.set(0, 0.55, -0.5); tail.rotation.x = 0.6; g.add(tail); this.tail = tail;
       const tip = sphere(0.09, 0xffdd88, 3); tip.position.set(0, 0.72, -0.7); tip.castShadow = false; g.add(tip); this.tip = tip;
     }
     this.model = g;
@@ -644,6 +645,7 @@ const NPC_LOOK = {
   merchant: { model: 'Rogue_Hooded', cape: '#a0602a', gear: false },
   quest: { model: 'Knight', cape: '#1f3f8c', gear: true },
   healer: { model: 'Mage', cape: '#e8e8e8', gear: false, tint: 0xffffff },
+  blacksmith: { model: 'Barbarian', cape: '#5a3a1a', gear: true },
 };
 export class Interact extends Entity {
   constructor(kind, data) {
@@ -653,7 +655,7 @@ export class Interact extends Entity {
     let lc = '#fff6d9', ly = 1.5;
     const add = (o) => { this.root.add(o); return o; };
     switch (kind) {
-      case 'merchant': case 'quest': case 'healer': {
+      case 'merchant': case 'quest': case 'healer': case 'blacksmith': {
         const L = NPC_LOOK[kind];
         this.char = new CharModel(L.model, { scale: 0.75 });
         this.char.setGear(L.gear, L.gear);
@@ -671,6 +673,10 @@ export class Interact extends Entity {
           this.bob.position.y = 2.6;
           const rack = add(prop('weaponrack')); rack.scale.setScalar(5); rack.position.set(1.4, 0, -0.6);
           lc = '#a6ffa6';
+        } else if (kind === 'blacksmith') {
+          const r = add(prop('weaponrack')); r.scale.setScalar(5); r.position.set(-1.5, 0, -0.4);
+          const a = add(prop('barrel')); a.scale.setScalar(5); a.position.set(1.4, 0, -0.3);
+          lc = '#ffb380';
         } else {
           const c = add(prop('candle_triple')); c.position.set(0.9, 0, 0.4);
           lc = '#b3e6ff';
@@ -739,7 +745,7 @@ export class Interact extends Entity {
         lc = hex(col); break;
       }
     }
-    this.label = { text: data.name || kind, color: lc, y: ly, always: ['merchant', 'quest', 'healer', 'well', 'portal', 'stairs_down', 'stairs_up'].includes(kind) };
+    this.label = { text: data.name || kind, color: lc, y: ly, always: ['merchant', 'quest', 'healer', 'blacksmith', 'well', 'portal', 'stairs_down', 'stairs_up'].includes(kind) };
   }
   update(dt) {
     this.t += dt;
@@ -766,5 +772,65 @@ export class Interact extends Entity {
     this.label = null;
     if (this.bob) this.bob.visible = false;
     if (this.kind === 'relic') G.level.remove(this);
+  }
+}
+
+// ---------------------------------------------------------------- Villager (ambient townsfolk)
+export class Villager extends Entity {
+  constructor(d) {
+    super('interact');
+    this.kind = 'villager';
+    this.data = d;
+    this.mode = d.mode || 'wander';
+    this.home = null;
+    this.path = [];
+    this.wait = rand(0.5, 3);
+    this.pickR = 0.7; this.pickH = 0.9;
+    this.char = new CharModel(d.model, { scale: 0.72 * (d.scale || 1), tint: d.tint });
+    this.char.applyLook({ gear: d.gear ? [d.gear] : [{ weapon: [], offhand: [] }], headgear: d.headgear, cape: d.cape || '#6a4a2a' }, { helm: !!d.helm, capeOn: d.capeOn !== false, cape: d.cape, gear: 0 });
+    this.root.add(this.char.root);
+    this.label = { text: d.name, color: '#e8dcc0', y: 2.2 * (d.scale || 1), always: false };
+    this.idleAnim = { sit: 'Sit_Floor_Idle', fish: 'Sit_Floor_Idle', chair: 'Sit_Chair_Idle', guard: '2H_Melee_Idle', perform: 'Spellcasting' }[this.mode] || 'Idle';
+    this.char.play(this.idleAnim, 0);
+    this.talkCd = 0;
+  }
+  talk() {
+    if (this.talkCd > 0) return;
+    this.talkCd = 3;
+    const line = pick(this.data.lines);
+    G.main.floatText(this.pos, `"${line}"`, '#f3e6c4', 15, 2.4 * (this.data.scale || 1));
+    msg(`${this.data.name}: "${line}"`, '#e8dcc0');
+    if (this.mode === 'wander') { this.path = []; this.wait = 3; }
+    this.char.once(Math.random() < 0.5 ? 'Interact' : 'Cheer', { timeScale: 1.2 });
+    sfx('ui');
+  }
+  update(dt) {
+    this.char.update(dt);
+    this.talkCd -= dt;
+    if (!this.home) this.home = this.pos.clone();
+    const pl = G.player;
+    const near = pl && flatDist(pl.pos, this.pos) < 3;
+    if (this.mode !== 'wander') {
+      if (this.mode === 'perform' && Math.random() < dt * 0.15) this.char.once('Cheer', { timeScale: 1 });
+      if (this.mode === 'guard' && near) this.face(pl.pos, dt * 0.3);
+      return;
+    }
+    if (near) { this.path = []; this.face(pl.pos, dt * 0.5); this.char.play('Idle', 0.25); return; }
+    if (this.path.length) {
+      this.followPath(this.path, this.data.speed || 1.9, dt);
+      this.char.play('Walking_A', 0.25, 1);
+      return;
+    }
+    this.char.play('Idle', 0.3);
+    this.wait -= dt;
+    if (this.wait <= 0) {
+      this.wait = rand(2.5, 7);
+      if (Math.random() < 0.2) { this.char.once(pick(['Interact', 'Cheer', 'PickUp']), { timeScale: 0.9 }); return; }
+      const r = this.data.roam || 9;
+      for (let i = 0; i < 6; i++) {
+        const t = this.home.clone().add(new THREE.Vector3(rand(-r, r), 0, rand(-r, r)));
+        if (G.level.walkable(t)) { this.path = G.level.findPath(this.pos, t); break; }
+      }
+    }
   }
 }

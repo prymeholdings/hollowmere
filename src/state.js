@@ -3,7 +3,8 @@ import { ENEMIES, QUEST_GIVER, FAME_STEPS, FAME_RANKS } from './data.js';
 import { randi, pick, sfx } from './util.js';
 
 const SAVE_KEY = 'hollowmere_save_v2';
-export const SKILL_ZERO = { firebolt: 0, lightning: 0, nova: 0, meteor: 0, heal: 0, bones: 0, whirlwind: 0, slam: 0, knives: 0, blink: 0, warcry: 0, mastery: 0, pet_bond: 0, toughness: 0 };
+export const SKILL_ZERO = { firebolt: 0, lightning: 0, nova: 0, meteor: 0, blizzard: 0, heal: 0, bones: 0, whirlwind: 0, slam: 0, earthquake: 0, knives: 0, blink: 0, smoke: 0, blades: 0, warcry: 0,
+  mastery: 0, toughness: 0, brutality: 0, second_wind: 0, arcane_flow: 0, elemental: 0, swift_feet: 0, pet_bond: 0, lethality: 0, bloodthirst: 0, fortune: 0 };
 export const BACKPACK_MAX = 40;
 
 export const G = {
@@ -15,7 +16,7 @@ export function msg(t, c = '#e6e6e6') { G.onMessage(t, c); }
 
 export function reset() {
   Object.assign(G, {
-    heroName: 'Wanderer', cls: 'Knight', look: { cape: '#8c1f1f', hooded: false }, lvl: 1, xp: 0, statPoints: 0, skillPoints: 1,
+    heroName: 'Wanderer', cls: 'Knight', look: { cape: '#8c1f1f', hooded: false, helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox' }, lvl: 1, xp: 0, statPoints: 0, skillPoints: 1,
     base: { str: 10, dex: 10, vit: 10, mag: 10 },
     skills: { ...SKILL_ZERO },
     hotbar: { rmb: 'firebolt', q: 'heal', w: 'nova', e: 'lightning', r: 'meteor' }, cds: {},
@@ -40,7 +41,7 @@ export function itemBonus(s) {
 }
 export const stat = (s) => G.base[s] + itemBonus(s);
 export const maxHp = () => (40 + stat('vit') * 5 + G.lvl * 6 + itemBonus('life')) * (1 + 0.08 * (G.skills.toughness || 0));
-export const maxMp = () => 14 + stat('mag') * 3 + G.lvl * 2 + itemBonus('mana');
+export const maxMp = () => (14 + stat('mag') * 3 + G.lvl * 2 + itemBonus('mana')) * (1 + 0.06 * (G.skills.arcane_flow || 0));
 export function armor() {
   let a = itemBonus('armor');
   for (const k in G.equipment) { const it = G.equipment[k]; if (it && it.armor) a += it.armor; }
@@ -57,7 +58,8 @@ export function weaponDamage() {
 }
 export const rollDamage = () => { const d = weaponDamage(); return d[0] + Math.random() * (d[1] - d[0]); };
 export const attackSpeed = () => 1.15 * (1 + stat('dex') * 0.008 + itemBonus('aspd') / 100 + G.skills.mastery * 0.03) * (G.buffs.speed > 0 ? 1.3 : 1);
-export const critChance = () => 0.05 + stat('dex') * 0.002;
+export const critChance = () => 0.05 + stat('dex') * 0.002 + (G.skills.lethality || 0) * 0.015;
+export const critMult = () => 2 + (G.skills.brutality || 0) * 0.15;
 export const petDamage = () => (3 + G.lvl * 1.4) * (1 + 0.15 * G.skills.pet_bond);
 export const petMaxHp = () => (35 + G.lvl * 10) * (1 + 0.15 * G.skills.pet_bond);
 export const xpToNext = () => Math.floor(50 * Math.pow(G.lvl, 1.55));
@@ -221,7 +223,9 @@ export function loadGame() {
   let d;
   try { d = JSON.parse(raw); } catch (e) { return false; }
   reset();
+  const look0 = { ...G.look };
   for (const k of SAVE_FIELDS) if (k in d) G[k] = d[k];
+  G.look = { ...look0, ...(d.look || {}) };
   G.base = { str: 10, dex: 10, vit: 10, mag: 10, ...d.base };
   G.skills = { ...SKILL_ZERO, ...d.skills };
   G.cds = {};

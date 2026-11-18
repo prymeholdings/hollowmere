@@ -3,10 +3,31 @@ import { G } from './state.js';
 import { ENEMIES, BOSSES, QUEST_GIVER } from './data.js';
 import { rand, randi, pick, box, cyl, cone, sphere } from './util.js';
 import { generate } from './items.js';
-import { Enemy, Interact, Loot } from './entities.js';
+import { Enemy, Interact, Loot, Villager } from './entities.js';
 import { prop, propMesh } from './assets.js';
+import { groundDetail, addDetail, grassField, flowers, grimeTexture } from './textures.js';
 
 export const CELL = 2;
+
+// Ambient townsfolk (original characters and lines)
+const VILLAGERS = [
+  { name: 'Marta the Baker', model: 'Mage', tint: 0xffe0c0, at: [22, 16], lines: ['Fresh bread at dawn, if the Wells stay quiet.', 'My oven has been warmer since you came to town.', 'Bring me wheat from the farm and I will bake you something grand. Someday.'] },
+  { name: 'Old Tobin', model: 'Knight', tint: 0xb0b0b0, scale: 0.95, at: [12, 18], lines: ['I went down the Well once. Once.', 'Back in my day the skeletons had manners.', 'Mind the third floor. It hums.'] },
+  { name: 'Lettie', model: 'Rogue', tint: 0xffd0e0, scale: 0.62, speed: 2.6, roam: 12, at: [18, 24], lines: ['Are you a real hero?', 'I found a shiny rock. It is mine now.', 'Mama says not to go near the Well.'] },
+  { name: 'Pell', model: 'Barbarian', tint: 0xd0ffd0, scale: 0.6, speed: 2.6, roam: 12, at: [16, 24], lines: ['Race you to the pond!', 'When I grow up I will fight the Drowned Warden.', 'Your fox is the best fox.'] },
+  { name: 'Hanne the Farmer', model: 'Barbarian', tint: 0xffe8a0, at: [8, 39.5], roam: 4, lines: ['Good soil this year. Strange glowing worms, though.', 'The crows will not go near the Well field.', 'Nothing beats an honest harvest.'] },
+  { name: 'Gaffer Rusk', model: 'Knight', tint: 0xc8a080, mode: 'fish', at: [10.5, 25.5], ry: -Math.PI / 2, lines: ['Shh. You will scare the perch.', 'Feed a glowfin to your fox. Trust me.', 'Biggest catch I ever saw was an old boot. Still proud of it.'] },
+  { name: 'Wren the Bard', model: 'Rogue_Hooded', tint: 0xd8c0ff, mode: 'perform', cape: '#7a2a8a', at: [28, 41.2], lines: ['A song for the brave, a coin for the bard!', 'I am writing a ballad about you. It needs more dragons.', 'Every hero needs a theme tune.'] },
+  { name: 'Captain Arlo', model: 'Knight', mode: 'guard', helm: true, headgear: 'Knight_Helmet', gear: { weapon: ['2H_Sword'], offhand: [] }, cape: '#1f3f8c', at: [17, 31.5], lines: ['The south road is safe. For now.', 'Report anything strange that crawls out of the Well.', 'Stand tall, adventurer.'] },
+  { name: 'Guard Bexley', model: 'Knight', mode: 'guard', helm: true, headgear: 'Knight_Helmet', gear: { weapon: ['2H_Sword'], offhand: [] }, cape: '#1f3f8c', at: [33, 11.5], ry: -Math.PI / 2, lines: ['Move along.', 'Quiet shift. I like quiet shifts.', 'Heard the lumbermill is hiring.'] },
+  { name: 'Sister Ama', model: 'Mage', tint: 0xffffff, cape: '#e8e8e8', at: [26, 21], roam: 5, lines: ['Brother Fennick never sleeps. I worry.', 'May the light keep your lantern lit.', 'Rest is a weapon too.'] },
+  { name: 'Joss the Woodcutter', model: 'Barbarian', tint: 0xc0a080, at: [40, 16], roam: 6, lines: ['Timber for the walls, timber for the bridges.', 'Hear that creak? That is the mill singing.', 'Never trust a tree that moves.'] },
+  { name: 'Archer Tamsin', model: 'Rogue', tint: 0xc0ffc0, mode: 'guard', at: [39, 35.5], ry: Math.PI / 2, lines: ['Bullseye, three times running.', 'Want lessons? Bring arrows.', 'The skeleton archers below cheat. I am sure of it.'] },
+  { name: 'Merchant Faye', model: 'Rogue_Hooded', tint: 0xfff0b0, cape: '#c08020', at: [35.5, 41.5], roam: 3, lines: ['Silks from the coast! Well, from the cart.', 'Odessa undercuts me. Do not tell her I said that.', 'Everything is for sale, eventually.'] },
+  { name: 'Brin', model: 'Mage', tint: 0xb0d0ff, mode: 'sit', at: [23, 30], ry: Math.PI, lines: ['Lovely day for doing nothing.', 'I counted the clouds. Nineteen.', 'Shh, I am thinking.'] },
+  { name: 'Dorran', model: 'Knight', tint: 0xffc0a0, at: [36, 26], roam: 8, lines: ['My roof leaks. Again.', 'You look like someone who fights things.', 'Have you seen my goat?'] },
+  { name: 'Ivy', model: 'Rogue', tint: 0xffe0a0, scale: 0.62, speed: 2.4, roam: 10, at: [40, 9], lines: ['Tag, you are it!', 'I can climb the windmill. Almost.', 'Is your sword heavy?'] },
+];
 
 export class Level {
   constructor(scene, kind, floor) {
@@ -20,9 +41,11 @@ export class Level {
     this.blocked = [];
     if (kind === 'town') this.genTown(); else this.genDungeon();
     this.explored = new Uint8Array(this.w * this.h);
+    this.timeU = { value: 0 };
+    this.noAO = [];
     this.buildEnv();
     if (kind === 'town') { this.buildTownVisuals(); this.populateTown(); }
-    else { this.buildDungeonVisuals(); this.populateDungeon(); }
+    else { this.buildDungeonVisuals(); this.addDungeonDetail(); this.populateDungeon(); }
   }
 
   dispose() {
@@ -80,8 +103,8 @@ export class Level {
   }
 
   genTown() {
-    this.alloc(34, 34);
-    this.carve(1, 1, 32, 32);
+    this.alloc(48, 48);
+    this.carve(1, 1, 46, 46);
     this.buildings = [
       { name: 'building_market_red', c: [8, 6.5], s: 6, ry: 0, npc: 'merchant' },
       { name: 'building_tavern_blue', c: [26, 6.5], s: 6.5, ry: 0 },
@@ -91,6 +114,20 @@ export class Level {
       { name: 'building_home_B_red', c: [19.5, 26.5], s: 5.5, ry: Math.PI },
       { name: 'building_home_A_blue', c: [28.5, 15.5], s: 6, ry: -Math.PI / 2 },
       { name: 'building_tower_A_blue', c: [13, 27], s: 4.5, ry: 0 },
+      // east lane
+      { name: 'building_home_B_blue', c: [37.5, 5], s: 5.5, ry: 0 },
+      { name: 'building_home_A_red', c: [44, 5], s: 5.5, ry: 0 },
+      { name: 'building_lumbermill_yellow', c: [43.5, 15], s: 5.5, ry: -Math.PI / 2 },
+      { name: 'building_home_A_green', c: [37, 22], s: 5.5, ry: Math.PI / 2 },
+      { name: 'building_home_B_green', c: [44, 26], s: 5.5, ry: -Math.PI / 2 },
+      { name: 'building_archeryrange_green', c: [43.5, 35.5], s: 5, ry: -Math.PI / 2 },
+      // south lane
+      { name: 'building_grain', c: [4.5, 43], s: 5.5, ry: 0 },
+      { name: 'building_home_B_yellow', c: [12, 44], s: 5.5, ry: 0 },
+      { name: 'building_home_A_blue', c: [19, 44], s: 5.5, ry: 0 },
+      { name: 'building_stage_A', c: [28, 43.5], s: 5, ry: 0 },
+      { name: 'building_market_yellow', c: [35.5, 44], s: 5.5, ry: 0 },
+      { name: 'building_tower_B_red', c: [44, 44.5], s: 4.5, ry: 0 },
     ];
     this.blocked = [{ x: 4, y: 23, w: 7, h: 5, type: 'pond' }, { x: 16, y: 16, w: 2, h: 2, type: 'well' }];
     this.buildingObjs = [];
@@ -108,7 +145,7 @@ export class Level {
       this.buildingObjs.push(o);
     }
     for (const b of this.blocked) this.carve(b.x, b.y, b.w, b.h, 0);
-    this.trees = [[3, 9], [30, 10], [11, 31], [22, 31], [31, 21], [3, 31], [20, 11], [13, 11], [31, 30], [9, 20]];
+    this.trees = [[3, 9], [30, 10], [11, 31], [22, 31], [31, 21], [3, 31], [20, 11], [13, 11], [31, 30], [9, 20], [34, 12], [46, 20], [34, 30], [24, 36], [8, 36], [46, 40], [31, 46], [39, 33], [2, 37], [15, 38]];
     for (const [x, y] of this.trees) this.cells[this.idx(x, y)] = 0;
     this.startPos = this.toWorld(17, 21);
     this.portalPos = this.toWorld(20, 19);
@@ -242,12 +279,14 @@ export class Level {
       this.scene.fog = new THREE.Fog(0x9fb8d8, 55, 120);
       this.ambient = new THREE.HemisphereLight(0xd8e4ff, 0x5a6a40, 1.4);
       this.sun.color.set(0xffe2b8); this.sun.intensity = 2.6;
+      this.scene.environmentIntensity = 0.3;
     } else {
       const tint = [0x5a6a90, 0x8a5a4a, 0x4a7a5a, 0x7a4a8a][theme];
       this.scene.background = new THREE.Color(0x030305);
       this.scene.fog = new THREE.Fog(0x030305, 30, 58);
-      this.ambient = new THREE.HemisphereLight(tint, 0x2a2a34, 2.4);
+      this.ambient = new THREE.HemisphereLight(tint, 0x2a2a34, 1.9);
       this.sun.color.set(tint); this.sun.intensity = 1.3;
+      this.scene.environmentIntensity = 0.12;
     }
     this.root.add(this.ambient);
   }
@@ -393,15 +432,42 @@ export class Level {
     }
   }
 
+  addDungeonDetail() {
+    const theme = Math.floor((this.floor - 1) / 3) % 4;
+    const cellPx = 20;
+    const moss = ['rgba(70,110,60,0.35)', 'rgba(120,60,30,0.35)', 'rgba(60,120,70,0.4)', 'rgba(90,60,120,0.35)'][theme];
+    const isF = (x, y) => x >= 0 && y >= 0 && x < this.w && y < this.h && this.cells[this.idx(x, y)] > 0;
+    const t = grimeTexture(this.w * cellPx, cellPx, isF, this.w, this.h, moss);
+    const W = this.w * CELL;
+    const m = new THREE.MeshBasicMaterial({ map: t, transparent: true, blending: THREE.MultiplyBlending, premultipliedAlpha: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(W, W), m);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.set(W / 2 - CELL / 2, 0.025, W / 2 - CELL / 2);
+    plane.renderOrder = 1;
+    this.root.add(plane);
+    this.noAO.push(plane);
+    // reflective puddles
+    const pm = new THREE.MeshStandardMaterial({ color: 0x1a2430, roughness: 0.05, metalness: 0.6, transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+    for (let i = 0; i < 14; i++) {
+      const r = this.rooms[randi(0, this.rooms.length - 1)];
+      const p = this.randomFloorIn(r);
+      const pd = new THREE.Mesh(new THREE.CircleGeometry(1, 20), pm);
+      pd.rotation.x = -Math.PI / 2; pd.scale.set(rand(0.4, 1.1), rand(0.3, 0.8), 1); pd.rotation.z = rand(0, 3);
+      pd.position.set(p.x, 0.03, p.z); pd.renderOrder = 2;
+      this.root.add(pd);
+      this.noAO.push(pd);
+    }
+  }
+
   groundTexture() {
-    const S = 1024, c = document.createElement('canvas');
+    const S = 2048, c = document.createElement('canvas');
     c.width = c.height = S;
     const g = c.getContext('2d');
     const span = (this.w + 16) * CELL;
     const toPx = (wx) => ((wx + 16) / span) * S;
     g.fillStyle = '#4f7a36'; g.fillRect(0, 0, S, S);
-    for (let i = 0; i < 9000; i++) {
-      const x = Math.random() * S, y = Math.random() * S, r = Math.random() * 6 + 1;
+    for (let i = 0; i < 16000; i++) {
+      const x = Math.random() * S, y = Math.random() * S, r = (Math.random() * 6 + 1) * S / 1024;
       g.fillStyle = `rgba(${40 + Math.random() * 50},${90 + Math.random() * 60},${30 + Math.random() * 30},${0.25 + Math.random() * 0.3})`;
       g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
     }
@@ -417,11 +483,18 @@ export class Level {
     path([[7, 10.5], [12, 12.5], [17, 13], [22, 12.5], [26, 10.5]], pw);
     path([[17, 21], [23, 23], [26.5, 28.5]], pw * 0.8);
     path([[17, 21], [11, 22.5], [8, 22]], pw * 0.8);
+    path([[26, 10.5], [33, 11], [40, 11.5], [40, 20], [40, 30], [40, 38]], pw);
+    path([[17, 33], [17, 38.5], [30, 39], [40, 38.5]], pw);
+    path([[17, 38.5], [8, 39], [4, 39.5]], pw * 0.8);
+    path([[40, 20], [33, 20.5], [28.5, 20]], pw * 0.7);
+    // farm field
+    g.fillStyle = '#6a4e2e'; g.fillRect(toPx(2 * CELL), toPx(33.5 * CELL), toPx(10 * CELL) - toPx(2 * CELL), toPx(37.5 * CELL) - toPx(33.5 * CELL));
+    for (let r = 0; r < 9; r++) { g.fillStyle = r % 2 ? '#5a4024' : '#7a9a3a'; g.fillRect(toPx(2.2 * CELL), toPx((33.8 + r * 0.42) * CELL), toPx(9.8 * CELL) - toPx(2.2 * CELL), 5); }
     // cobbled plaza
     const cx = toPx(17 * CELL), cz = toPx(17 * CELL), pr = (7.5 / span) * S * CELL;
     g.fillStyle = '#5e574e'; g.beginPath(); g.arc(cx, cz, pr, 0, 7); g.fill();
     // concentric rings of cobbles, one muted stone tone each
-    const stone = 9;
+    const stone = 9 * S / 1024;
     for (let rr = stone * 0.6; rr < pr - 2; rr += stone) {
       const n = Math.max(6, Math.floor((Math.PI * 2 * rr) / (stone * 1.15)));
       const off = Math.random() * 7;
@@ -432,6 +505,7 @@ export class Level {
         g.fillStyle = `rgb(${l + 10},${l + 4},${l - 6})`;
         g.beginPath(); g.roundRect(-stone * 0.42, -stone * 0.5, stone * 0.84, stone * 0.95, 2.5); g.fill();
         g.fillStyle = 'rgba(255,245,225,0.12)'; g.fillRect(-stone * 0.3, -stone * 0.4, stone * 0.5, stone * 0.25);
+        g.strokeStyle = 'rgba(40,34,28,0.6)'; g.lineWidth = 1.5; g.stroke();
         g.restore();
       }
     }
@@ -439,23 +513,42 @@ export class Level {
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 8;
+    this.groundPx = { data: g.getImageData(0, 0, S, S).data, S, span };
     return { tex: t, span };
   }
 
   buildTownVisuals() {
     const { tex, span } = this.groundTexture();
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(span, span), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 }));
+    const det = groundDetail();
+    const rep = span / 3.2;
+    const nrm = det.normal.clone(); nrm.repeat.set(rep, rep); nrm.needsUpdate = true;
+    const gmat = addDetail(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, normalMap: nrm, normalScale: new THREE.Vector2(0.9, 0.9) }), det.albedo, rep, 0.5);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(span, span), gmat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(span / 2 - 16, 0, span / 2 - 16);
     ground.receiveShadow = true;
     this.root.add(ground);
-    const outer = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x4a7232, roughness: 1 }));
-    outer.rotation.x = -Math.PI / 2; outer.position.set(34, -0.05, 34); outer.receiveShadow = true;
+    const outer = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), addDetail(new THREE.MeshStandardMaterial({ color: 0x4a7232, roughness: 1 }), det.albedo, 120, 0.45));
+    outer.rotation.x = -Math.PI / 2; outer.position.set(47, -0.05, 47); outer.receiveShadow = true;
     this.root.add(outer);
     for (const o of this.buildingObjs) this.root.add(o);
+    // 3D grass and flowers on green areas only
+    const gp = this.groundPx;
+    const isGrass = (x, z) => {
+      const px = Math.floor(((x + 16) / gp.span) * gp.S), pz = Math.floor(((z + 16) / gp.span) * gp.S);
+      if (px < 0 || pz < 0 || px >= gp.S || pz >= gp.S) return false;
+      const i = (pz * gp.S + px) * 4, r = gp.data[i], gg = gp.data[i + 1], b = gp.data[i + 2];
+      if (!(gg > r * 1.2 && gg > b * 1.3)) return false;
+      const [cx, cy] = this.cellOf(new THREE.Vector3(x, 0, z));
+      return !(cx >= 0 && cy >= 0 && cx < this.w && cy < this.h) || this.cells[this.idx(cx, cy)] !== 0;
+    };
+    const area = { x0: -12, z0: -12, x1: (this.w + 5) * CELL, z1: (this.h + 5) * CELL };
+    const gf = grassField(9000, area, isGrass, this.timeU), fl = flowers(500, area, isGrass);
+    this.root.add(gf, fl);
+    this.noAO.push(gf, fl);
     // town wall
     const W = (this.w - 1) * CELL;
-    for (let i = 0; i < 17; i++) {
+    for (let i = 0; i < Math.ceil(W / 4); i++) {
       const a = i * 4 + 2;
       this.placeProp('wall_straight', new THREE.Vector3(a, 0, -0.6), 2, 0);
       this.placeProp('wall_straight', new THREE.Vector3(a, 0, W + 0.6), 2, 0);
@@ -469,6 +562,7 @@ export class Level {
     water.rotation.x = -Math.PI / 2; water.scale.set(pond.w * CELL / 2, pond.h * CELL / 2, 1); water.position.set(pcx, 0.06, pcz);
     this.root.add(water);
     this.water = water;
+    this.noAO.push(water);
     const bank = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshStandardMaterial({ color: 0x6b5d45, roughness: 1 }));
     bank.rotation.x = -Math.PI / 2; bank.scale.set(pond.w * CELL / 2 + 0.8, pond.h * CELL / 2 + 0.8, 1); bank.position.set(pcx, 0.03, pcz);
     this.root.add(bank);
@@ -482,22 +576,29 @@ export class Level {
     // countryside ring
     for (let i = 0; i < 70; i++) {
       const a = rand(0, Math.PI * 2), r = rand(42, 75);
-      const p = new THREE.Vector3(33 + Math.cos(a) * r, 0, 33 + Math.sin(a) * r);
+      const C = (this.w - 1) * CELL / 2; const p = new THREE.Vector3(C + Math.cos(a) * (r + 14), 0, C + Math.sin(a) * (r + 14));
       this.placeProp(pick(['trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B', 'hills_A_trees']), p, rand(6, 9), rand(0, 6));
     }
-    for (let i = 0; i < 10; i++) { const a = rand(0, Math.PI * 2); this.placeProp('mountain_A_grass_trees', new THREE.Vector3(33 + Math.cos(a) * 85, 0, 33 + Math.sin(a) * 85), rand(18, 26), rand(0, 6)); }
+    for (let i = 0; i < 10; i++) { const a = rand(0, Math.PI * 2); const C = (this.w - 1) * CELL / 2; this.placeProp(pick(['mountain_A_grass_trees', 'hills_B_trees']), new THREE.Vector3(C + Math.cos(a) * 105, 0, C + Math.sin(a) * 105), rand(18, 26), rand(0, 6)); }
     this.placeProp('building_windmill_yellow', new THREE.Vector3(-14, 3, 40), 7, 1);
     // market dressing
-    const deco = [['tent', [12, 10], 5], ['crate_A_big', [11, 9], 6], ['sack', [10.5, 10.2], 8], ['barrel', [4, 10], 6], ['wheelbarrow', [3.5, 12], 6], ['resource_lumber', [9, 18.5], 5], ['barrel', [22, 10], 6], ['flag_red', [21, 9.5], 7], ['bucket_water', [14.5, 17], 7], ['crate_A_big', [30, 11], 6], ['sack', [24, 28.5], 8]];
+    const deco = [['tent', [12, 10], 5], ['crate_A_big', [11, 9], 6], ['sack', [10.5, 10.2], 8], ['barrel', [4, 10], 6], ['wheelbarrow', [3.5, 12], 6], ['resource_lumber', [9, 18.5], 5], ['barrel', [22, 10], 6], ['flag_red', [21, 9.5], 7], ['bucket_water', [14.5, 17], 7], ['crate_A_big', [30, 11], 6], ['sack', [24, 28.5], 8],
+      ['resource_lumber', [42, 19.5], 5], ['pallet', [45, 19], 6], ['ladder', [41.5, 13], 5], ['target', [41, 33], 6], ['target', [41, 37], 6], ['bucket_arrows', [42, 35], 7],
+      ['crate_open', [33, 41.5], 6], ['crate_long_A', [38, 41.5], 6], ['flag_blue', [26, 41], 7], ['flag_yellow', [30.5, 41], 7], ['sack', [7, 41], 8], ['wheelbarrow', [9.5, 41], 6],
+      ['resource_stone', [35, 25], 6], ['barrel', [38.5, 8.5], 6], ['bucket_water', [43, 8.5], 7], ['crate_A_big', [46, 30], 6]];
     for (const [n, [x, y], sc] of deco) { this.placeProp(n, this.toWorld(x, y), sc, rand(0, 6)); this.cells[this.idx(Math.round(x), Math.round(y))] = 2; }
+    // farm fence
+    for (let x = 2.5; x < 10; x += 1.5) { this.placeProp('fence_wood_straight', this.toWorld(x, 33.2), 3.2, 0); this.placeProp('fence_wood_straight', this.toWorld(x, 37.8), 3.2, 0); }
+    for (let x = 2.4; x < 10; x += 0.9) for (let z = 34; z < 37.6; z += 0.85) { const c = this.placeProp('tree_single_A', this.toWorld(x + rand(-0.1, 0.1), z), rand(0.9, 1.3), rand(0, 6)); c.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.setHex(0xd8c050); } }); }
+    for (let y = 33; y <= 38; y++) for (let x = 2; x <= 10; x++) if (this.cells[this.idx(x, y)] === 1) this.cells[this.idx(x, y)] = 2;
     // lamps
     this.lamps = [];
-    for (const [x, y] of [[15, 13], [19, 13], [15, 21.5], [19, 21.5], [9, 21], [25, 21]]) {
+    for (const [x, y] of [[15, 13], [19, 13], [15, 21.5], [19, 21.5], [9, 21], [25, 21], [33, 10], [39, 18], [39, 29], [16, 36.5], [26, 37.5], [36, 37.5], [8, 37.5]]) {
       const p = this.toWorld(x, y);
       const post = cyl(0.07, 0.09, 2.6, 0x262626); post.position.copy(p).setY(1.3); this.root.add(post);
       const cap = cone(0.3, 0.25, 0x262626, 0, 4); cap.position.copy(p).setY(2.95); this.root.add(cap);
       const bulb = sphere(0.18, 0xffcc73, 2.5); bulb.position.copy(p).setY(2.7); bulb.castShadow = false; this.root.add(bulb);
-      if (this.lamps.length < 4) { const l = new THREE.PointLight(0xffcc73, 7, 9, 1.5); l.position.copy(p).setY(2.6); this.root.add(l); this.lamps.push(l); }
+      if (this.lamps.length < 6) { const l = new THREE.PointLight(0xffcc73, 7, 9, 1.5); l.position.copy(p).setY(2.6); this.root.add(l); this.lamps.push(l); }
     }
   }
 
@@ -513,6 +614,13 @@ export class Level {
     this.interact('pond', this.toWorld(7, 22).add(new THREE.Vector3(0, 0, -0.3)), { name: 'Fishing Pond' });
     this.interact('well', this.toWorld(16.5, 16.5), { name: 'The Old Well - Enter the Sunken Wells' });
     if (G.portalFloor > 0) this.interact('portal', this.portalPos, { name: `Portal to Floor ${G.portalFloor}` });
+    this.interact('blacksmith', this.toWorld(9.6, 15.5), { name: 'Hobb Ironhand, Blacksmith' }).root.rotation.y = Math.PI / 2;
+    for (const v of VILLAGERS) {
+      const e = new Villager(v);
+      e.root.position.copy(this.toWorld(...v.at));
+      if (v.ry !== undefined) e.root.rotation.y = v.ry;
+      this.add(e);
+    }
     for (const e of this.entities) if (e.kind && e.kind !== 'well' && e.kind !== 'portal') { const [x, y] = this.cellOf(e.pos); if (this.cells[this.idx(x, y)] !== 1) e.pos.copy(this.toWorld(...this.nearestFloor(x, y))); }
   }
 

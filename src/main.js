@@ -3,6 +3,34 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+
+// Final pass: contrast-adaptive sharpening, color grading and vignette (original shader)
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, resolution: { value: new THREE.Vector2(1, 1) }, sharpen: { value: 0.35 }, vignette: { value: 0.32 }, saturation: { value: 1.08 }, contrast: { value: 1.06 }, lift: { value: new THREE.Vector3(0.0, 0.0, 0.012) }, gain: { value: new THREE.Vector3(1.02, 1.0, 0.97) } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 resolution; uniform float sharpen, vignette, saturation, contrast; uniform vec3 lift, gain; varying vec2 vUv;
+    void main(){
+      vec2 px = 1.0 / resolution;
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      vec3 n = texture2D(tDiffuse, vUv + vec2(0.0, -px.y)).rgb, s = texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb;
+      vec3 e = texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb, w = texture2D(tDiffuse, vUv + vec2(-px.x, 0.0)).rgb;
+      vec3 mn = min(c, min(min(n, s), min(e, w))), mx = max(c, max(max(n, s), max(e, w)));
+      vec3 amp = clamp(min(mn, 1.0 - mx) / max(mx, 1e-4), 0.0, 1.0);
+      vec3 wgt = -sqrt(amp) * mix(0.0, 0.2, sharpen);
+      c = clamp((c + (n + s + e + w) * wgt) / (1.0 + 4.0 * wgt), 0.0, 1.0);
+      c = c * gain + lift * (1.0 - c);
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c = mix(vec3(l), c, saturation);
+      c = (c - 0.5) * contrast + 0.5;
+      vec2 d = vUv - 0.5;
+      c *= 1.0 - vignette * smoothstep(0.25, 0.85, dot(d, d) * 2.2);
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`,
+};
 export { G } from './state.js';
 import { G, reset, msg, saveGame, loadGame, maxHp, maxMp, itemBonus, tick, addFame, restockShop } from './state.js';
 import { Level } from './level.js';
@@ -15,7 +43,21 @@ import { loadAll, CharModel } from './assets.js';
 import { FX } from './fx.js';
 import { sfx, playMusic, unlockAudio } from './audio.js';
 import { Settings, loadSettings } from './settings.js';
-import { CLASSES, SKILLS, cast } from './skills.js';
+import { CLASSES, SKILLS, PET_COATS, cast, updateZones, clearZones } from './skills.js';
+import { box, sphere, cone } from './util.js';
+
+function makeFoxPreview(coat) {
+  const g = new THREE.Group();
+  const b = box(0.38, 0.32, 0.7, coat); b.position.y = 0.38; g.add(b);
+  const hd = sphere(0.2, coat); hd.position.set(0, 0.6, 0.38); g.add(hd);
+  const snout = box(0.1, 0.1, 0.18, 0xf2e6d9); snout.position.set(0, 0.55, 0.58); g.add(snout);
+  for (const x of [-0.1, 0.1]) { const ear = cone(0.07, 0.18, coat); ear.position.set(x, 0.82, 0.35); g.add(ear); }
+  for (const [x, z] of [[-0.12, -0.25], [0.12, -0.25], [-0.12, 0.25], [0.12, 0.25]]) { const l = box(0.08, 0.25, 0.08, 0x592e14); l.position.set(x, 0.12, z); g.add(l); }
+  const tail = box(0.12, 0.12, 0.45, coat); tail.position.set(0, 0.55, -0.5); tail.rotation.x = 0.6; g.add(tail);
+  const tip = sphere(0.09, 0xffdd88, 3); tip.position.set(0, 0.72, -0.7); g.add(tip);
+  g.scale.setScalar(0.85);
+  return g;
+}
 
 window.__G = G;
 const HOTKEYS = { q: 'q', w: 'w', e: 'e', r: 'r' };
@@ -67,28 +109,65 @@ class Main {
 
   applyQuality() {
     const q = Settings.quality;
-    const pr = Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : q === 'medium' ? 1.25 : 1);
-    this.renderer.setPixelRatio(pr);
+    const rs = Settings.renderScale || 1;
+    const prMax = q === 'ultra' ? 2 : q === 'high' ? 1.5 : q === 'medium' ? 1.25 : 1;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, prMax) * rs);
     this.renderer.shadowMap.enabled = q !== 'low';
-    this.renderer.shadowMap.type = q === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = q === 'low' || q === 'medium' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     this.renderer.shadowMap.needsUpdate = true;
+    if (!this.envTex) {
+      const pm = new THREE.PMREMGenerator(this.renderer);
+      this.envTex = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+      pm.dispose();
+    }
+    this.scene.environment = q === 'low' ? null : this.envTex;
+    this.applyShadowRes();
     this.scene.traverse((o) => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach((m) => (m.needsUpdate = true)); } });
-    if (q === 'high') {
-      if (!this.composer) {
-        this.composer = new EffectComposer(this.renderer);
-        this.composer.addPass(new RenderPass(this.scene, this.camera));
-        this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 0.82);
-        this.composer.addPass(this.bloom);
-        this.composer.addPass(new OutputPass());
+    if (this.composer) { this.composer.dispose(); this.composer = null; this.gtao = null; }
+    if (q !== 'low') {
+      const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: q === 'medium' ? 0 : 4 });
+      this.composer = new EffectComposer(this.renderer, rt);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      if (q === 'high' || q === 'ultra') {
+        this.gtao = new GTAOPass(this.scene, this.camera, size.x, size.y);
+        this.gtao.blendIntensity = q === 'ultra' ? 1.0 : 0.85;
+        this.gtao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 1.6, thickness: 1.5, scale: 1.0, samples: q === 'ultra' ? 16 : 10 });
+        this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: q === 'ultra' ? 16 : 8 });
+        const gt = this.gtao, orig = gt.render.bind(gt);
+        gt.render = (...a) => {
+          const hide = [...(G.level?.noAO || []), this.fx.points].filter((o) => o && o.visible);
+          hide.forEach((o) => (o.visible = false));
+          orig(...a);
+          hide.forEach((o) => (o.visible = true));
+        };
+        this.composer.addPass(this.gtao);
       }
-    } else if (this.composer) { this.composer.dispose(); this.composer = null; }
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), q === 'medium' ? 0.4 : 0.5, 0.5, 0.9);
+      this.composer.addPass(this.bloom);
+      this.composer.addPass(new OutputPass());
+      if (q === 'medium') this.composer.addPass(new SMAAPass(size.x, size.y));
+      this.grade = new ShaderPass(GradeShader);
+      this.composer.addPass(this.grade);
+    }
     this.resize();
+  }
+  applyShadowRes() {
+    const L = G.level;
+    if (!L || !L.sun) return;
+    const q = Settings.quality;
+    const n = q === 'ultra' ? 4096 : q === 'high' ? 2048 : 1024;
+    if (L.sun.shadow.mapSize.x !== n) { L.sun.shadow.mapSize.set(n, n); L.sun.shadow.map?.dispose(); L.sun.shadow.map = null; }
   }
 
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h);
-    if (this.composer) { this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h); }
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h);
+      const sz = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+      if (this.grade) { this.grade.uniforms.resolution.value.copy(sz); this.grade.uniforms.sharpen.value = (Settings.sharpen ?? 0.35) + (1 - (Settings.renderScale || 1)) * 0.8; }
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.fx.setScale?.(h * this.renderer.getPixelRatio());
@@ -97,6 +176,7 @@ class Main {
   menuScene() {
     this.clearLevel();
     G.level = new Level(this.scene, 'town', 0);
+    this.applyShadowRes();
     this.menuMode = true;
   }
 
@@ -106,7 +186,7 @@ class Main {
     if (!G.level || G.level.kind !== 'town') this.menuScene();
     this.menuMode = true;
     this.creating = true;
-    this.creation = { cls: 'Knight', cape: CLASSES.Knight.cape, hooded: false, name: '' };
+    this.creation = { cls: 'Knight', cape: CLASSES.Knight.cape, hooded: false, name: '', helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox', petName: 'Pip', tab: 'class' };
     const L = G.level;
     const spot = L.startPos.clone();
     this.podium = new THREE.Group();
@@ -127,9 +207,14 @@ class Main {
     const cls = CLASSES[s.cls];
     if (this.preview) this.podium.remove(this.preview.root);
     const name = s.hooded && cls.alt ? cls.alt : cls.model;
-    this.preview = new CharModel(name, { scale: 1 });
-    this.preview.setGear(true, true);
-    this.preview.setCapeColor(s.cape);
+    this.preview = new CharModel(name, { scale: s.height });
+    this.preview.applyLook(cls, s);
+    if (this.previewPet) this.podium.remove(this.previewPet);
+    const coat = (PET_COATS.find((c) => c.key === s.pet) || PET_COATS[0]).color;
+    this.previewPet = makeFoxPreview(coat);
+    this.previewPet.position.set(1.15, 0.25, 0.75);
+    this.previewPet.rotation.y = -0.5;
+    this.podium.add(this.previewPet);
     this.preview.root.position.y = 0.25;
     this.preview.root.rotation.y = 0.35;
     this.podium.add(this.preview.root);
@@ -138,7 +223,7 @@ class Main {
   }
   closeCreation() {
     this.creating = false;
-    if (this.podium) { this.scene.remove(this.podium); this.podium = null; this.preview = null; }
+    if (this.podium) { this.scene.remove(this.podium); this.podium = null; this.preview = null; this.previewPet = null; }
     this.ui.hideCreation();
     this.ui.showMenu();
   }
@@ -149,7 +234,8 @@ class Main {
     reset();
     G.heroName = (s.name || '').trim().slice(0, 18) || 'Wanderer';
     G.cls = s.cls;
-    G.look = { cape: s.cape, hooded: !!s.hooded };
+    G.look = { cape: s.cape, hooded: !!s.hooded, helm: s.helm, gear: s.gear, tint: s.tint, height: s.height, capeOn: s.capeOn, pet: s.pet };
+    G.petName = (s.petName || '').trim().slice(0, 14) || 'Pip';
     G.base = { ...cls.base };
     for (const k in G.skills) G.skills[k] = 0;
     Object.assign(G.skills, cls.skills);
@@ -157,7 +243,7 @@ class Main {
     if (G.equipment.weapon) G.equipment.weapon.name = G.equipment.weapon.base = cls.weapon;
     G.hp = maxHp(); G.mp = maxMp();
     restockShop();
-    if (this.podium) { this.scene.remove(this.podium); this.podium = null; this.preview = null; }
+    if (this.podium) { this.scene.remove(this.podium); this.podium = null; this.preview = null; this.previewPet = null; }
     this.creating = false;
     this.ui.hideCreation();
     this.ui.hideMenu();
@@ -185,6 +271,7 @@ class Main {
   clearLevel() {
     this.ui.clearWorld();
     this.fx.clear();
+    clearZones();
     if (G.level) G.level.dispose();
     G.level = null; G.player = null; G.pet = null;
   }
@@ -195,6 +282,7 @@ class Main {
     G.currentFloor = floor;
     const L = new Level(this.scene, kind, floor);
     G.level = L;
+    this.applyShadowRes();
     const p = new Player();
     let pos = L.startPos.clone();
     if (kind === 'dungeon' && arrive === 'up') pos = L.downPos.clone().add(new THREE.Vector3(1.5, 0, 1.5));
@@ -239,8 +327,8 @@ class Main {
     this.ui.refresh();
   }
   addFameFromBoss(f) { addFame(25 + f * 4); this.ui.banner('Guardian slain!', 'Your fame grows'); sfx('legend'); }
-  magicFind() { return Math.round(itemBonus('magic_find') + (G.buffs.wealth > 0 ? 50 : 0)); }
-  goldFind() { return Math.round(itemBonus('gold_find') + (G.buffs.wealth > 0 ? 100 : 0)); }
+  magicFind() { return Math.round(itemBonus('magic_find') + (G.buffs.wealth > 0 ? 50 : 0) + (G.skills.fortune || 0) * 8); }
+  goldFind() { return Math.round(itemBonus('gold_find') + (G.buffs.wealth > 0 ? 100 : 0) + (G.skills.fortune || 0) * 8); }
   randomTreasure() { return generate(Math.max(G.lvl, G.currentFloor) + 1, 80, 1); }
   flash(t) { this.ui.flash(t); }
   floatText(pos, text, color, size = 20, yOff = 2) {
@@ -277,6 +365,8 @@ class Main {
     switch (e.kind) {
       case 'merchant': this.ui.show('shop'); this.ui.show('inv'); sfx('ui'); break;
       case 'quest': this.ui.show('quest'); sfx('ui'); break;
+      case 'blacksmith': this.ui.show('forge'); this.ui.show('inv'); sfx('ui'); break;
+      case 'villager': e.talk(); break;
       case 'healer': {
         G.hp = maxHp(); G.mp = maxMp();
         if (G.pet) { G.pet.dead = false; G.pet.hp = G.pet.maxHp; if (G.petAwayTime <= 0) G.pet.root.visible = true; }
@@ -284,6 +374,22 @@ class Main {
         this.fx.emit(G.player.pos.clone().setY(0.3), { count: 40, color: 0x88ffaa, speed: 1, up: 4, life: 1, size: 0.3, spread: 0.7 });
         sfx('heal');
         msg('"Go with the light, child." You and your pet are fully healed.', '#b3e6ff');
+        const spent = Object.values(G.skills).reduce((a, b) => a + b, 0);
+        if (spent > 0 && G.lvl >= 3) {
+          const cost = 60 * G.lvl;
+          this.ui.choice('Brother Fennick', `"I can also help you forget what you have learned, so you may walk a different path." Unlearn all ${spent} skill points for ${cost} gold?`, [
+            [`Unlearn skills (${cost} gold)`, () => {
+              if (G.gold < cost) { this.flash('Not enough gold'); return; }
+              G.gold -= cost; G.skillPoints += spent;
+              for (const k in G.skills) G.skills[k] = 0;
+              G.pet?.applyForm(true);
+              this.ui.refreshSlotIcons(); this.ui.refresh();
+              msg(`Your skills are forgotten. ${spent} skill points returned. Press K to choose again.`, '#ffd84d');
+              sfx('level');
+            }],
+            ['No, thank you', null],
+          ]);
+        }
         break;
       }
       case 'pond': case 'fish_hole': this.ui.openFishing(); break;
@@ -444,6 +550,7 @@ class Main {
   ambientFx(dt, t) {
     const L = G.level;
     if (!L) return;
+    if (L.timeU) L.timeU.value = t;
     this.flameT -= dt;
     const emitFlames = this.flameT <= 0;
     if (emitFlames) this.flameT = 0.08;
@@ -486,6 +593,7 @@ class Main {
         tick(dt);
         if (this.holding && this.canPlay()) { this.holdT -= dt; if (this.holdT <= 0) { this.holdT = 0.12; this.click(false); } }
         for (const e of L.entities.slice()) e.update(dt, t);
+        updateZones(dt);
         if (!G.player.dead) G.player.hover = this.canPlay() ? this.pick() : null;
         this.fx.update(dt);
         // boss music when a living guardian is close

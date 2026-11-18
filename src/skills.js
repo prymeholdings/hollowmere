@@ -1,46 +1,65 @@
 import * as THREE from 'three';
-import { G, stat, rollDamage, maxHp, critChance } from './state.js';
+import { G, stat, rollDamage, maxHp, critChance, critMult } from './state.js';
 import { Projectile, Ally } from './entities.js';
-import { flatDist, sfx } from './util.js';
+import { flatDist, sfx, pick } from './util.js';
 
 const mag = () => stat('mag');
 const rank = (id) => G.skills[id] || 0;
 const R = (id, base, per) => base * (1 + per * (rank(id) - 1));
-const spellPower = () => (G.buffs.power > 0 ? 1.5 : 1) * (G.buffs.warcry > 0 ? 1.15 : 1);
+const spellPower = () => (G.buffs.power > 0 ? 1.5 : 1) * (G.buffs.warcry > 0 ? 1.15 : 1) * (1 + 0.08 * rank('elemental'));
+// synergies: each rank of the source skill adds pct% to this skill
+export const SYNERGY = {
+  firebolt: [['meteor', 8]], meteor: [['firebolt', 6]], lightning: [['nova', 4], ['blizzard', 4]],
+  nova: [['blizzard', 6]], blizzard: [['nova', 6], ['lightning', 3]], slam: [['earthquake', 6]], earthquake: [['slam', 6], ['whirlwind', 3]],
+  whirlwind: [['slam', 4]], knives: [['blades', 6]], blades: [['knives', 6], ['smoke', 3]], heal: [['bones', 5]],
+};
+const syn = (id) => 1 + (SYNERGY[id] || []).reduce((a, [src, pct]) => a + rank(src) * pct / 100, 0);
 
 export const SKILLS = {
   firebolt: { name: 'Firebolt', icon: 'fire', school: 'Fire', cost: () => 4 + rank('firebolt') * 1.5, cd: 0, anim: 'Spellcast_Shoot',
-    dmg: () => R('firebolt', 6 + mag() * 1.1 + G.lvl * 1.5, 0.3) * spellPower(),
-    desc: (s) => `Hurls a bolt of fire for ${Math.round(s.dmg())} damage.` },
+    dmg: () => R('firebolt', 6 + mag() * 1.1 + G.lvl * 1.5, 0.3) * spellPower() * syn('firebolt'),
+    desc: (s) => `Hurls a bolt of fire for ${Math.round(s.dmg())} damage. At rank 5 it explodes on impact.` },
   lightning: { name: 'Chain Lightning', icon: 'bolt', school: 'Storm', cost: () => 10 + rank('lightning') * 2, cd: 0.8, anim: 'Spellcast_Shoot',
-    dmg: () => R('lightning', 5 + mag() * 0.9 + G.lvl * 1.3, 0.25) * spellPower(), jumps: () => 2 + rank('lightning'),
+    dmg: () => R('lightning', 5 + mag() * 0.9 + G.lvl * 1.3, 0.25) * spellPower() * syn('lightning'), jumps: () => 2 + rank('lightning'),
     desc: (s) => `Lightning arcs between ${s.jumps() + 1} foes for ${Math.round(s.dmg())} damage each.` },
   nova: { name: 'Frost Nova', icon: 'frost', school: 'Frost', cost: () => 16 + rank('nova') * 2, cd: 4, anim: 'Spellcast_Raise',
-    dmg: () => R('nova', 8 + mag() * 0.9 + G.lvl * 1.2, 0.3) * spellPower(),
+    dmg: () => R('nova', 8 + mag() * 0.9 + G.lvl * 1.2, 0.3) * spellPower() * syn('nova'),
     desc: (s) => `Freezing blast around you: ${Math.round(s.dmg())} damage, slows enemies for 4s.` },
   meteor: { name: 'Meteor', icon: 'meteor', school: 'Fire', cost: () => 28 + rank('meteor') * 3, cd: 6, anim: 'Spellcast_Long',
-    dmg: () => R('meteor', 20 + mag() * 2.2 + G.lvl * 3, 0.3) * spellPower(),
+    dmg: () => R('meteor', 20 + mag() * 2.2 + G.lvl * 3, 0.3) * spellPower() * syn('meteor'),
     desc: (s) => `Calls a meteor down at the cursor for ${Math.round(s.dmg())} damage in a wide area.` },
+  blizzard: { name: 'Blizzard', icon: 'blizzard', school: 'Frost', cost: () => 34 + rank('blizzard') * 3, cd: 5, anim: 'Spellcast_Long',
+    dmg: () => R('blizzard', 6 + mag() * 0.7 + G.lvl * 1.1, 0.28) * spellPower() * syn('blizzard'), dur: () => 4 + rank('blizzard') * 0.25,
+    desc: (s) => `Ice storms the cursor area for ${s.dur().toFixed(1)}s, dealing ${Math.round(s.dmg())} damage twice a second and slowing foes.` },
   heal: { name: 'Mend Wounds', icon: 'heal', school: 'Light', cost: () => 12 + rank('heal'), cd: 3, anim: 'Spellcast_Raise',
-    amount: () => R('heal', 18 + mag() * 1.6 + G.lvl * 2, 0.35),
+    amount: () => R('heal', 18 + mag() * 1.6 + G.lvl * 2, 0.35) * syn('heal'),
     desc: (s) => `Restores ${Math.round(s.amount())} life to you and heals your pet.` },
   bones: { name: 'Raise Bones', icon: 'skull', school: 'Death', cost: () => 30 + rank('bones') * 2, cd: 20, anim: 'Spellcast_Raise',
-    count: () => 1 + Math.ceil(rank('bones') / 2),
+    count: () => 1 + Math.ceil(rank('bones') / 3),
     desc: (s) => `Raises ${s.count()} skeleton warrior${s.count() > 1 ? 's' : ''} to fight for you for 30 seconds.` },
   whirlwind: { name: 'Whirlwind', icon: 'whirl', school: 'Might', cost: () => 12 + rank('whirlwind') * 1.5, cd: 2.5, anim: '2H_Melee_Attack_Spin',
-    mult: () => R('whirlwind', 1.1, 0.2),
+    mult: () => R('whirlwind', 1.1, 0.2) * syn('whirlwind'),
     desc: (s) => `Spin with your weapon, hitting everything around you 3 times for ${Math.round(s.mult() * 100)}% weapon damage.` },
   slam: { name: 'Ground Slam', icon: 'slam', school: 'Might', cost: () => 9 + rank('slam'), cd: 2, anim: '2H_Melee_Attack_Chop',
-    mult: () => R('slam', 1.8, 0.25),
+    mult: () => R('slam', 1.8, 0.25) * syn('slam'),
     desc: (s) => `Smash the ground ahead for ${Math.round(s.mult() * 100)}% weapon damage and stun foes for 1.5s.` },
+  earthquake: { name: 'Earthquake', icon: 'quake', school: 'Might', cost: () => 30 + rank('earthquake') * 2, cd: 8, anim: '2H_Melee_Attack_Slice',
+    mult: () => R('earthquake', 1.4, 0.22) * syn('earthquake'),
+    desc: (s) => `Three shockwaves roll out from you, each dealing ${Math.round(s.mult() * 100)}% weapon damage and stunning for 1s.` },
   knives: { name: 'Fan of Knives', icon: 'knives', school: 'Cunning', cost: () => 8 + rank('knives'), cd: 0.6, anim: 'Throw',
-    mult: () => R('knives', 0.7, 0.2), count: () => 4 + rank('knives'),
+    mult: () => R('knives', 0.7, 0.2) * syn('knives'), count: () => 4 + Math.ceil(rank('knives') / 2),
     desc: (s) => `Throws ${s.count()} knives in a fan, each dealing ${Math.round(s.mult() * 100)}% weapon damage.` },
-  blink: { name: 'Shadow Step', icon: 'blink', school: 'Cunning', cost: () => 10, cd: () => Math.max(1.5, 5 - rank('blink') * 0.5), anim: 'Dodge_Forward',
+  blink: { name: 'Shadow Step', icon: 'blink', school: 'Cunning', cost: () => 10, cd: () => Math.max(1.5, 5 - rank('blink') * 0.35), anim: 'Dodge_Forward',
     desc: (s) => `Vanish and reappear at the cursor. ${s.cdv().toFixed(1)}s cooldown.` },
+  smoke: { name: 'Smoke Bomb', icon: 'smoke', school: 'Cunning', cost: () => 14, cd: () => Math.max(5, 12 - rank('smoke') * 0.5), anim: 'Throw',
+    dur: () => 2.5 + rank('smoke') * 0.25,
+    desc: (s) => `Blinds nearby foes for ${s.dur().toFixed(1)}s and gives you +30% dodge for 5s.` },
+  blades: { name: 'Rain of Blades', icon: 'blades', school: 'Cunning', cost: () => 24 + rank('blades') * 2, cd: 4, anim: 'Spellcast_Raise',
+    mult: () => R('blades', 0.6, 0.18) * syn('blades'),
+    desc: (s) => `Blades fall on the cursor area for 3s, about 10 strikes of ${Math.round(s.mult() * 100)}% weapon damage.` },
   warcry: { name: 'Battle Cry', icon: 'cry', school: 'Might', cost: () => 15, cd: 18, anim: 'Cheer',
-    dur: () => 10 + rank('warcry') * 2,
-    desc: (s) => `+30% damage and +40 armor for you and your allies for ${s.dur()}s.` },
+    dur: () => 10 + rank('warcry') * 1.5,
+    desc: (s) => `+30% damage and +40 armor for ${s.dur().toFixed(0)}s. Nearby foes are slowed.` },
 };
 for (const k in SKILLS) {
   const s = SKILLS[k];
@@ -49,24 +68,82 @@ for (const k in SKILLS) {
 }
 
 export const PASSIVES = {
-  mastery: { name: 'Weapon Mastery', desc: () => '+10% weapon damage and +3% attack speed per rank.' },
-  pet_bond: { name: 'Pet Bond', desc: () => `+15% pet damage and life per rank.` },
-  toughness: { name: 'Toughness', desc: () => '+8% maximum life and +5 armor per rank.' },
+  mastery: { name: 'Weapon Mastery', icon: 'mastery', desc: (r) => `+${r * 10}% weapon damage and +${r * 3}% attack speed.` , per: '+10% weapon damage, +3% attack speed' },
+  toughness: { name: 'Iron Skin', icon: 'toughness', desc: (r) => `+${r * 8}% maximum life and +${r * 5} armor.`, per: '+8% life, +5 armor' },
+  brutality: { name: 'Brutality', icon: 'brutal', desc: (r) => `Critical hits deal ${200 + r * 15}% damage.`, per: '+15% critical damage' },
+  second_wind: { name: 'Second Wind', icon: 'wind', desc: (r) => `+${(r * 0.6).toFixed(1)} life per second.`, per: '+0.6 life regeneration' },
+  arcane_flow: { name: 'Arcane Flow', icon: 'arcane', desc: (r) => `+${r * 6}% maximum mana and +${r * 12}% mana regeneration.`, per: '+6% mana, +12% mana regen' },
+  elemental: { name: 'Elemental Mastery', icon: 'elemental', desc: (r) => `+${r * 8}% damage with all spells.`, per: '+8% spell damage' },
+  swift_feet: { name: 'Swift Feet', icon: 'feet', desc: (r) => `+${r * 4}% movement speed.`, per: '+4% movement speed' },
+  pet_bond: { name: 'Pet Bond', icon: 'pet_bond', desc: (r) => `+${r * 15}% pet damage and life.`, per: '+15% pet damage and life' },
+  lethality: { name: 'Lethality', icon: 'lethal', desc: (r) => `+${(r * 1.5).toFixed(1)}% critical hit chance.`, per: '+1.5% critical chance' },
+  bloodthirst: { name: 'Bloodthirst', icon: 'blood', desc: (r) => `${(r * 0.5).toFixed(1)}% of weapon damage heals you.`, per: '+0.5% life steal' },
+  fortune: { name: "Fortune's Favor", icon: 'fortune', desc: (r) => `+${r * 8}% gold and magic find.`, per: '+8% gold and magic find' },
 };
+for (const k in PASSIVES) PASSIVES[k].id = k;
+
+// Three skill trees. tier = row (level gate), col = column, req = prerequisites (rank 1 needed)
+export const TIER_LEVEL = [1, 6, 12, 18];
+export const MAX_ACTIVE = 15, MAX_PASSIVE = 10;
+export const TREES = [
+  { id: 'might', name: 'Might', color: '#e0a050', nodes: [
+    { id: 'slam', tier: 0, col: 0 }, { id: 'mastery', tier: 0, col: 1 }, { id: 'toughness', tier: 0, col: 2 },
+    { id: 'warcry', tier: 1, col: 0, req: ['slam'] }, { id: 'whirlwind', tier: 1, col: 1, req: ['mastery'] },
+    { id: 'brutality', tier: 2, col: 1, req: ['whirlwind'] }, { id: 'second_wind', tier: 2, col: 2, req: ['toughness'] },
+    { id: 'earthquake', tier: 3, col: 0, req: ['warcry', 'whirlwind'] }] },
+  { id: 'sorcery', name: 'Sorcery', color: '#8ab8ff', nodes: [
+    { id: 'firebolt', tier: 0, col: 0 }, { id: 'heal', tier: 0, col: 1 }, { id: 'arcane_flow', tier: 0, col: 2 },
+    { id: 'lightning', tier: 1, col: 0, req: ['firebolt'] }, { id: 'nova', tier: 1, col: 2, req: ['arcane_flow'] },
+    { id: 'meteor', tier: 2, col: 0, req: ['lightning'] }, { id: 'bones', tier: 2, col: 1, req: ['heal'] }, { id: 'elemental', tier: 2, col: 2, req: ['nova'] },
+    { id: 'blizzard', tier: 3, col: 2, req: ['elemental'] }] },
+  { id: 'cunning', name: 'Cunning', color: '#b48aff', nodes: [
+    { id: 'knives', tier: 0, col: 0 }, { id: 'swift_feet', tier: 0, col: 1 }, { id: 'pet_bond', tier: 0, col: 2 },
+    { id: 'lethality', tier: 1, col: 0, req: ['knives'] }, { id: 'blink', tier: 1, col: 1, req: ['swift_feet'] },
+    { id: 'bloodthirst', tier: 2, col: 0, req: ['lethality'] }, { id: 'smoke', tier: 2, col: 1, req: ['blink'] }, { id: 'fortune', tier: 2, col: 2, req: ['pet_bond'] },
+    { id: 'blades', tier: 3, col: 0, req: ['bloodthirst', 'smoke'] }] },
+];
+export const NODE = {};
+for (const t of TREES) for (const n of t.nodes) NODE[n.id] = { ...n, tree: t.id };
+export const isActive = (id) => !!SKILLS[id];
+export const maxRank = (id) => (isActive(id) ? MAX_ACTIVE : MAX_PASSIVE);
+export const skillName = (id) => (SKILLS[id] || PASSIVES[id]).name;
+export const skillIconKey = (id) => (SKILLS[id] || PASSIVES[id]).icon;
+export function treePoints(treeId) { return TREES.find((t) => t.id === treeId).nodes.reduce((a, n) => a + rank(n.id), 0); }
+export function learnBlock(id) {
+  const n = NODE[id];
+  if (!n) return 'Unknown skill';
+  if (rank(id) >= maxRank(id)) return 'Maximum rank';
+  if (G.lvl < TIER_LEVEL[n.tier]) return `Requires level ${TIER_LEVEL[n.tier]}`;
+  const miss = (n.req || []).filter((r) => rank(r) < 1);
+  if (miss.length) return `Requires ${miss.map(skillName).join(' and ')}`;
+  if (G.skillPoints <= 0) return 'No skill points';
+  return null;
+}
+export function synergyText(id) {
+  const l = SYNERGY[id];
+  if (!l) return '';
+  return l.map(([src, pct]) => `+${pct}% per rank of ${skillName(src)} (${rank(src)})`).join('<br>');
+}
 
 export const CLASSES = {
-  Knight: { title: 'Knight', model: 'Knight', desc: 'A sworn shield of Hollowmere. Tough, steady, and hard to kill.', base: { str: 14, dex: 9, vit: 15, mag: 6 }, skills: { slam: 1, warcry: 1 }, hotbar: { rmb: 'slam', q: 'warcry', w: 'heal', e: 'nova', r: 'firebolt' }, weapon: 'Iron Sword', cape: '#8c1f1f' },
-  Barbarian: { title: 'Berserker', model: 'Barbarian', desc: 'A wild axe-swinger from the northern fells. Fast, brutal, reckless.', base: { str: 16, dex: 12, vit: 12, mag: 4 }, skills: { whirlwind: 1, mastery: 1 }, hotbar: { rmb: 'whirlwind', q: 'warcry', w: 'slam', e: 'heal', r: 'firebolt' }, weapon: 'Hand Axe', cape: '#3a5a2a' },
-  Mage: { title: 'Mage', model: 'Mage', desc: 'A scholar of the burning arts. Fragile, but devastating from afar.', base: { str: 6, dex: 9, vit: 9, mag: 20 }, skills: { firebolt: 1, nova: 1 }, hotbar: { rmb: 'firebolt', q: 'heal', w: 'nova', e: 'lightning', r: 'meteor' }, weapon: 'Ashwood Staff', cape: '#4a2a7a' },
-  Rogue: { title: 'Rogue', model: 'Rogue', alt: 'Rogue_Hooded', desc: 'A quick blade from the alleys of the old city. Strikes first, never stays.', base: { str: 10, dex: 17, vit: 10, mag: 7 }, skills: { knives: 1, blink: 1 }, hotbar: { rmb: 'knives', q: 'blink', w: 'heal', e: 'nova', r: 'firebolt' }, weapon: 'Curved Dagger', cape: '#1f5a3a' },
+  Knight: { title: 'Knight', model: 'Knight', desc: 'A sworn shield of Hollowmere. Tough, steady, and hard to kill.', base: { str: 14, dex: 9, vit: 15, mag: 6 }, skills: { slam: 1, toughness: 1 }, hotbar: { rmb: 'slam', q: 'warcry', w: 'heal', e: 'whirlwind', r: 'earthquake' }, weapon: 'Iron Sword', cape: '#8c1f1f',
+    gear: [{ key: 'sword_shield', label: 'Sword and shield', weapon: ['1H_Sword'], offhand: ['Round_Shield'] }, { key: 'sword_badge', label: 'Sword and crest shield', weapon: ['1H_Sword'], offhand: ['Badge_Shield'] }, { key: 'sword_tower', label: 'Sword and tower shield', weapon: ['1H_Sword'], offhand: ['Rectangle_Shield'] }, { key: 'greatsword', label: 'Greatsword', weapon: ['2H_Sword'], offhand: [] }, { key: 'dual', label: 'Twin swords', weapon: ['1H_Sword'], offhand: ['1H_Sword_Offhand'] }], headgear: 'Knight_Helmet' },
+  Barbarian: { title: 'Berserker', model: 'Barbarian', desc: 'A wild axe-swinger from the northern fells. Fast, brutal, reckless.', base: { str: 16, dex: 12, vit: 12, mag: 4 }, skills: { whirlwind: 1, mastery: 1 }, hotbar: { rmb: 'whirlwind', q: 'warcry', w: 'slam', e: 'heal', r: 'earthquake' }, weapon: 'Hand Axe', cape: '#3a5a2a',
+    gear: [{ key: 'axe_shield', label: 'Axe and shield', weapon: ['1H_Axe'], offhand: ['Barbarian_Round_Shield'] }, { key: 'greataxe', label: 'Great axe', weapon: ['2H_Axe'], offhand: [] }, { key: 'dual', label: 'Twin axes', weapon: ['1H_Axe'], offhand: ['1H_Axe_Offhand'] }, { key: 'mug', label: 'Axe and ale', weapon: ['1H_Axe'], offhand: ['Mug'] }], headgear: 'Barbarian_Hat' },
+  Mage: { title: 'Mage', model: 'Mage', desc: 'A scholar of the burning arts. Fragile, but devastating from afar.', base: { str: 6, dex: 9, vit: 9, mag: 20 }, skills: { firebolt: 1, arcane_flow: 1 }, hotbar: { rmb: 'firebolt', q: 'heal', w: 'nova', e: 'lightning', r: 'meteor' }, weapon: 'Ashwood Staff', cape: '#4a2a7a',
+    gear: [{ key: 'staff_book', label: 'Staff and tome', weapon: ['2H_Staff'], offhand: ['Spellbook'] }, { key: 'staff', label: 'Staff only', weapon: ['2H_Staff'], offhand: [] }, { key: 'wand_book', label: 'Wand and open tome', weapon: ['1H_Wand'], offhand: ['Spellbook_open'] }, { key: 'wand', label: 'Wand only', weapon: ['1H_Wand'], offhand: [] }], headgear: 'Mage_Hat' },
+  Rogue: { title: 'Rogue', model: 'Rogue', alt: 'Rogue_Hooded', desc: 'A quick blade from the alleys of the old city. Strikes first, never stays.', base: { str: 10, dex: 17, vit: 10, mag: 7 }, skills: { knives: 1, swift_feet: 1 }, hotbar: { rmb: 'knives', q: 'blink', w: 'smoke', e: 'heal', r: 'blades' }, weapon: 'Curved Dagger', cape: '#1f5a3a',
+    gear: [{ key: 'daggers', label: 'Twin daggers', weapon: ['Knife'], offhand: ['Knife_Offhand'] }, { key: 'dagger_star', label: 'Dagger and throwing star', weapon: ['Knife'], offhand: ['Throwable'] }, { key: 'crossbow', label: 'Hand crossbow', weapon: ['1H_Crossbow'], offhand: ['Knife_Offhand'] }] },
 };
-export const CAPE_COLORS = ['#8c1f1f', '#1f3f8c', '#2f6a2a', '#4a2a7a', '#8a6a1a', '#1a1a1a', '#e0e0e0', '#1f5a5a'];
+export const CAPE_COLORS = ['#8c1f1f', '#1f3f8c', '#2f6a2a', '#4a2a7a', '#8a6a1a', '#1a1a1a', '#e0e0e0', '#1f5a5a', '#b04a8a', '#d06a1a'];
+export const ARMOR_TINTS = ['#ffffff', '#c8d4ff', '#ffd8a8', '#b8e0b0', '#e0b8e8', '#9a9a9a', '#ffb0b0', '#fff0a0'];
+export const PET_COATS = [{ key: 'fox', label: 'Ember fox', color: 0xe07a3a }, { key: 'arctic', label: 'Snow fox', color: 0xe8eef2 }, { key: 'shadow', label: 'Shadow fox', color: 0x3a3a46 }, { key: 'gold', label: 'Sun fox', color: 0xe8c040 }, { key: 'ash', label: 'Ash fox', color: 0x8a8278 }];
 
 function enemies() { return G.level.entities.filter((e) => e.type === 'enemy' && !e.dead); }
 function weaponHit(e, mult, kind = 'phys') {
   let d = rollDamage() * mult;
   const crit = Math.random() < critChance();
-  if (crit) d *= 2;
+  if (crit) d *= critMult();
   e.takeDamage(d, crit, kind);
   return d;
 }
@@ -77,6 +154,19 @@ export function canCast(id) {
   if ((G.cds[id] || 0) > 0) return 'Not ready';
   if (G.mp < s.cost()) return 'Not enough mana';
   return null;
+}
+
+// persistent ground effects (Blizzard, Rain of Blades)
+const zones = [];
+export function clearZones() { zones.length = 0; }
+export function updateZones(dt) {
+  for (let i = zones.length - 1; i >= 0; i--) {
+    const z = zones[i];
+    z.t += dt; z.acc += dt;
+    z.vis?.(dt);
+    while (z.acc >= z.every) { z.acc -= z.every; if (G.level) z.tick(); }
+    if (z.t >= z.dur) zones.splice(i, 1);
+  }
 }
 
 export function cast(id, at, targetEnt) {
@@ -228,6 +318,57 @@ export function cast(id, at, targetEnt) {
       fx.emit(pos.clone().setY(1), { count: 50, color: 0xff6644, speed: 6, life: 0.6, size: 0.6, flat: true });
       for (const e of enemies()) if (flatDist(e.pos, pos) < 6) e.slowT = Math.max(e.slowT, 1.5);
       sfx('buff');
+      break;
+    }
+    case 'earthquake': {
+      const m = s.mult();
+      G.main.shake(0.3);
+      [0, 0.3, 0.6].forEach((delay, wave) => setTimeout(() => {
+        if (!G.player || G.player.dead || !G.level) return;
+        const c = G.player.pos.clone();
+        const rad = 3 + wave * 2;
+        for (const e of enemies()) { const d = flatDist(e.pos, c); if (d < rad && d >= rad - 2.6) { weaponHit(e, m); e.stunT = Math.max(e.stunT || 0, 1); } }
+        fx.ring(c, 0xd8a060, rad, 0.4);
+        for (let k = 0; k < 14; k++) { const a = (k / 14) * Math.PI * 2; fx.emit(c.clone().add(new THREE.Vector3(Math.cos(a) * rad, 0.2, Math.sin(a) * rad)), { count: 4, color: 0x9a7a50, speed: 3, up: 2, life: 0.7, size: 0.6, gravity: 8 }); }
+        G.main.shake(0.22);
+        sfx('boom');
+      }, delay * 1000));
+      break;
+    }
+    case 'blizzard': {
+      const c = at.clone();
+      const dmg = s.dmg();
+      fx.ring(c, 0x9fe8ff, 4, 0.6);
+      zones.push({ t: 0, acc: 0, every: 0.5, dur: s.dur(),
+        tick: () => { for (const e of enemies()) if (flatDist(e.pos, c) < 4) { e.takeDamage(dmg, false, 'frost'); e.slowT = Math.max(e.slowT || 0, 1.5); } fx.ring(c, 0x9fe8ff, 4, 0.5); fx.emit(c.clone().setY(0.2), { count: 24, color: 0xdff8ff, speed: 4, life: 0.5, size: 0.5, flat: true }); sfx('nova'); },
+        vis: () => { for (let k = 0; k < 6; k++) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * 4; fx.emit(new THREE.Vector3(c.x + Math.cos(a) * r, 7, c.z + Math.sin(a) * r), { count: 1, color: 0xcff4ff, speed: 0.2, up: 0, rise: -14, life: 0.5, size: 0.9, drag: 0 }); } } });
+      sfx('nova');
+      break;
+    }
+    case 'smoke': {
+      const dur = s.dur();
+      for (const e of enemies()) if (flatDist(e.pos, pos) < 4.5) { e.stunT = Math.max(e.stunT || 0, dur); }
+      G.buffs.smoke = 5;
+      fx.emit(pos.clone().setY(0.4), { count: 90, color: 0x6a6a7a, speed: 3, up: 0.6, life: 2.2, size: 1.4, spread: 1.5, drag: 2.5 });
+      fx.ring(pos, 0x8a8a9a, 4.5, 0.5);
+      sfx('blink');
+      break;
+    }
+    case 'blades': {
+      const c = at.clone();
+      const m = s.mult();
+      fx.ring(c, 0xcfd8e0, 3.5, 0.5);
+      zones.push({ t: 0, acc: 0, every: 0.3, dur: 3,
+        tick: () => {
+          const list = enemies().filter((e) => flatDist(e.pos, c) < 3.5);
+          const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * 3.2;
+          const tgt = list.length ? pick(list) : null;
+          const p = tgt ? tgt.pos.clone() : new THREE.Vector3(c.x + Math.cos(a) * r, 0, c.z + Math.sin(a) * r);
+          fx.beam(p.clone().setY(6), p.clone().setY(0.2), 0xdfe8f0, 0.15);
+          fx.emit(p.clone().setY(0.3), { count: 8, color: 0xe8f0ff, speed: 3, life: 0.3, size: 0.3 });
+          if (tgt) weaponHit(tgt, m);
+          sfx('swing');
+        } });
       break;
     }
   }

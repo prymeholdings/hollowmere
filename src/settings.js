@@ -2,7 +2,9 @@ import { Audio, applyVolumes } from './audio.js';
 const KEY = 'hollowmere_settings_v1';
 export const Settings = {
   master: 0.8, music: 0.55, sfx: 0.8,
-  quality: 'high', // low | medium | high
+  quality: 'high', // low | medium | high | ultra
+  renderScale: 1,
+  sharpen: 0.35,
   damageNumbers: true,
   showHelp: true,
   screenShake: true,

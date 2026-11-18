@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, petDamage, petMaxHp, msg } from './state.js';
-import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish } from './items.js';
+import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate } from './items.js';
 import { FAME_STEPS, QUEST_GIVER } from './data.js';
 import { hex, sfx, clamp } from './util.js';
 import { itemIcon, skillIcon } from './icons.js';
-import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, canCast } from './skills.js';
+import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, NODE, TIER_LEVEL, canCast, learnBlock, maxRank, isActive, skillName, skillIconKey, treePoints, synergyText } from './skills.js';
 import { Settings, saveSettings } from './settings.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -184,6 +184,7 @@ export class UI {
     if (G.buffs.speed > 0) buffs.push(['blink', G.buffs.speed, 'Shrine of Swiftness']);
     if (G.buffs.wealth > 0) buffs.push(['skull', G.buffs.wealth, 'Shrine of Wealth']);
     if (G.buffs.warcry > 0) buffs.push(['cry', G.buffs.warcry, 'Battle Cry']);
+    if (G.buffs.smoke > 0) buffs.push(['smoke', G.buffs.smoke, 'Smoke Bomb: +30% dodge']);
     const bk = buffs.map((b) => b[0] + Math.ceil(b[1])).join();
     if (bk !== this._bk) { this._bk = bk; $('#hud-buffs').innerHTML = buffs.map(([ic, t, n]) => `<div class="buff" title="${n}">${skillIcon(ic)}<span>${Math.ceil(t)}</span></div>`).join(''); }
     $('#hud-loc').textContent = G.level.kind === 'town' ? 'Hollowmere' : `Sunken Wells · Floor ${G.level.floor}`;
@@ -271,9 +272,17 @@ export class UI {
     this.showText(html);
   }
   showSkillTip(id) {
-    const s = SKILLS[id];
     const r = G.skills[id] || 0;
-    this.showText(`<div class="tt-name" style="color:#e8c170">${s.name}</div><div class="tt-sub">${s.school} · Rank ${r}</div><div>${s.desc(s)}</div><div class="tt-dim" style="margin-top:4px">Mana: ${Math.round(s.cost())}${s.cdv() ? ` · Cooldown: ${s.cdv().toFixed(1)}s` : ''}</div>${r ? '' : '<div class="tt-bad">Not learned yet</div>'}`);
+    const block = learnBlock(id);
+    const foot = block && block !== 'No skill points' ? `<div class="tt-bad">${block}</div>` : '';
+    if (PASSIVES[id]) {
+      const p = PASSIVES[id];
+      this.showText(`<div class="tt-name" style="color:#e8c170">${p.name}</div><div class="tt-sub">Passive · Rank ${r} / ${maxRank(id)}</div><div>${r ? p.desc(r) : 'Not learned yet.'}</div><div class="tt-dim" style="margin-top:4px">Next rank: ${p.desc(r + 1)}</div>${foot}`);
+      return;
+    }
+    const s = SKILLS[id];
+    const st = synergyText(id);
+    this.showText(`<div class="tt-name" style="color:#e8c170">${s.name}</div><div class="tt-sub">${s.school} · Rank ${r} / ${maxRank(id)}</div><div>${s.desc(s)}</div><div class="tt-dim" style="margin-top:4px">Mana: ${Math.round(s.cost())}${s.cdv() ? ` · Cooldown: ${s.cdv().toFixed(1)}s` : ''}</div>${st ? `<div style="color:#9fd8a0;margin-top:4px">Synergies:<br>${st}</div>` : ''}${r ? '' : '<div class="tt-bad">Not learned yet</div>'}${foot}`);
   }
   placeTooltip() {
     const t = this.tooltip;
@@ -299,7 +308,7 @@ export class UI {
   show(name, ...args) {
     sfx('ui');
     this.close(name);
-    const fn = { inv: this.renderInv, char: this.renderChar, skills: this.renderSkills, shop: this.renderShop, quest: this.renderQuest, pause: this.renderPause, settings: this.renderSettings }[name];
+    const fn = { inv: this.renderInv, char: this.renderChar, skills: this.renderSkills, shop: this.renderShop, quest: this.renderQuest, pause: this.renderPause, settings: this.renderSettings, forge: this.renderForge }[name];
     if (fn) fn.call(this, ...args);
   }
   panel(name, title, style, closable = true) {
@@ -320,6 +329,7 @@ export class UI {
     if (this.open.skills) this.renderSkills();
     if (this.open.shop) this.renderShop();
     if (this.open.quest) this.renderQuest();
+    if (this.open.forge) this.renderForge();
   }
 
   itemCell(it, onClick, onRight, selected, cls = 'cell') {
@@ -419,35 +429,107 @@ export class UI {
   }
 
   renderSkills() {
-    const body = this.body('skills', 'Skills', { left: '50%', top: '70px', width: '600px', transform: 'translateX(-50%)', maxHeight: '82vh', overflowY: 'auto' });
-    let html = `<div class="muted" style="text-align:center;margin-bottom:8px">Skill points: <b style="color:#ffd84d">${G.skillPoints}</b> · Any class can learn any skill. Click a key to place a skill on your bar.</div>`;
-    const ids = Object.keys(SKILLS);
-    for (const id of ids) {
-      const s = SKILLS[id];
-      const r = G.skills[id] || 0;
-      const asg = SLOTKEYS.map((k) => `<button class="${G.hotbar[k] === id ? 'on' : ''}" data-asg="${id}:${k}" ${r ? '' : 'disabled'}>${KEYLABEL[k]}</button>`).join('');
-      html += `<div class="skrow ${r ? '' : 'locked'}"><div class="ic">${skillIcon(s.icon)}</div><div class="bd"><b>${s.name}</b> <span class="muted">· ${s.school} · Rank ${r}</span><small>${s.desc(s)} Mana ${Math.round(s.cost())}${s.cdv() ? `, cooldown ${s.cdv().toFixed(1)}s` : ''}.</small><div class="asg">${asg}</div></div><button data-up="${id}" ${G.skillPoints ? '' : 'disabled'}>+</button></div>`;
+    const body = this.body('skills', 'Skill Trees', { left: '50%', top: '56px', width: '1010px', transform: 'translateX(-50%)', maxHeight: '88vh', overflowY: 'auto' });
+    if (!this.skSel) this.skSel = G.hotbar.rmb || 'firebolt';
+    const NW = 64, CW = 96, RH = 92, PADX = 26, PADY = 14;
+    let html = `<div class="sk-top"><span>Skill points: <b style="color:#ffd84d">${G.skillPoints}</b></span><span class="muted">Click a skill to learn a rank. Rows unlock at levels ${TIER_LEVEL.join(', ')}. Any class can learn any tree.</span></div><div class="sk-trees">`;
+    for (const t of TREES) {
+      const W = PADX * 2 + CW * 2 + NW, H = PADY * 2 + RH * 3 + NW;
+      const xy = (n) => [PADX + n.col * CW + NW / 2, PADY + n.tier * RH + NW / 2];
+      let lines = '';
+      for (const n of t.nodes) for (const r of n.req || []) {
+        const a = xy(NODE[r]), b = xy(n);
+        const on = (G.skills[r] || 0) > 0;
+        lines += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${on ? t.color : '#3a3022'}" stroke-width="${on ? 4 : 3}" ${on ? '' : 'stroke-dasharray="6 5"'}/>`;
+      }
+      let rows = '';
+      for (let i = 0; i < 4; i++) rows += `<div class="sk-tier" style="top:${PADY + i * RH + NW / 2 - 8}px">Lv ${TIER_LEVEL[i]}</div>`;
+      let nodes = '';
+      for (const n of t.nodes) {
+        const r = G.skills[n.id] || 0, mx = maxRank(n.id);
+        const block = learnBlock(n.id);
+        const cls = ['sk-node', r ? 'learned' : '', !block ? 'avail' : '', isActive(n.id) ? 'active' : 'passive', this.skSel === n.id ? 'sel' : '', (block && !r && block.startsWith('Req')) ? 'locked' : ''].join(' ');
+        const [x, y] = xy(n);
+        nodes += `<div class="${cls}" data-node="${n.id}" style="left:${x - NW / 2}px;top:${y - NW / 2}px;--tc:${t.color}">${skillIcon(skillIconKey(n.id))}<span class="rk">${r}/${mx}</span></div>`;
+      }
+      html += `<div class="sk-tree"><div class="sk-head" style="color:${t.color}">${t.name}<small>${treePoints(t.id)} points</small></div><div class="sk-canvas" style="width:${W}px;height:${H}px">${rows}<svg width="${W}" height="${H}">${lines}</svg>${nodes}</div></div>`;
     }
-    html += '<h3><span>Passives</span></h3>';
-    for (const id in PASSIVES) {
-      const p = PASSIVES[id];
-      html += `<div class="skrow"><div class="ic">${skillIcon(id)}</div><div class="bd"><b>${p.name}</b> <span class="muted">· Rank ${G.skills[id] || 0}</span><small>${p.desc()}</small></div><button data-up="${id}" ${G.skillPoints ? '' : 'disabled'}>+</button></div>`;
-    }
+    html += '</div><div id="sk-detail"></div>';
+    if (G.lvl >= 2) html += '';
     body.innerHTML = html;
-    body.querySelectorAll('[data-up]').forEach((b) => (b.onclick = () => {
-      if (G.skillPoints <= 0) return;
-      const id = b.dataset.up;
-      G.skills[id] = (G.skills[id] || 0) + 1; G.skillPoints--;
-      if (G.skills[id] === 1 && SKILLS[id] && !Object.values(G.hotbar).includes(id)) { const free = SLOTKEYS.find((k) => !G.hotbar[k] || !(G.skills[G.hotbar[k]] > 0)); if (free) G.hotbar[free] = id; }
-      if (id === 'pet_bond' && G.pet) G.pet.applyForm(true);
-      sfx('level'); this.refreshSlotIcons(); this.refresh();
-    }));
-    body.querySelectorAll('[data-asg]').forEach((b) => (b.onclick = () => {
-      const [id, k] = b.dataset.asg.split(':');
+    body.querySelectorAll('[data-node]').forEach((d) => {
+      const id = d.dataset.node;
+      d.onclick = () => {
+        this.skSel = id;
+        const block = learnBlock(id);
+        if (!block) {
+          G.skills[id] = (G.skills[id] || 0) + 1; G.skillPoints--;
+          if (G.skills[id] === 1 && SKILLS[id] && !Object.values(G.hotbar).includes(id)) { const free = SLOTKEYS.find((k) => !G.hotbar[k] || !(G.skills[G.hotbar[k]] > 0)); if (free) G.hotbar[free] = id; }
+          if (id === 'pet_bond' && G.pet) G.pet.applyForm(true);
+          sfx('level'); this.refreshSlotIcons(); this.refresh();
+        } else { sfx('ui'); this.renderSkills(); }
+      };
+      d.onmouseenter = () => this.showSkillTip(id);
+      d.onmouseleave = () => this.hideTooltip();
+    });
+    this.renderSkillDetail();
+  }
+  renderSkillDetail() {
+    const box = $('#sk-detail');
+    if (!box) return;
+    const id = this.skSel;
+    const r = G.skills[id] || 0;
+    const block = learnBlock(id);
+    let h = `<div class="ic">${skillIcon(skillIconKey(id))}</div><div class="bd"><b>${skillName(id)}</b> <span class="muted">· Rank ${r} / ${maxRank(id)}</span>`;
+    if (SKILLS[id]) {
+      const s = SKILLS[id];
+      h += `<small>${s.desc(s)} Mana ${Math.round(s.cost())}${s.cdv() ? `, cooldown ${s.cdv().toFixed(1)}s` : ''}.</small>`;
+      const st = synergyText(id); if (st) h += `<small style="color:#9fd8a0">Synergies: ${st.replace(/<br>/g, ' · ')}</small>`;
+      h += `<div class="asg">Place on: ${SLOTKEYS.map((k) => `<button class="${G.hotbar[k] === id ? 'on' : ''}" data-asg="${k}" ${r ? '' : 'disabled'}>${KEYLABEL[k]}</button>`).join('')}</div>`;
+    } else {
+      const p = PASSIVES[id];
+      h += `<small>${r ? 'Now: ' + p.desc(r) : 'Passive.'} Each rank: ${p.per}.</small>`;
+    }
+    h += `<small class="${block ? 'tt-bad' : ''}" style="${block ? '' : 'color:#ffd84d'}">${block ? (block === 'Maximum rank' ? 'Fully mastered.' : block) : 'Click the skill again to add a rank.'}</small></div>`;
+    box.innerHTML = h;
+    box.querySelectorAll('[data-asg]').forEach((b) => (b.onclick = () => {
+      const k = b.dataset.asg;
       for (const kk of SLOTKEYS) if (G.hotbar[kk] === id) G.hotbar[kk] = null;
       G.hotbar[k] = id; sfx('ui'); this.refreshSlotIcons(); this.renderSkills();
     }));
-    body.querySelectorAll('.skrow .ic').forEach((ic, i) => { const id = ids[i]; if (!id) return; ic.onmouseenter = () => this.showSkillTip(id); ic.onmouseleave = () => this.hideTooltip(); });
+  }
+
+  renderForge() {
+    const body = this.body('forge', "Hobb's Forge", { left: '18px', top: '90px', width: '470px', maxHeight: '78vh', overflowY: 'auto' });
+    const list = [];
+    for (const k in G.equipment) { const it = G.equipment[k]; if (it && it.rarity >= 1) list.push({ it, where: 'eq', key: k }); }
+    G.backpack.forEach((it, i) => { if (it.rarity >= 1 && it.slot in G.equipment) list.push({ it, where: 'bp', key: i }); });
+    let h = '<div class="muted" style="text-align:center;margin-bottom:8px">"Bring me anything with a spark of magic and I will hammer it into something new." Reforging rerolls an item of the same kind and rarity.</div>';
+    if (!list.length) h += '<p style="text-align:center">You have no magic, rare or legendary gear to reforge.</p>';
+    body.innerHTML = h;
+    for (const e of list) {
+      const cost = Math.max(60, Math.round(sellPrice(e.it) * 4));
+      const row = el('div', 'skrow');
+      row.innerHTML = `<div class="ic">${itemIcon(e.it, hex(itemColor(e.it)))}</div><div class="bd"><b style="color:${hex(itemColor(e.it))}">${e.it.name}</b><small>${e.where === 'eq' ? 'Equipped' : 'In backpack'} · item level ${e.it.ilvl}</small></div>`;
+      const b = el('button', '', `Reforge · ${cost}g`);
+      b.disabled = G.gold < cost;
+      b.onclick = () => {
+        if (G.gold < cost) return;
+        let n = null;
+        for (let i = 0; i < 120 && !n; i++) { const c = generate(e.it.ilvl, 0, e.it.rarity); if (c.slot === e.it.slot && c.rarity === e.it.rarity) n = c; }
+        if (!n) { this.flash('The metal resists. Try again.'); return; }
+        G.gold -= cost;
+        if (e.where === 'eq') G.equipment[e.key] = n; else G.backpack[e.key] = n;
+        msg(`Hobb reforges your ${e.it.name} into ${n.name}!`, hex(itemColor(n)));
+        sfx('legend');
+        G.player?.refreshVisuals();
+        this.refresh();
+      };
+      row.appendChild(b);
+      row.querySelector('.ic').onmouseenter = () => this.showTooltip(e.it);
+      row.querySelector('.ic').onmouseleave = () => this.hideTooltip();
+      body.appendChild(row);
+    }
   }
 
   renderShop() {
@@ -528,7 +610,9 @@ export class UI {
     const check = (key, label) => `<div class="setrow"><span>${label}</span><input type="checkbox" data-c="${key}" ${Settings[key] ? 'checked' : ''}></div>`;
     body.innerHTML = `<h3><span>Audio</span></h3>${slider('master', 'Master volume')}${slider('music', 'Music')}${slider('sfx', 'Sound effects')}
       <h3><span>Graphics</span></h3>
-      <div class="setrow"><span>Quality</span><select id="set-q"><option value="low">Low (fast)</option><option value="medium">Medium</option><option value="high">High (glow and soft shadows)</option></select></div>
+      <div class="setrow"><span>Quality</span><select id="set-q"><option value="low">Low (fastest)</option><option value="medium">Medium (glow, SMAA)</option><option value="high">High (ambient occlusion, MSAA, soft shadows)</option><option value="ultra">Ultra (sharper shadows, full resolution)</option></select></div>
+      <div class="setrow"><span>Render scale <small class="muted">(lower is faster)</small></span><span><input type="range" min="50" max="100" step="5" value="${Math.round((Settings.renderScale || 1) * 100)}" id="set-rs"> <span id="sv-rs">${Math.round((Settings.renderScale || 1) * 100)}%</span></span></div>
+      <div class="setrow"><span>Sharpening</span><span><input type="range" min="0" max="100" value="${Math.round((Settings.sharpen ?? 0.35) * 100)}" id="set-sh"> <span id="sv-sh">${Math.round((Settings.sharpen ?? 0.35) * 100)}%</span></span></div>
       <div class="setrow"><span>Fullscreen</span><button class="small" id="set-fs">Toggle (F11)</button></div>
       <h3><span>Gameplay</span></h3>${check('damageNumbers', 'Show damage numbers')}${check('screenShake', 'Screen shake')}${check('autoLoot', 'Auto-pick up potions')}${check('showHelp', 'Show key hints')}
       <h3><span>Controls</span></h3><div class="muted" style="line-height:1.6">Left-click: move, attack, pick up, talk · Right-click / Q W E R: skills · 1 / 2: potions · T: town portal · I: inventory · C: character · K: skills · J: quest · Tab: big map · Alt: show item names · Mouse wheel: zoom · F5: save · Esc: menu</div>
@@ -537,6 +621,8 @@ export class UI {
     body.querySelectorAll('[data-k]').forEach((r) => (r.oninput = () => { Settings[r.dataset.k] = r.value / 100; $('#sv-' + r.dataset.k).textContent = r.value + '%'; saveSettings(); }));
     body.querySelectorAll('[data-c]').forEach((c) => (c.onchange = () => { Settings[c.dataset.c] = c.checked; saveSettings(); }));
     $('#set-q', body).onchange = (e) => { Settings.quality = e.target.value; saveSettings(); this.main.applyQuality(); };
+    $('#set-rs', body).onchange = (e) => { Settings.renderScale = e.target.value / 100; $('#sv-rs').textContent = e.target.value + '%'; saveSettings(); this.main.applyQuality(); };
+    $('#set-sh', body).oninput = (e) => { Settings.sharpen = e.target.value / 100; $('#sv-sh').textContent = e.target.value + '%'; saveSettings(); this.main.resize(); };
     $('#set-fs', body).onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); };
     $('#set-done', body).onclick = () => { this.close('settings'); if (fromMenu) this.showMenu(); };
   }
@@ -639,7 +725,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       <button id="m-quit">Quit</button>
-      <div class="foot">An original action RPG · v0.2 · 3D models by Kay Lousberg (KayKit, CC0) · Music and sound made in code</div>`;
+      <div class="foot">An original action RPG · v0.3 · 3D models by Kay Lousberg (KayKit, CC0) · Music and sound made in code</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };
@@ -658,25 +744,57 @@ export class UI {
     const c = $('#create');
     c.classList.remove('hidden');
     this.open.create = true;
+    state.tab = state.tab || 'class';
+    const statName = { str: 'Strength', dex: 'Dexterity', vit: 'Vitality', mag: 'Magic' };
     const render = () => {
       const cls = CLASSES[state.cls];
-      const statMax = 20;
-      c.innerHTML = `<div class="panel cls"><h2>Choose your class</h2>${Object.entries(CLASSES).map(([k, v]) => `<div class="clscard ${k === state.cls ? 'on' : ''}" data-cls="${k}"><div class="ic">${skillIcon(SKILLS[Object.keys(v.skills).find((s) => SKILLS[s])].icon)}</div><div><b>${v.title}</b><small>${v.desc}</small></div></div>`).join('')}</div>
-        <div class="panel info"><h2>${cls.title}</h2>
-          <div class="muted" style="text-align:center;margin-bottom:10px">${cls.desc}</div>
-          ${['str', 'dex', 'vit', 'mag'].map((k) => `<div class="statbar"><span>${{ str: 'Strength', dex: 'Dexterity', vit: 'Vitality', mag: 'Magic' }[k]}</span><div><i style="width:${(cls.base[k] / statMax) * 100}%"></i></div><b>${cls.base[k]}</b></div>`).join('')}
-          <h3><span>Starting skills</span></h3><div class="muted">${Object.keys(cls.skills).map((s) => (SKILLS[s] || PASSIVES[s]).name).join(', ')}</div>
-          <h3><span>Cape colour</span></h3><div class="swatches">${CAPE_COLORS.map((col) => `<div class="sw ${col === state.cape ? 'on' : ''}" style="background:${col}" data-cape="${col}"></div>`).join('')}</div>
+      const tab = (k, t) => `<button class="crtab ${state.tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`;
+      let inner = '';
+      if (state.tab === 'class') {
+        inner = `<div class="muted" style="text-align:center;margin-bottom:10px">${cls.desc}</div>
+          ${['str', 'dex', 'vit', 'mag'].map((k) => `<div class="statbar"><span>${statName[k]}</span><div><i style="width:${(cls.base[k] / 20) * 100}%"></i></div><b>${cls.base[k]}</b></div>`).join('')}
+          <h3><span>Starting skills</span></h3><div class="muted">${Object.keys(cls.skills).map(skillName).join(', ')}. You can learn every skill tree later.</div>`;
+      } else if (state.tab === 'look') {
+        inner = `<h3><span>Weapons</span></h3><div class="chips">${cls.gear.map((g, i) => `<button class="chip ${state.gear === i ? 'on' : ''}" data-gear="${i}">${g.label}</button>`).join('')}</div>
+          <h3><span>Armor tint</span></h3><div class="swatches">${ARMOR_TINTS.map((col) => `<div class="sw ${col === state.tint ? 'on' : ''}" style="background:${col}" data-tint="${col}"></div>`).join('')}</div>
+          <h3><span>Cape</span></h3><div class="swatches">${CAPE_COLORS.map((col) => `<div class="sw ${col === state.cape ? 'on' : ''}" style="background:${col}" data-cape="${col}"></div>`).join('')}</div>
+          <div class="setrow"><span>Wear a cape</span><input type="checkbox" id="cr-capeon" ${state.capeOn ? 'checked' : ''}></div>
           ${cls.alt ? `<div class="setrow"><span>Wear a hood</span><input type="checkbox" id="cr-hood" ${state.hooded ? 'checked' : ''}></div>` : ''}
-          <h3><span>Name</span></h3><input type="text" id="cr-name" maxlength="18" placeholder="Name your hero" value="${state.name}" style="width:100%">
-          <div style="text-align:center;margin-top:16px"><button id="cr-back">Back</button><button id="cr-go" class="primary big">Begin</button></div>
+          ${cls.headgear ? `<div class="setrow"><span>Wear ${state.cls === 'Mage' ? 'hat' : 'helmet'}</span><input type="checkbox" id="cr-helm" ${state.helm ? 'checked' : ''}></div>` : ''}
+          <div class="setrow"><span>Height</span><span><input type="range" id="cr-height" min="88" max="112" value="${Math.round(state.height * 100)}"> ${Math.round(state.height * 100)}%</span></div>`;
+      } else {
+        inner = `<h3><span>Companion</span></h3><div class="muted" style="margin-bottom:8px">Your lantern-tailed fox fights beside you and can sell loot in town.</div>
+          <div class="chips">${PET_COATS.map((p) => `<button class="chip ${state.pet === p.key ? 'on' : ''}" data-pet="${p.key}"><i class="dot" style="background:#${p.color.toString(16).padStart(6, '0')}"></i>${p.label}</button>`).join('')}</div>
+          <h3><span>Companion name</span></h3><input type="text" id="cr-petname" maxlength="14" value="${state.petName}" style="width:100%">`;
+      }
+      c.innerHTML = `<div class="panel cls"><h2>Choose your class</h2>${Object.entries(CLASSES).map(([k, v]) => `<div class="clscard ${k === state.cls ? 'on' : ''}" data-cls="${k}"><div class="ic">${skillIcon(skillIconKey(Object.keys(v.skills)[0]))}</div><div><b>${v.title}</b><small>${v.desc}</small></div></div>`).join('')}</div>
+        <div class="panel info"><h2>${cls.title}</h2>
+          <div class="crtabs">${tab('class', 'Class')}${tab('look', 'Appearance')}${tab('pet', 'Companion')}</div>
+          <div class="crbody">${inner}</div>
+          <h3><span>Hero name</span></h3><input type="text" id="cr-name" maxlength="18" placeholder="Name your hero" value="${state.name}" style="width:100%">
+          <div style="text-align:center;margin-top:14px"><button id="cr-rand">Randomize</button><button id="cr-back">Back</button><button id="cr-go" class="primary big">Begin</button></div>
         </div>`;
-      c.querySelectorAll('[data-cls]').forEach((d) => (d.onclick = () => { state.cls = d.dataset.cls; state.cape = CLASSES[state.cls].cape; state.hooded = false; sfx('ui'); onChange(); render(); }));
-      c.querySelectorAll('[data-cape]').forEach((d) => (d.onclick = () => { state.cape = d.dataset.cape; sfx('ui'); onChange(); render(); }));
-      const hood = $('#cr-hood', c); if (hood) hood.onchange = () => { state.hooded = hood.checked; onChange(); };
+      const upd = () => { sfx('ui'); onChange(); render(); };
+      c.querySelectorAll('[data-tab]').forEach((d) => (d.onclick = () => { state.tab = d.dataset.tab; sfx('ui'); render(); }));
+      c.querySelectorAll('[data-cls]').forEach((d) => (d.onclick = () => { state.cls = d.dataset.cls; state.cape = CLASSES[state.cls].cape; state.hooded = false; state.gear = 0; upd(); }));
+      c.querySelectorAll('[data-cape]').forEach((d) => (d.onclick = () => { state.cape = d.dataset.cape; upd(); }));
+      c.querySelectorAll('[data-tint]').forEach((d) => (d.onclick = () => { state.tint = d.dataset.tint; upd(); }));
+      c.querySelectorAll('[data-gear]').forEach((d) => (d.onclick = () => { state.gear = +d.dataset.gear; upd(); }));
+      c.querySelectorAll('[data-pet]').forEach((d) => (d.onclick = () => { state.pet = d.dataset.pet; upd(); }));
+      const chk = (id, key) => { const e = $(id, c); if (e) e.onchange = () => { state[key] = e.checked; upd(); }; };
+      chk('#cr-hood', 'hooded'); chk('#cr-helm', 'helm'); chk('#cr-capeon', 'capeOn');
+      const ht = $('#cr-height', c); if (ht) ht.onchange = () => { state.height = ht.value / 100; upd(); };
+      const pn = $('#cr-petname', c); if (pn) pn.oninput = () => { state.petName = pn.value; };
       const nm = $('#cr-name', c);
       nm.oninput = () => { state.name = nm.value; };
       nm.onkeydown = (e) => { if (e.key === 'Enter') onBegin(); };
+      $('#cr-rand', c).onclick = () => {
+        const pk = (a) => a[Math.floor(Math.random() * a.length)];
+        const cl = CLASSES[state.cls];
+        Object.assign(state, { cape: pk(CAPE_COLORS), tint: pk(ARMOR_TINTS), gear: Math.floor(Math.random() * cl.gear.length), helm: Math.random() < 0.7, hooded: !!cl.alt && Math.random() < 0.5, capeOn: Math.random() < 0.85, height: 0.9 + Math.random() * 0.2, pet: pk(PET_COATS).key });
+        if (!state.name) state.name = pk(['Aldric', 'Wren', 'Corvin', 'Isolde', 'Bram', 'Mira', 'Talon', 'Sable', 'Rook', 'Elowen', 'Garrick', 'Nyx']);
+        upd();
+      };
       $('#cr-go', c).onclick = () => onBegin();
       $('#cr-back', c).onclick = () => onBack();
       c.querySelectorAll('.panel').forEach((p) => p.addEventListener('mousedown', (e) => e.stopPropagation()));
