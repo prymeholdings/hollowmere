@@ -1,0 +1,4 @@
+node_modules/
+dist/
+app/game.js
+app/game.js.map
