@@ -1,7 +1,7 @@
 {
   "name": "hollowmere",
   "productName": "Hollowmere",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hollowmere: The Sunken Wells - an original action RPG dungeon crawler",
   "main": "electron/main.js",
   "author": "Hollowmere",
@@ -19,6 +19,9 @@
     "files": [
       "electron/**",
       "app/**",
+      "!app/preview.html",
+      "!app/preview.js",
+      "!app/game.js.map",
       "package.json"
     ],
     "directories": {
@@ -31,6 +34,7 @@
     }
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.5.1",
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.28.2",

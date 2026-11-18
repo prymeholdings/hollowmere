@@ -50,33 +50,4 @@ export function humanoid(body, head, s = 1) {
   return g;
 }
 
-// tiny synthesized sound effects
-let actx = null;
-export function sfx(kind) {
-  try {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    const t = actx.currentTime;
-    const o = actx.createOscillator();
-    const g = actx.createGain();
-    o.connect(g); g.connect(actx.destination);
-    const set = {
-      hit: ['square', 180, 90, 0.08, 0.05],
-      hurt: ['sawtooth', 120, 60, 0.12, 0.06],
-      gold: ['triangle', 900, 1300, 0.12, 0.05],
-      pick: ['triangle', 500, 800, 0.1, 0.05],
-      fire: ['sawtooth', 400, 120, 0.25, 0.04],
-      heal: ['sine', 400, 900, 0.4, 0.06],
-      nova: ['sine', 900, 200, 0.4, 0.06],
-      level: ['triangle', 400, 1200, 0.7, 0.08],
-      die: ['square', 220, 50, 0.3, 0.05],
-      splash: ['sine', 300, 100, 0.2, 0.06],
-      ui: ['sine', 600, 650, 0.05, 0.03],
-    }[kind] || ['sine', 440, 440, 0.1, 0.03];
-    o.type = set[0];
-    o.frequency.setValueAtTime(set[1], t);
-    o.frequency.exponentialRampToValueAtTime(set[2], t + set[3]);
-    g.gain.setValueAtTime(set[4], t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + set[3]);
-    o.start(t); o.stop(t + set[3] + 0.02);
-  } catch (e) { /* audio unavailable */ }
-}
+export { sfx } from './audio.js';

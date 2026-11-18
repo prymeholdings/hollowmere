@@ -1,0 +1,157 @@
+// Original procedural music and sound effects, generated with the Web Audio API.
+export const Audio = {
+  ctx: null, master: null, music: null, sfxBus: null, reverb: null,
+  vol: { master: 0.8, music: 0.55, sfx: 0.8 },
+  track: null, nextBeat: 0, beat: 0, timer: null, intensity: 0,
+};
+
+function ctx() {
+  if (Audio.ctx) return Audio.ctx;
+  const C = new (window.AudioContext || window.webkitAudioContext)();
+  Audio.ctx = C;
+  Audio.master = C.createGain(); Audio.master.connect(C.destination);
+  Audio.music = C.createGain(); Audio.music.connect(Audio.master);
+  Audio.sfxBus = C.createGain(); Audio.sfxBus.connect(Audio.master);
+  // generated reverb impulse
+  const len = C.sampleRate * 3;
+  const buf = C.createBuffer(2, len, C.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+  Audio.reverb = C.createConvolver(); Audio.reverb.buffer = buf;
+  const rv = C.createGain(); rv.gain.value = 0.35;
+  Audio.reverb.connect(rv); rv.connect(Audio.master);
+  applyVolumes();
+  return C;
+}
+export function applyVolumes() {
+  if (!Audio.ctx) return;
+  Audio.master.gain.value = Audio.vol.master;
+  Audio.music.gain.value = Audio.vol.music * 0.5;
+  Audio.sfxBus.gain.value = Audio.vol.sfx;
+}
+export function unlockAudio() { const C = ctx(); if (C.state === 'suspended') C.resume(); }
+
+const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+
+function voice(t, freq, dur, { type = 'triangle', gain = 0.2, attack = 0.01, release = null, filter = 0, dest, rev = 0.3, detune = 0 } = {}) {
+  const C = Audio.ctx;
+  const o = C.createOscillator();
+  o.type = type; o.frequency.value = freq; o.detune.value = detune;
+  const g = C.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(gain, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + (release ?? dur));
+  let node = o;
+  if (filter) { const f = C.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filter; o.connect(f); node = f; }
+  node.connect(g);
+  g.connect(dest || Audio.music);
+  if (rev) { const s = C.createGain(); s.gain.value = rev; g.connect(s); s.connect(Audio.reverb); }
+  o.start(t); o.stop(t + (release ?? dur) + 0.05);
+}
+function noise(t, dur, { gain = 0.2, filter = 800, type = 'lowpass', dest, q = 1 } = {}) {
+  const C = Audio.ctx;
+  const len = Math.floor(C.sampleRate * dur);
+  const buf = C.createBuffer(1, len, C.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const s = C.createBufferSource(); s.buffer = buf;
+  const f = C.createBiquadFilter(); f.type = type; f.frequency.value = filter; f.Q.value = q;
+  const g = C.createGain(); g.gain.value = gain;
+  s.connect(f); f.connect(g); g.connect(dest || Audio.music);
+  s.start(t);
+}
+
+// ---------------- music ----------------
+const TRACKS = {
+  menu: { bpm: 70, chords: [[50, 57, 62, 65], [48, 55, 60, 64], [46, 53, 58, 62], [45, 52, 57, 61]], scale: [62, 64, 65, 67, 69, 72, 74], mood: 'warm' },
+  town: { bpm: 84, chords: [[50, 57, 62, 65], [48, 55, 60, 67], [46, 53, 58, 65], [48, 55, 60, 64]], scale: [62, 64, 65, 67, 69, 71, 72, 74, 76], mood: 'warm' },
+  dungeon: { bpm: 62, chords: [[45, 52, 57, 60], [46, 53, 58, 61], [45, 52, 57, 60], [43, 50, 55, 58]], scale: [57, 58, 60, 62, 64, 65, 69], mood: 'dark' },
+  boss: { bpm: 96, chords: [[45, 52, 57, 60], [46, 53, 58, 62], [41, 48, 53, 57], [44, 51, 56, 59]], scale: [57, 58, 60, 63, 64, 65, 68, 69], mood: 'battle' },
+};
+
+export function playMusic(name) {
+  ctx();
+  if (Audio.track === name) return;
+  Audio.track = name;
+  Audio.beat = 0;
+  const C = Audio.ctx;
+  Audio.music.gain.cancelScheduledValues(C.currentTime);
+  Audio.music.gain.setValueAtTime(0.0001, C.currentTime);
+  Audio.music.gain.linearRampToValueAtTime(Audio.vol.music * 0.5, C.currentTime + 2.5);
+  Audio.nextBeat = C.currentTime + 0.2;
+  if (!Audio.timer) Audio.timer = setInterval(schedule, 80);
+}
+
+function schedule() {
+  const C = Audio.ctx;
+  const T = TRACKS[Audio.track];
+  if (!T || !C) return;
+  const spb = 60 / T.bpm / 2; // eighth notes
+  while (Audio.nextBeat < C.currentTime + 0.35) {
+    const t = Audio.nextBeat;
+    const b = Audio.beat;
+    const bar = Math.floor(b / 8);
+    const chord = T.chords[bar % T.chords.length];
+    const step = b % 8;
+    if (T.mood === 'warm') {
+      if (step === 0) {
+        for (const n of chord) voice(t, midi(n), spb * 8, { type: 'sawtooth', gain: 0.025, attack: 0.6, filter: 900, rev: 0.5, detune: (Math.random() - 0.5) * 12 });
+        voice(t, midi(chord[0] - 12), spb * 6, { type: 'sine', gain: 0.12, attack: 0.05, rev: 0.1 });
+      }
+      // plucked arpeggio
+      const arp = [0, 2, 1, 3, 2, 1, 3, 2];
+      if (Math.random() < 0.85) voice(t, midi(chord[arp[step]] + 12), spb * 3, { type: 'triangle', gain: 0.06, attack: 0.005, release: spb * 3, rev: 0.4 });
+      if (step % 4 === 2 && Math.random() < 0.4) voice(t, midi(T.scale[Math.floor(Math.random() * T.scale.length)] + 12), spb * 4, { type: 'sine', gain: 0.05, attack: 0.02, rev: 0.6 });
+    } else if (T.mood === 'dark') {
+      if (step === 0 && bar % 2 === 0) {
+        voice(t, midi(chord[0] - 12), spb * 16, { type: 'sawtooth', gain: 0.05, attack: 2, filter: 260, rev: 0.4 });
+        voice(t, midi(chord[0] - 12), spb * 16, { type: 'sawtooth', gain: 0.05, attack: 2, filter: 260, rev: 0.4, detune: 9 });
+        voice(t, midi(chord[2]), spb * 16, { type: 'sine', gain: 0.03, attack: 3, rev: 0.7 });
+      }
+      if (step === 0 || step === 3) voice(t, midi(chord[0] - 24), 0.4, { type: 'sine', gain: step === 0 ? 0.16 : 0.08, attack: 0.005, release: 0.4, rev: 0 });
+      if (Math.random() < 0.12) {
+        const n = T.scale[Math.floor(Math.random() * T.scale.length)] + 12;
+        voice(t, midi(n), 3, { type: 'sine', gain: 0.05, attack: 0.002, release: 3, rev: 0.8 });
+        voice(t, midi(n) * 2.76, 1.5, { type: 'sine', gain: 0.015, attack: 0.002, release: 1.5, rev: 0.8 });
+      }
+      if (step === 6 && Math.random() < 0.3) noise(t, 1.5, { gain: 0.02, filter: 400, type: 'bandpass' });
+    } else {
+      if (step === 0) for (const n of chord) voice(t, midi(n), spb * 8, { type: 'sawtooth', gain: 0.03, attack: 0.1, filter: 1200, rev: 0.3 });
+      voice(t, midi(chord[0] - 12), spb * 0.9, { type: 'sawtooth', gain: 0.06, attack: 0.005, filter: 500, rev: 0 });
+      if (step === 0 || step === 3 || step === 6) { voice(t, 60, 0.35, { type: 'sine', gain: 0.35, attack: 0.002, release: 0.35, rev: 0.1 }); noise(t, 0.12, { gain: 0.15, filter: 200 }); }
+      if (step === 4) noise(t, 0.2, { gain: 0.15, filter: 2500, type: 'bandpass' });
+      if (step % 2 === 1 && Math.random() < 0.5) voice(t, midi(T.scale[(b * 3) % T.scale.length] + 12), spb, { type: 'square', gain: 0.025, attack: 0.005, filter: 2000, rev: 0.3 });
+    }
+    Audio.nextBeat += spb;
+    Audio.beat++;
+  }
+}
+
+// ---------------- sound effects ----------------
+export function sfx(kind) {
+  if (!Audio.ctx || Audio.ctx.state !== 'running') return;
+  const t = Audio.ctx.currentTime;
+  const D = Audio.sfxBus;
+  const v = (f, d, o) => voice(t, f, d, { dest: D, rev: 0.15, ...o });
+  switch (kind) {
+    case 'hit': noise(t, 0.08, { gain: 0.35, filter: 1800, dest: D }); v(140, 0.1, { type: 'square', gain: 0.08, filter: 600 }); break;
+    case 'crit': noise(t, 0.12, { gain: 0.45, filter: 3000, dest: D }); v(90, 0.2, { type: 'square', gain: 0.12, filter: 800 }); break;
+    case 'swing': noise(t, 0.15, { gain: 0.12, filter: 3000, type: 'bandpass', dest: D, q: 0.7 }); break;
+    case 'hurt': v(160, 0.18, { type: 'sawtooth', gain: 0.12, filter: 700 }); break;
+    case 'gold': v(1320, 0.12, { gain: 0.07 }); setTimeout(() => sfx('gold2'), 60); break;
+    case 'gold2': v(1760, 0.15, { gain: 0.06 }); break;
+    case 'pick': v(520, 0.1, { gain: 0.08 }); v(780, 0.12, { gain: 0.06 }); break;
+    case 'fire': noise(t, 0.35, { gain: 0.25, filter: 900, dest: D }); v(220, 0.3, { type: 'sawtooth', gain: 0.05, filter: 600 }); break;
+    case 'boom': noise(t, 0.8, { gain: 0.6, filter: 500, dest: D }); v(55, 0.6, { type: 'sine', gain: 0.4 }); break;
+    case 'zap': for (let i = 0; i < 3; i++) v(800 + Math.random() * 1200, 0.08, { type: 'square', gain: 0.05, filter: 4000 }); noise(t, 0.2, { gain: 0.2, filter: 5000, type: 'highpass', dest: D }); break;
+    case 'heal': [523, 659, 784, 1046].forEach((f, i) => voice(t + i * 0.06, f, 0.5, { dest: D, gain: 0.06, type: 'sine', rev: 0.5 })); break;
+    case 'nova': noise(t, 0.6, { gain: 0.3, filter: 6000, type: 'highpass', dest: D }); v(1200, 0.5, { type: 'sine', gain: 0.05 }); break;
+    case 'buff': [392, 494, 587].forEach((f, i) => voice(t + i * 0.08, f, 0.6, { dest: D, gain: 0.07, type: 'square', filter: 1500, rev: 0.4 })); break;
+    case 'blink': v(1500, 0.25, { type: 'sine', gain: 0.08 }); v(300, 0.25, { type: 'sine', gain: 0.08 }); break;
+    case 'level': [392, 523, 659, 784, 1046].forEach((f, i) => voice(t + i * 0.09, f, 0.8, { dest: D, gain: 0.08, type: 'triangle', rev: 0.6 })); break;
+    case 'die': v(110, 0.4, { type: 'sawtooth', gain: 0.1, filter: 400 }); noise(t, 0.3, { gain: 0.15, filter: 600, dest: D }); break;
+    case 'splash': noise(t, 0.4, { gain: 0.25, filter: 1200, type: 'bandpass', dest: D }); break;
+    case 'ui': v(880, 0.05, { type: 'sine', gain: 0.04, rev: 0 }); break;
+    case 'door': noise(t, 0.5, { gain: 0.2, filter: 300, dest: D }); break;
+    case 'legend': [523, 659, 784, 1046, 1318].forEach((f, i) => voice(t + i * 0.05, f, 1.2, { dest: D, gain: 0.07, type: 'sine', rev: 0.8 })); break;
+  }
+}

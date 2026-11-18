@@ -1,0 +1,16 @@
+import { Audio, applyVolumes } from './audio.js';
+const KEY = 'hollowmere_settings_v1';
+export const Settings = {
+  master: 0.8, music: 0.55, sfx: 0.8,
+  quality: 'high', // low | medium | high
+  damageNumbers: true,
+  showHelp: true,
+  screenShake: true,
+  autoLoot: true,
+};
+export function loadSettings() {
+  try { Object.assign(Settings, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* defaults */ }
+  syncAudio();
+}
+export function saveSettings() { localStorage.setItem(KEY, JSON.stringify(Settings)); syncAudio(); }
+function syncAudio() { Audio.vol.master = Settings.master; Audio.vol.music = Settings.music; Audio.vol.sfx = Settings.sfx; applyVolumes(); }

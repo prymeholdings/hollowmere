@@ -1,0 +1,8 @@
+Hollowmere: The Sunken Wells - credits and licenses
+
+3D models: KayKit Adventurers, Skeletons, Dungeon Remastered and Medieval Hexagon packs
+by Kay Lousberg (www.kaylousberg.com), released under CC0 1.0 (public domain).
+See LICENSE-KayKit-*.txt in this folder.
+
+Music and sound effects: generated in code by the game itself (original, no samples).
+Game design, code, UI and icons: original work for Hollowmere.

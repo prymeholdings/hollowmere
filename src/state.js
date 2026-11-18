@@ -2,7 +2,8 @@ import { generate, itemColor, sellPrice } from './items.js';
 import { ENEMIES, QUEST_GIVER, FAME_STEPS, FAME_RANKS } from './data.js';
 import { randi, pick, sfx } from './util.js';
 
-const SAVE_KEY = 'hollowmere_save_v1';
+const SAVE_KEY = 'hollowmere_save_v2';
+export const SKILL_ZERO = { firebolt: 0, lightning: 0, nova: 0, meteor: 0, heal: 0, bones: 0, whirlwind: 0, slam: 0, knives: 0, blink: 0, warcry: 0, mastery: 0, pet_bond: 0, toughness: 0 };
 export const BACKPACK_MAX = 40;
 
 export const G = {
@@ -14,9 +15,10 @@ export function msg(t, c = '#e6e6e6') { G.onMessage(t, c); }
 
 export function reset() {
   Object.assign(G, {
-    heroName: 'Wanderer', lvl: 1, xp: 0, statPoints: 0, skillPoints: 1,
+    heroName: 'Wanderer', cls: 'Knight', look: { cape: '#8c1f1f', hooded: false }, lvl: 1, xp: 0, statPoints: 0, skillPoints: 1,
     base: { str: 10, dex: 10, vit: 10, mag: 10 },
-    skills: { firebolt: 1, heal: 0, nova: 0, pet_bond: 0, mastery: 0 },
+    skills: { ...SKILL_ZERO },
+    hotbar: { rmb: 'firebolt', q: 'heal', w: 'nova', e: 'lightning', r: 'meteor' }, cds: {},
     gold: 80, fame: 0, fameRank: 0, hpPotions: 4, mpPotions: 2, scrolls: 2,
     equipment: {
       weapon: { base: 'Rusted Shortblade', name: 'Rusted Shortblade', slot: 'weapon', rarity: 0, ilvl: 1, req: 1, dmg: [2, 5], affixes: {}, value: 6 },
@@ -37,28 +39,25 @@ export function itemBonus(s) {
   return t;
 }
 export const stat = (s) => G.base[s] + itemBonus(s);
-export const maxHp = () => 40 + stat('vit') * 5 + G.lvl * 6 + itemBonus('life');
+export const maxHp = () => (40 + stat('vit') * 5 + G.lvl * 6 + itemBonus('life')) * (1 + 0.08 * (G.skills.toughness || 0));
 export const maxMp = () => 14 + stat('mag') * 3 + G.lvl * 2 + itemBonus('mana');
 export function armor() {
   let a = itemBonus('armor');
   for (const k in G.equipment) { const it = G.equipment[k]; if (it && it.armor) a += it.armor; }
-  return a + stat('dex') * 0.3;
+  return a + stat('dex') * 0.3 + (G.skills.toughness || 0) * 5 + (G.buffs.warcry > 0 ? 40 : 0);
 }
 export function weaponDamage() {
   const w = G.equipment.weapon;
   const d = w ? w.dmg : [1, 3];
   let mult = 1 + stat('str') * 0.025 + G.skills.mastery * 0.1 + itemBonus('dmg_pct') / 100;
   if (G.buffs.power > 0) mult *= 1.5;
+  if (G.buffs.warcry > 0) mult *= 1.3;
   const flat = itemBonus('dmg');
   return [(d[0] + flat) * mult, (d[1] + flat) * mult];
 }
 export const rollDamage = () => { const d = weaponDamage(); return d[0] + Math.random() * (d[1] - d[0]); };
 export const attackSpeed = () => 1.15 * (1 + stat('dex') * 0.008 + itemBonus('aspd') / 100 + G.skills.mastery * 0.03) * (G.buffs.speed > 0 ? 1.3 : 1);
 export const critChance = () => 0.05 + stat('dex') * 0.002;
-export const fireboltDamage = () => (6 + stat('mag') * 1.1 + G.lvl * 1.5) * (1 + 0.3 * (G.skills.firebolt - 1)) * (G.buffs.power > 0 ? 1.5 : 1);
-export const fireboltCost = () => 4 + G.skills.firebolt * 1.5;
-export const healAmount = () => (18 + stat('mag') * 1.6) * (1 + 0.35 * (G.skills.heal - 1));
-export const novaDamage = () => (8 + stat('mag') * 0.9 + G.lvl * 1.2) * (1 + 0.3 * (G.skills.nova - 1));
 export const petDamage = () => (3 + G.lvl * 1.4) * (1 + 0.15 * G.skills.pet_bond);
 export const petMaxHp = () => (35 + G.lvl * 10) * (1 + 0.15 * G.skills.pet_bond);
 export const xpToNext = () => Math.floor(50 * Math.pow(G.lvl, 1.55));
@@ -70,7 +69,7 @@ export function addXp(n) {
     G.xp -= xpToNext();
     G.lvl++; G.statPoints += 5; G.skillPoints += 1;
     G.hp = maxHp(); G.mp = maxMp();
-    msg(`Level up! You are now level ${G.lvl}. Press C to spend points.`, '#ffd84d');
+    msg(`Level up! You are now level ${G.lvl}. Press C for attributes and K for skills.`, '#ffd84d');
     sfx('level');
     G.main?.onLevelUp();
   }
@@ -140,6 +139,7 @@ export function petSellCommons() {
 }
 export function tick(dt) {
   for (const k in G.buffs) if (G.buffs[k] > 0) G.buffs[k] -= dt;
+  for (const k in G.cds) if (G.cds[k] > 0) G.cds[k] -= dt;
   if (G.petFormTime > 0) {
     G.petFormTime -= dt;
     if (G.petFormTime <= 0) { G.petForm = ''; msg(`${G.petName} returns to normal.`); G.pet?.applyForm(); }
@@ -207,7 +207,7 @@ export function restockShop() {
 }
 
 // saving
-const SAVE_FIELDS = ['heroName', 'lvl', 'xp', 'statPoints', 'skillPoints', 'base', 'skills', 'gold', 'fame', 'fameRank', 'hp', 'mp', 'hpPotions', 'mpPotions', 'scrolls', 'equipment', 'backpack', 'deepest', 'portalFloor', 'quest', 'questOffer', 'petName', 'petForm', 'petFormTime', 'shopStock', 'kills', 'fishCaught'];
+const SAVE_FIELDS = ['heroName', 'cls', 'look', 'hotbar', 'lvl', 'xp', 'statPoints', 'skillPoints', 'base', 'skills', 'gold', 'fame', 'fameRank', 'hp', 'mp', 'hpPotions', 'mpPotions', 'scrolls', 'equipment', 'backpack', 'deepest', 'portalFloor', 'quest', 'questOffer', 'petName', 'petForm', 'petFormTime', 'shopStock', 'kills', 'fishCaught'];
 export function saveGame() {
   const d = { v: 1 };
   for (const k of SAVE_FIELDS) d[k] = G[k];
@@ -223,7 +223,8 @@ export function loadGame() {
   reset();
   for (const k of SAVE_FIELDS) if (k in d) G[k] = d[k];
   G.base = { str: 10, dex: 10, vit: 10, mag: 10, ...d.base };
-  G.skills = { firebolt: 1, heal: 0, nova: 0, pet_bond: 0, mastery: 0, ...d.skills };
+  G.skills = { ...SKILL_ZERO, ...d.skills };
+  G.cds = {};
   G.hp = Math.max(1, Math.min(G.hp, maxHp())); G.mp = Math.min(G.mp, maxMp());
   return true;
 }
