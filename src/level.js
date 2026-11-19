@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { G, MAX_FLOOR } from './state.js';
 import { ENEMIES, BOSSES, QUEST_GIVER } from './data.js';
 import { rand, randi, pick, box, cyl, cone, sphere } from './util.js';
-import { generate } from './items.js';
+import { generate, randomGem } from './items.js';
 import { Enemy, Interact, Loot, Villager } from './entities.js';
 import { prop, propMesh } from './assets.js';
 import { groundDetail, addDetail, grassField, flowers, grimeTexture } from './textures.js';
@@ -673,6 +673,9 @@ export class Level {
     if (boss) n = 4;
     for (let i = 0; i < n; i++) drops.push({ item: generate(f + randi(0, 1), mf + (boss ? 100 : 0), boss && i === 0 ? 2 : elite ? 1 : 0) });
     if (Math.random() < 0.09) drops.push({ potion: Math.random() < 0.65 ? 'hp' : 'mp' });
+    // gems: rare from regular monsters, likely from champions, guaranteed from guardians
+    const gc = boss ? randi(1, 2) : Math.random() < (elite ? 0.3 : 0.045) ? 1 : 0;
+    for (let i = 0; i < gc; i++) drops.push({ item: randomGem(f) });
     for (const d of drops) {
       const l = new Loot(d);
       const tp = p.clone().add(new THREE.Vector3(rand(-1.2, 1.2), 0, rand(-1.2, 1.2)));

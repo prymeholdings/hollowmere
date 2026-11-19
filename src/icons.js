@@ -1,4 +1,5 @@
-// Hand-made SVG icons for items and skills (original artwork).
+// Hand-made SVG icons for items and skills (original artwork). Equipment and gems use 3D-rendered icons.
+import { itemIconURL } from './iconrender.js';
 const wrap = (inner, c1, c2 = '#000') => `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="g" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="${c1}" stop-opacity="0.35"/><stop offset="1" stop-color="${c2}" stop-opacity="0"/></radialGradient></defs><rect width="64" height="64" fill="url(#g)"/>${inner}</svg>`;
 const M = '#d8dde4', D = '#5a4630', G = '#e8c35a';
 const ITEM = {
@@ -16,6 +17,8 @@ const ITEM = {
   boot: `<path d="M20 10 L36 10 L36 38 L54 44 L54 54 L18 54 Z" fill="#6a4a2a" stroke="#333" stroke-width="2"/>`,
 };
 export function itemIcon(it, rarityColor) {
+  const url = itemIconURL(it);
+  if (url) return `<img class="icon3d" src="${url}" draggable="false" alt="">`;
   let k = 'sword';
   if (it.slot === 'fish') k = it.name === 'Old Boot' ? 'boot' : 'fish';
   else if (it.slot === 'weapon') k = /Axe/.test(it.base) ? 'axe' : /Staff/.test(it.base) ? 'staff' : /Pick/.test(it.base) ? 'pick' : /Dagger|Shortblade/.test(it.base) ? 'dagger' : 'sword';

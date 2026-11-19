@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { G, msg, maxHp, maxMp, armor, rollDamage, attackSpeed, critChance, critMult, stat, itemBonus, elementalDamage, petDamage, petMaxHp, addXp, onKill, pickupItem } from './state.js';
 import { box, sphere, capsule, cyl, cone, humanoid, ring, rand, pick, flatDist, sfx, hex } from './util.js';
-import { itemColor, typeOf, lookOf, displayName } from './items.js';
-import { CharModel, prop } from './assets.js';
+import { itemColor, typeOf, lookOf, displayName, GEMS } from './items.js';
+import { CharModel, prop, findSource, tintMaterial } from './assets.js';
 import { CLASSES, PET_COATS } from './skills.js';
 import { Settings } from './settings.js';
 
@@ -666,15 +666,32 @@ export class Loot extends Entity {
       this.gem = prop('bottle_A_brown'); this.gem.scale.setScalar(0.6);
       this.gem.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.set(c); o.material.emissive = new THREE.Color(c); o.material.emissiveIntensity = 0.5; } });
     } else {
-      c = itemColor(this.item); text = this.item.name;
-      this.gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.25), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.5 + this.item.rarity * 0.5, metalness: 0.6, roughness: 0.3 }));
+      c = itemColor(this.item); text = displayName(this.item);
+      const it = this.item;
+      const gc = it.slot === 'gem' ? GEMS[it.gem].color : c;
+      // weapons, shields and helms drop as their real 3D model
+      const l = ['weapon', 'offhand', 'helm'].includes(it.slot) ? lookOf(it) : null;
+      const src = l && l.vis !== 'Rogue_Head_Hooded' ? findSource(l.vis) : null;
+      if (src) {
+        const m = src.node.clone(true);
+        m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.setScalar(0.72);
+        m.traverse((o) => { if (o.isMesh) { o.visible = true; o.material = o.material.clone(); tintMaterial(o.material, l); o.castShadow = true; } });
+        this.gem = new THREE.Group(); this.gem.add(m);
+        // lay it flat: rotate so the thinnest axis points up
+        const sz = new THREE.Box3().setFromObject(m, true).getSize(new THREE.Vector3());
+        if (sz.x <= sz.y && sz.x <= sz.z) m.rotation.z = Math.PI / 2; else if (sz.z <= sz.y) m.rotation.x = Math.PI / 2;
+        this.gem.rotation.y = Math.random() * 6.28;
+        this.flat = true;
+      } else {
+        this.gem = new THREE.Mesh(new THREE.OctahedronGeometry(it.slot === 'gem' ? 0.18 : 0.25), new THREE.MeshStandardMaterial({ color: gc, emissive: gc, emissiveIntensity: 0.5 + (it.rarity || 0) * 0.5, metalness: 0.6, roughness: 0.3 }));
+      }
       this.gem.castShadow = true;
       if (this.item.rarity >= 2) {
         ring(this.root, 0.6, c);
         const beam = cyl(0.06, 0.06, 5, c, 2); beam.material.transparent = true; beam.material.opacity = 0.3; beam.material.depthWrite = false; beam.position.y = 2.5; beam.castShadow = false; this.root.add(beam);
       }
     }
-    this.gem.position.y = 0.3;
+    this.gem.position.y = this.flat ? 0.08 : 0.3;
     this.root.add(this.gem);
     this.pickR = 0.7; this.pickH = 0.3;
     this.label = { text, color: hex(c), y: 0.9, clickable: true };
@@ -685,8 +702,8 @@ export class Loot extends Entity {
   update(dt) {
     this.t += dt;
     if (this.pop < 1) { this.pop = Math.min(1, this.pop + dt * 2.5); this.root.position.y = Math.sin(this.pop * Math.PI) * 1.2; }
-    this.gem.rotation.y += dt * 1.5;
-    if (!this.gold) this.gem.position.y = 0.35 + Math.sin(this.t * 3) * 0.06;
+    if (!this.flat) this.gem.rotation.y += dt * 1.5;
+    if (!this.gold && !this.flat) this.gem.position.y = 0.35 + Math.sin(this.t * 3) * 0.06;
     if (this.item && this.item.rarity >= 1 && Math.random() < dt * 4) G.main.fx.emit(this.pos.clone().setY(0.4), { count: 1, color: itemColor(this.item), speed: 0.3, life: 0.8, size: 0.25, rise: 0.8 });
     if ((this.gold || (Settings.autoLoot && this.potion)) && this.pop >= 1 && G.player && !G.player.dead && flatDist(this.pos, G.player.pos) < 1.4) this.pickup();
   }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg, MAX_LEVEL } from './state.js';
-import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate } from './items.js';
+import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg, MAX_LEVEL, socketGem, socketTargets, invalidateBonus } from './state.js';
+import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate, displayName, GEMS, makeGem, GEM_TIERS, maxSockets, upgradeItem, TYPES, typeOf, MATS } from './items.js';
 import { FAME_STEPS, QUEST_GIVER } from './data.js';
 import { hex, sfx, clamp } from './util.js';
 import { itemIcon, skillIcon } from './icons.js';
@@ -398,7 +398,7 @@ export class UI {
     const bar = el('div');
     const selIt = this.sel?.src === 'pack' ? G.backpack[this.sel.key] : null;
     const btn = (t, fn, dis) => { const b = el('button', 'small', t); b.disabled = !!dis; b.onclick = () => { fn(); this.hideTooltip(); this.refresh(); }; bar.appendChild(b); };
-    btn(selIt?.slot === 'fish' ? 'Feed Pet' : 'Equip', () => this.quickUse(this.sel.key, true), !selIt);
+    btn(selIt?.slot === 'fish' ? 'Feed Pet' : selIt?.slot === 'gem' ? 'Socket' : 'Equip', () => this.quickUse(this.sel.key, true), !selIt);
     if (this.open.shop) btn('Sell', () => this.sell(this.sel.key), !selIt);
     btn('Drop', () => { const it = G.backpack.splice(this.sel.key, 1)[0]; this.main.dropItem(it); this.sel = null; }, !selIt);
     btn(`Send ${G.petName} to sell commons`, () => petSellCommons(), G.level.kind === 'town' && !this.open.shop);
@@ -408,8 +408,18 @@ export class UI {
     const it = G.backpack[i];
     if (!it) return;
     if (this.open.shop && !viaButton) return this.sell(i);
+    if (it.slot === 'gem') { this.hideTooltip(); this.socketPicker(i); return; }
     if (it.slot === 'fish') feedPet(i); else equipFromPack(i);
     this.sel = null; this.hideTooltip(); this.refresh();
+  }
+  socketPicker(gemIdx) {
+    const gem = G.backpack[gemIdx];
+    const targets = socketTargets();
+    if (!targets.length) { this.toast('No item with an empty socket. The blacksmith can add sockets.', true); return; }
+    this.choice(`Socket ${gem.name}`, 'Choose an item with an empty socket:', [
+      ...targets.slice(0, 10).map((t) => [`${displayName(t.it)}${t.where === 'eq' ? ' (equipped)' : ''}`, () => { socketGem(G.backpack.indexOf(gem), t.it); this.sel = null; this.refresh(); }]),
+      ['Cancel', null],
+    ], targets.length > 3);
   }
   sell(i) {
     const it = G.backpack[i];
@@ -417,7 +427,7 @@ export class UI {
     G.backpack.splice(i, 1);
     const p = sellPrice(it);
     G.gold += p;
-    msg(`Sold ${it.name} for ${p} gold`, '#ffd84d');
+    msg(`Sold ${displayName(it)} for ${p} gold`, '#ffd84d');
     sfx('gold');
     this.sel = null; this.hideTooltip(); this.refresh();
   }
@@ -516,35 +526,129 @@ export class UI {
   }
 
   renderForge() {
-    const body = this.body('forge', "Hobb's Forge", { left: '18px', top: '90px', width: '470px', maxHeight: '78vh', overflowY: 'auto' });
-    const list = [];
-    for (const k in G.equipment) { const it = G.equipment[k]; if (it && it.rarity >= 1) list.push({ it, where: 'eq', key: k }); }
-    G.backpack.forEach((it, i) => { if (it.rarity >= 1 && it.slot in G.equipment) list.push({ it, where: 'bp', key: i }); });
-    let h = '<div class="muted" style="text-align:center;margin-bottom:8px">"Bring me anything with a spark of magic and I will hammer it into something new." Reforging rerolls an item of the same kind and rarity.</div>';
-    if (!list.length) h += '<p style="text-align:center">You have no magic, rare or legendary gear to reforge.</p>';
-    body.innerHTML = h;
-    for (const e of list) {
-      const cost = Math.max(60, Math.round(sellPrice(e.it) * 4));
-      const row = el('div', 'skrow');
-      row.innerHTML = `<div class="ic">${itemIcon(e.it, hex(itemColor(e.it)))}</div><div class="bd"><b style="color:${hex(itemColor(e.it))}">${e.it.name}</b><small>${e.where === 'eq' ? 'Equipped' : 'In backpack'} · item level ${e.it.ilvl}</small></div>`;
-      const b = el('button', '', `Reforge · ${cost}g`);
-      b.disabled = G.gold < cost;
-      b.onclick = () => {
-        if (G.gold < cost) return;
-        let n = null;
-        for (let i = 0; i < 120 && !n; i++) { const c = generate(e.it.ilvl, 0, e.it.rarity); if (c.slot === e.it.slot && c.rarity === e.it.rarity) n = c; }
-        if (!n) { this.flash('The metal resists. Try again.'); return; }
-        G.gold -= cost;
-        if (e.where === 'eq') G.equipment[e.key] = n; else G.backpack[e.key] = n;
-        msg(`Hobb reforges your ${e.it.name} into ${n.name}!`, hex(itemColor(n)));
-        sfx('legend');
-        G.player?.refreshVisuals();
-        this.refresh();
+    const body = this.body('forge', "Hobb's Forge", { left: '18px', top: '90px', width: '490px', maxHeight: '80vh', overflowY: 'auto' });
+    const tab = this.forgeTab || 'reforge';
+    body.innerHTML = '';
+    const tabs = el('div', 'ftabs');
+    for (const [k, t] of [['reforge', 'Reforge'], ['gems', 'Sockets & Gems'], ['artisan', 'Artisan']]) {
+      const b = el('button', 'small' + (k === tab ? ' on' : ''), t);
+      b.dataset.ftab = k;
+      b.onclick = () => { this.forgeTab = k; sfx('ui'); this.renderForge(); };
+      tabs.appendChild(b);
+    }
+    body.appendChild(tabs);
+    const gear = [];
+    for (const k in G.equipment) { const it = G.equipment[k]; if (it) gear.push({ it, where: 'eq', key: k }); }
+    G.backpack.forEach((it, i) => { if (it.slot in G.equipment) gear.push({ it, where: 'bp', key: i }); });
+    const row = (e, sub, buttons) => {
+      const r = el('div', 'skrow');
+      r.innerHTML = `<div class="ic">${itemIcon(e.it, hex(itemColor(e.it)))}</div><div class="bd"><b style="color:${hex(itemColor(e.it))}">${displayName(e.it)}</b><small>${sub}</small></div>`;
+      const bx = el('div', 'fbtns');
+      for (const [label, cost, fn, dis] of buttons) {
+        const b = el('button', 'small', cost ? `${label} · ${cost.toLocaleString()}g` : label);
+        b.disabled = !!dis || (cost && G.gold < cost);
+        b.onclick = () => { if (cost && G.gold < cost) return; if (fn() !== false) { if (cost) G.gold -= cost; invalidateBonus(); G.player?.refreshVisuals(); this.hideTooltip(); this.refresh(); } };
+        bx.appendChild(b);
+      }
+      r.appendChild(bx);
+      r.querySelector('.ic').onmouseenter = () => this.showTooltip(e.it);
+      r.querySelector('.ic').onmouseleave = () => this.hideTooltip();
+      body.appendChild(r);
+      return r;
+    };
+    const where = (e) => (e.where === 'eq' ? 'Equipped' : 'In backpack');
+    if (tab === 'reforge') {
+      body.appendChild(el('div', 'muted fnote', '"Bring me anything with a spark of magic and I will hammer it into something new." Reforging rerolls the magic of an item but keeps its kind, rarity, sockets, gems, dye and name.'));
+      const list = gear.filter((e) => e.it.rarity >= 1);
+      if (!list.length) body.appendChild(el('p', '', 'You have no magic, rare or legendary gear to reforge.'));
+      for (const e of list) {
+        const cost = Math.max(60, Math.round(sellPrice(e.it) * 4));
+        row(e, `${where(e)} · item level ${e.it.ilvl}`, [['Reforge', cost, () => {
+          let n = null;
+          for (let i = 0; i < 200 && !n; i++) { const c = generate(e.it.ilvl, 0, e.it.rarity, e.it.type); if (c.rarity === e.it.rarity) n = c; }
+          if (!n) { this.toast('The metal resists. Try again.', true); return false; }
+          for (const k of ['sockets', 'gems', 'dye', 'look', 'customName']) if (e.it[k] !== undefined) n[k] = e.it[k];
+          if (e.where === 'eq') G.equipment[e.key] = n; else G.backpack[e.key] = n;
+          msg(`Hobb reforges your ${displayName(e.it)} into ${n.name}!`, hex(itemColor(n)));
+          sfx('legend');
+        }]]);
+      }
+    } else if (tab === 'gems') {
+      body.appendChild(el('div', 'muted fnote', 'Gems add power that depends on where they sit: elemental damage in weapons, life and attributes in armor and helms, utility in off-hands. Right-click a gem in your backpack to socket it.'));
+      body.appendChild(el('h3', '', '<span>Combine gems</span>'));
+      const groups = {};
+      G.backpack.forEach((it) => { if (it.slot === 'gem' && it.tier < 4) { const k = it.gem + ':' + it.tier; (groups[k] ||= []).push(it); } });
+      const keys = Object.keys(groups).filter((k) => groups[k].length >= 3);
+      if (!keys.length) body.appendChild(el('p', 'muted', 'Bring three gems of the same kind and quality to combine them into a finer one.'));
+      for (const k of keys) {
+        const g = groups[k][0];
+        const next = makeGem(g.gem, g.tier + 1);
+        row({ it: next }, `3 × ${g.name} → ${next.name} (you have ${groups[k].length})`, [['Combine', 80 * (g.tier + 1) * (g.tier + 1), () => {
+          for (const x of groups[k].slice(0, 3)) G.backpack.splice(G.backpack.indexOf(x), 1);
+          G.backpack.push(next); sfx('legend'); msg(`Hobb fuses three gems into a ${next.name}.`, '#99ddff');
+        }]]);
+      }
+      body.appendChild(el('h3', '', '<span>Sockets</span>'));
+      const sock = gear.filter((e) => maxSockets(upgradeItem(e.it)) > 0);
+      for (const e of sock) {
+        const it = e.it, ms = maxSockets(it), used = (it.gems || []).filter(Boolean).length;
+        const add = Math.round(120 * Math.pow(it.sockets + 1, 2) * (1 + it.ilvl / 12));
+        const rem = Math.round(40 + it.ilvl * 6);
+        row(e, `${where(e)} · sockets ${it.sockets}/${ms}${used ? ` · ${used} gem${used > 1 ? 's' : ''}` : ''}`, [
+          ['Add socket', it.sockets < ms ? add : 0, () => { it.sockets++; sfx('gold'); msg(`Hobb punches a new socket into ${displayName(it)}.`, '#99ddff'); }, it.sockets >= ms],
+          ['Remove gems', used ? rem : 0, () => {
+            if (G.backpack.length + used > BACKPACK_MAX) { this.toast('Not enough room in your backpack', true); return false; }
+            for (const g of it.gems) if (g) G.backpack.push(makeGem(g.gem, g.tier));
+            it.gems = []; sfx('pick'); msg('Hobb pries the gems loose. They are safe in your backpack.', '#99ddff');
+          }, !used],
+        ]);
+      }
+    } else {
+      body.appendChild(el('div', 'muted fnote', '"A hero should look the part." Dye your gear, give it a name of your own, or reshape it to look like another item of the same kind. Stats never change.'));
+      if (!this.artSel || !gear.some((e) => e.it === this.artSel)) this.artSel = gear[0]?.it || null;
+      const pick = el('div', 'grid artpick');
+      for (const e of gear) {
+        const c = this.itemCell(e.it, () => { this.artSel = e.it; sfx('ui'); this.renderForge(); }, null, e.it === this.artSel);
+        pick.appendChild(c);
+      }
+      body.appendChild(pick);
+      const it = this.artSel;
+      if (!it) return;
+      upgradeItem(it);
+      body.appendChild(el('h3', '', `<span>${displayName(it)}</span>`));
+      // dye
+      const dyes = ['#ffffff', '#e8e8e8', '#6a6a72', '#2a2a30', '#c03030', '#e07030', '#e8c040', '#80c040', '#30a060', '#30a0c0', '#3060d0', '#6040c0', '#a040b0', '#e070a0', '#8a5a30', '#d8b880', '#a8dcff', '#ffd86a'];
+      const dr = el('div', 'dyes');
+      dr.appendChild(el('span', 'muted', 'Dye (40g): '));
+      for (const d of dyes) {
+        const sw = el('div', 'dye' + (it.dye === d ? ' on' : ''));
+        sw.style.background = d; sw.title = d;
+        sw.onclick = () => { if (G.gold < 40) { this.toast('Not enough gold', true); return; } G.gold -= 40; it.dye = d === '#ffffff' ? undefined : d; sfx('ui'); G.player?.refreshVisuals(); this.refresh(); };
+        dr.appendChild(sw);
+      }
+      body.appendChild(dr);
+      // rename
+      const rn = el('div', 'setrow', `<span>Name</span><span><input id="art-name" maxlength="28" value="${(it.customName || '').replace(/"/g, '&quot;')}" placeholder="${it.name.replace(/"/g, '&quot;')}"> <button class="small" id="art-ren">Rename · 25g</button></span>`);
+      body.appendChild(rn);
+      $('#art-ren', rn).onclick = () => {
+        const v = $('#art-name', rn).value.replace(/[<>]/g, '').trim().slice(0, 28);
+        if (G.gold < 25) { this.toast('Not enough gold', true); return; }
+        G.gold -= 25; it.customName = v || undefined; sfx('ui'); this.toast(v ? `Renamed to ${v}` : 'Name restored'); this.refresh();
       };
-      row.appendChild(b);
-      row.querySelector('.ic').onmouseenter = () => this.showTooltip(e.it);
-      row.querySelector('.ic').onmouseleave = () => this.hideTooltip();
-      body.appendChild(row);
+      $('#art-name', rn).addEventListener('keydown', (e) => e.stopPropagation());
+      // appearance
+      const ap = el('div', 'looks');
+      ap.appendChild(el('div', 'muted', 'Appearance (75g):'));
+      const own = it.type;
+      for (const [k, t] of Object.entries(TYPES)) {
+        if (t.slot !== it.slot) continue;
+        if (it.slot === 'weapon' && !!t.two !== !!TYPES[own].two) continue; // keep one- and two-handed looks apart
+        const cur = (it.look || own) === k;
+        const b = el('button', 'small' + (cur ? ' on' : ''), t.name + (k === own ? ' (original)' : ''));
+        b.onclick = () => { if (cur) return; if (G.gold < 75) { this.toast('Not enough gold', true); return; } G.gold -= 75; it.look = k === own ? undefined : k; sfx('ui'); G.player?.refreshVisuals(); this.refresh(); };
+        ap.appendChild(b);
+      }
+      body.appendChild(ap);
     }
   }
 

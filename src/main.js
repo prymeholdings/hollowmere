@@ -33,9 +33,9 @@ const GradeShader = {
 };
 export { G } from './state.js';
 import { setItemLook } from './assets.js';
-import { lookOf, starterItem } from './items.js';
+import { lookOf, starterItem, makeGem } from './items.js';
 setItemLook(lookOf);
-import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL } from './state.js';
+import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL, weaponDamage, socketGem } from './state.js';
 import { Level } from './level.js';
 import { Player, Pet, Loot } from './entities.js';
 import { UI } from './ui.js';
@@ -86,6 +86,10 @@ function makeFoxPreview(coat) {
 window.__G = G;
 window.__gen = (lvl, type) => generate(lvl, 0, 0, type);
 window.__CLASSES = CLASSES;
+window.__gem = (g, t) => makeGem(g, t);
+window.__Loot = Loot;
+window.__dmg = () => weaponDamage();
+window.__socket = (i, it) => socketGem(i, it);
 const HOTKEYS = { q: 'q', w: 'w', e: 'e', r: 'r' };
 
 class Main {

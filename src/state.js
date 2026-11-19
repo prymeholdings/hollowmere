@@ -1,4 +1,4 @@
-import { generate, itemColor, sellPrice, starterItem, gemEffect, upgradeItem, isTwoHanded, displayName, SOCKET_SLOTS } from './items.js';
+import { generate, itemColor, sellPrice, starterItem, gemEffect, upgradeItem, isTwoHanded, displayName, SOCKET_SLOTS, makeGem, GEMS } from './items.js';
 import { ENEMIES, QUEST_GIVER, FAME_STEPS, FAME_RANKS } from './data.js';
 import { randi, pick, sfx } from './util.js';
 
@@ -259,6 +259,8 @@ export function restockShop() {
   G.shopStock = [];
   const il = Math.max(G.lvl, G.deepest);
   for (let i = 0; i < 10; i++) G.shopStock.push(generate(il + randi(0, 2), 30, i < 4 ? 1 : 0));
+  // a couple of gems (finer ones once the hero has gone deeper)
+  for (let i = 0; i < 2; i++) G.shopStock.push(makeGem(pick(Object.keys(GEMS)), Math.min(2, Math.floor(G.deepest / 30))));
 }
 
 // saving
