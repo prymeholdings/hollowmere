@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { Settings } from './settings.js';
+import { makeWater, tickWater } from './water.js';
 import { G, MAX_FLOOR } from './state.js';
 import { ENEMIES, BOSSES, QUEST_GIVER, FINAL_BOSS } from './data.js';
 import { rand, randi, pick, box, cyl, cone, sphere } from './util.js';
@@ -299,15 +301,15 @@ export class Level {
     if (this.kind === 'town') {
       this.scene.background = new THREE.Color(0x9fb8d8);
       this.scene.fog = new THREE.Fog(0x9fb8d8, 55, 120);
-      this.ambient = new THREE.HemisphereLight(0xd8e4ff, 0x5a6a40, 1.4);
-      this.sun.color.set(0xffe2b8); this.sun.intensity = 2.6;
+      this.ambient = new THREE.HemisphereLight(0xd8e4ff, 0x5a6a40, Settings.grit === 'classic' ? 1.4 : 1.1);
+      this.sun.color.set(0xffe2b8); this.sun.intensity = Settings.grit === 'classic' ? 2.6 : 2.2;
       this.scene.environmentIntensity = 0.3;
     } else {
       const tint = [0x5a6a90, 0x8a5a4a, 0x4a7a5a, 0x7a4a8a][theme];
       this.scene.background = new THREE.Color(0x030305);
-      this.scene.fog = new THREE.Fog(0x030305, 30, 58);
-      this.ambient = new THREE.HemisphereLight(tint, 0x2a2a34, 1.9);
-      this.sun.color.set(tint); this.sun.intensity = 1.3;
+      this.scene.fog = new THREE.Fog(0x040304, 24, 50);
+      this.ambient = new THREE.HemisphereLight(tint, 0x2a2a34, Settings.grit === 'classic' ? 1.9 : 1.3);
+      this.sun.color.set(tint); this.sun.intensity = Settings.grit === 'classic' ? 1.3 : 0.95;
       this.scene.environmentIntensity = 0.12;
     }
     this.root.add(this.ambient);
@@ -602,8 +604,9 @@ export class Level {
     this.waters = [];
     for (const pond of this.blocked.filter((b) => b.type === 'pond')) {
       const pcx = (pond.x + (pond.w - 1) / 2) * CELL, pcz = (pond.y + (pond.h - 1) / 2) * CELL;
-      const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshStandardMaterial({ color: pond.deep ? 0x1d4f86 : 0x2d6a9f, roughness: 0.08, metalness: 0.5, emissive: pond.deep ? 0x08305a : 0x0a2a4a, emissiveIntensity: pond.deep ? 0.9 : 0.6, transparent: true, opacity: 0.92 }));
+      const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48), makeWater(pond.deep));
       water.rotation.x = -Math.PI / 2; water.scale.set(pond.w * CELL / 2, pond.h * CELL / 2, 1); water.position.set(pcx, 0.06, pcz);
+      tickWater(water);
       this.root.add(water);
       this.waters.push(water);
       this.noAO.push(water);

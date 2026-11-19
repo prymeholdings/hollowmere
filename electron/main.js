@@ -43,11 +43,21 @@ ipcMain.on('hm-load', (e) => {
 ipcMain.on('hm-quit', () => app.quit());
 
 app.whenReady().then(() => {
-  protocol.handle('app', (req) => {
-    const rel = decodeURIComponent(new URL(req.url).pathname).replace(/^\/+/, '');
-    const file = path.normalize(path.join(ROOT, rel));
-    if (!file.startsWith(ROOT)) return new Response('Forbidden', { status: 403 });
-    return net.fetch(pathToFileURL(file).toString());
+  const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.txt': 'text/plain', '.pack': 'application/octet-stream', '.webmanifest': 'application/manifest+json' };
+  protocol.handle('app', async (req) => {
+    try {
+      const rel = decodeURIComponent(new URL(req.url).pathname).replace(/^\/+/, '');
+      const file = path.normalize(path.join(ROOT, rel));
+      if (!file.startsWith(ROOT)) return new Response('Forbidden', { status: 403 });
+      const buf = await fs.promises.readFile(file);
+      const headers = { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'accept-ranges': 'bytes' };
+      const m = /bytes=(\d*)-(\d*)/.exec(req.headers.get('range') || '');
+      if (m) {
+        const a = m[1] ? +m[1] : 0, b = m[2] ? Math.min(+m[2], buf.length - 1) : buf.length - 1;
+        return new Response(buf.subarray(a, b + 1), { status: 206, headers: { ...headers, 'content-range': `bytes ${a}-${b}/${buf.length}` } });
+      }
+      return new Response(buf, { headers });
+    } catch (err) { return new Response('Not found', { status: 404 }); }
   });
   createWindow();
 });

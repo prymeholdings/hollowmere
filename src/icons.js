@@ -69,7 +69,9 @@ const SK = {
   pet_bond: `<path d="M32 54 C10 40 8 22 20 16 C26 13 30 16 32 20 C34 16 38 13 44 16 C56 22 54 40 32 54 Z" fill="#e07a3a" stroke="#333" stroke-width="2"/>`,
   toughness: `<path d="M32 6 L54 14 C54 36 46 50 32 58 C18 50 10 36 10 14 Z" fill="#6a7a8a" stroke="#333" stroke-width="2"/><path d="M22 32 L30 40 L44 24" stroke="#cfe" stroke-width="5" fill="none"/>`,
 };
+export const EXTRA = {};
 export function skillIcon(key) {
+  if (EXTRA[key]) return wrap(EXTRA[key].inner, EXTRA[key].glow);
   const glow = { icelance: '#9fe8ff', venom: '#77ee33', firewall: '#ff7a2a', toxic: '#77dd33', glacial: '#bfeeff', ballzap: '#a8b8ff', inferno: '#ff6a1a', cataclysm: '#c8a8ff', pyro: '#ff8a3a', cryo: '#9fe8ff', conduit: '#b8c8ff', fire: '#ff8a3a', bolt: '#8ac8ff', frost: '#9fe8ff', meteor: '#ff6a2a', heal: '#7dff9a', skull: '#9aff9a', whirl: '#ffffff', slam: '#e0a050', knives: '#cfd8e0', blink: '#a46aff', cry: '#ff5a3a', blizzard: '#9fe8ff', quake: '#e0a050', smoke: '#aaaaaa', blades: '#cfd8e0', brutal: '#ff5a3a', wind: '#9fffc0', arcane: '#8ab8ff', elemental: '#c8a8ff', feet: '#9fd8ff', lethal: '#ff6a6a', blood: '#ff3a4a', fortune: '#ffd84d', mastery: '#ffd84d', toughness: '#bfe0ff', pet_bond: '#ff9a5a' }[key] || '#ffffff';
   return wrap(SK[key] || SK.attack, glow);
 }

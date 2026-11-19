@@ -3,6 +3,7 @@ import { ENEMIES, QUEST_GIVER, FAME_STEPS, FAME_RANKS } from './data.js';
 import { randi, pick, sfx } from './util.js';
 import { petRec, petBonus, ensurePets } from './pets.js';
 import { zodiacBonus } from './zodiac.js';
+import { perkBonus, liveBuff } from './perks.js';
 
 const SAVE_KEY = 'hollowmere_save_v2';
 export const SKILL_ZERO = { firebolt: 0, lightning: 0, nova: 0, meteor: 0, blizzard: 0, heal: 0, bones: 0, whirlwind: 0, slam: 0, earthquake: 0, knives: 0, blink: 0, smoke: 0, blades: 0, warcry: 0,
@@ -52,12 +53,13 @@ function bonusTable() {
     if (it.gems) for (const g of it.gems) if (g) { const [k, v] = gemEffect(g, slot); add(k, v); }
   }
   zodiacBonus(add);
+  perkBonus(add);
   if (t.all) for (const k of ['str', 'dex', 'vit', 'mag']) add(k, t.all);
   bonusCache = t; bonusRefs = refs;
   return t;
 }
 export const invalidateBonus = () => { bonusCache = null; };
-export function itemBonus(s) { return bonusTable()[s] || 0; }
+export function itemBonus(s) { return (bonusTable()[s] || 0) + liveBuff(s); }
 export const stat = (s) => G.base[s] + itemBonus(s);
 export const elementalDamage = () => ({ fire: itemBonus('fire'), cold: itemBonus('cold'), light: itemBonus('light'), poison: itemBonus('poison') });
 export const maxHp = () => (40 + stat('vit') * 5 + G.lvl * 6 + itemBonus('life')) * (1 + 0.08 * (G.skills.toughness || 0)) * (1 + itemBonus('life_pct') / 100);
@@ -167,6 +169,7 @@ export function pickupItem(it) {
   G.backpack.push(it);
   msg(`Picked up ${displayName(it)}`, '#' + itemColor(it).toString(16).padStart(6, '0'));
   sfx('pick');
+  if ((it.rarity || 0) >= 2) G.main?.barkLoot?.();
   return true;
 }
 export function feedPet(i) {

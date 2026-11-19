@@ -13,3 +13,18 @@ the day and night sky, and all boss attack effects.
 
 Music and sound effects: generated in code by the game itself (original, no samples).
 Game design, code, UI and icons: original work for Hollowmere.
+
+---- Version 0.6 additions ----
+Realistic characters: built at runtime with the ara3d library (MIT licence, (c) Joshua Olatunde, https://github.com/olatunde85/3d-gen),
+vendored as src/vendor/ara3d.js. The character data in assets/ara/ is derived from MakeHuman (http://www.makehumancommunity.org),
+explicitly released under CC0 1.0 by Data Collection AB, Joel Palmius and Jonas Hauquier (see assets/ara/LICENSE.txt).
+Character animations: motion capture from the CMU Graphics Lab Motion Capture Database (http://mocap.cs.cmu.edu), retargeted by
+ara3d. "The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217."
+Music: "Battle Theme A" by cynicmusic (https://opengameart.org/content/battle-theme-a), CC0 1.0, used for guardian fights.
+All other music and sound effects are generated in code. Blood, gore, skills, perks, zodiac stars and barks are original work.
+
+Owner-supplied music (private installer only, not in the public web build):
+ - Chopin, Nocturne No. 19 in E minor, Op. 72 No. 1 (town at night)
+ - Emile Mosseri, "Jacob's Prayer" (Minari soundtrack) (town by day, title menu)
+ - "Lobotomy" by unseenglobalmedia (Abyss and Void depths)
+The owner is responsible for holding the rights to distribute these recordings.

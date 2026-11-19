@@ -9,7 +9,10 @@ import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, 
 import { Settings, saveSettings } from './settings.js';
 import { Orb3D } from './orbs.js';
 import { HeroView } from './heroview.js';
-import { SIGNS, STARS, starRank, starPoints, starPointsTotal, canLearn, learnStar, respecCost, signsCompleted } from './zodiac.js';
+import { SIGNS, STARS, starRank, starPoints, starPointsTotal, canLearn, learnStar, respecCost, signsCompleted, signProgress } from './zodiac.js';
+import { Barks } from './barks.js';
+import { BUFF_DEFS, perkDesc } from './perks.js';
+import { REAL_OK, HAIR_STYLES, BEARDS, EYE_COLORS, SKIN_PRESETS, HAIR_COLORS, HIGHLIGHT_COLORS, defaultLook, fullLook } from './realchar.js';
 import { exportSaveCode, parseSaveCode, storeImportedSave } from './state.js';
 import { applyUI, UI_THEMES } from './uiprefs.js';
 import { SKIN_TONES, DETAIL_OPTIONS, SCARF_COLORS, CLASS_DETAILS } from './details.js';
@@ -23,7 +26,24 @@ const KEYLABEL = { rmb: 'RMB', q: 'Q', w: 'W', e: 'E', r: 'R' };
 
 
 // rows of the hero look editor shared by character creation and the in-game Wardrobe
+function bodyRows(state) {
+  if (!REAL_OK || Settings.realistic === false) return '';
+  const chips = (key, opts) => `<div class="chips">${opts.map(([v, l]) => `<button class="chip ${state[key] === v ? 'on' : ''}" data-det="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
+  const sw = (key, list, none) => `<div class="swatches">${list.map((c) => `<div class="sw ${c === (state[key] || '') ? 'on' : ''}" style="background:${c || 'repeating-linear-gradient(45deg,#2a2218,#2a2218 4px,#4a3a26 4px,#4a3a26 8px)'}" data-det="${key}" data-v="${c}" title="${c ? '' : none}"></div>`).join('')}</div>`;
+  const male = state.sex !== 'f';
+  return `<h3><span>Body</span></h3>
+    <div class="chips"><button class="chip ${male ? 'on' : ''}" data-det="sex" data-v="m">Male</button><button class="chip ${!male ? 'on' : ''}" data-det="sex" data-v="f">Female</button></div>
+    <div class="setrow"><span>Build</span><span><input type="range" data-rng="weight" min="0" max="100" value="${Math.round((state.weight ?? 0.5) * 100)}"> ${Math.round((state.weight ?? 0.5) * 100)}</span></div>
+    <div class="setrow"><span>Muscle</span><span><input type="range" data-rng="muscle" min="0" max="100" value="${Math.round((state.muscle ?? 0.6) * 100)}"> ${Math.round((state.muscle ?? 0.6) * 100)}</span></div>
+    <h3><span>Skin</span></h3><div class="swatches">${SKIN_PRESETS.map((p, i) => `<div class="sw ${(state.skinTone ?? 1) === i ? 'on' : ''}" style="background:${['#f0d2bc', '#e8bf9f', '#d4a67a', '#b98458', '#8a5a3a', '#5a3826'][i]}" data-num="skinTone" data-v="${i}" title="${p.name}"></div>`).join('')}</div>
+    <h3><span>Hair</span></h3>${chips('hairStyle', HAIR_STYLES)}
+    <h3><span>Hair colour</span></h3>${sw('hairColor', HAIR_COLORS)}
+    <h3><span>Highlight colour</span></h3>${sw('hairHi', HIGHLIGHT_COLORS, 'No highlights')}
+    ${male ? `<h3><span>Beard</span></h3>${chips('beard', BEARDS)}` : ''}
+    <h3><span>Eyes</span></h3>${chips('eyes', EYE_COLORS)}`;
+}
 function detailRows(state) {
+  if (!state._noBody) { /* body section is added by the callers */ }
   const chips = (key, opts) => `<div class="chips">${opts.map(([v, l]) => `<button class="chip ${state[key] === v ? 'on' : ''}" data-det="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
   return `<h3><span>Skin tone</span></h3><div class="swatches">${SKIN_TONES.map((c) => `<div class="sw ${c === (state.skin || '#ffffff') ? 'on' : ''}" style="background:${c === '#ffffff' ? 'linear-gradient(135deg,#f2c8a8,#fff)' : c}" data-det="skin" data-v="${c}" title="${c === '#ffffff' ? 'Natural' : ''}"></div>`).join('')}</div>
     <h3><span>Shoulders</span></h3>${chips('shoulders', DETAIL_OPTIONS.shoulders)}
@@ -33,7 +53,13 @@ function detailRows(state) {
     <h3><span>Scarf</span></h3><div class="swatches">${SCARF_COLORS.map((c) => `<div class="sw ${c === (state.scarf || '') ? 'on' : ''}" style="background:${c || 'repeating-linear-gradient(45deg,#2a2218,#2a2218 4px,#4a3a26 4px,#4a3a26 8px)'}" data-det="scarf" data-v="${c}" title="${c ? '' : 'No scarf'}"></div>`).join('')}</div>`;
 }
 function bindDetails(root, state, onChange) {
-  root.querySelectorAll('[data-det]').forEach((d) => (d.onclick = () => { state[d.dataset.det] = d.dataset.v; onChange(); }));
+  root.querySelectorAll('[data-det]').forEach((d) => (d.onclick = () => {
+    state[d.dataset.det] = d.dataset.v;
+    if (d.dataset.det === 'sex') { const f = defaultLook(state.cls || G.cls, d.dataset.v); state.hairStyle = f.hairStyle; state.beard = f.beard; }
+    onChange();
+  }));
+  root.querySelectorAll('[data-num]').forEach((d) => (d.onclick = () => { state[d.dataset.num] = +d.dataset.v; onChange(); }));
+  root.querySelectorAll('[data-rng]').forEach((d) => (d.onchange = () => { state[d.dataset.rng] = d.value / 100; onChange(); }));
 }
 
 // Fishing spots: chance of a class-fitted legendary and of other treasure per catch.
@@ -49,6 +75,7 @@ export class UI {
     this.root = $('#ui');
     this.labels = new Map();
     this.floats = [];
+    this.bubbles = [];
     this.open = {};
     this.sel = null;
     this.fish = null;
@@ -170,7 +197,29 @@ export class UI {
     const b = $('#banner'); b.innerHTML = t + (sub ? `<small>${sub}</small>` : ''); b.classList.add('on');
     clearTimeout(this.bannerT); this.bannerT = setTimeout(() => b.classList.remove('on'), 2600);
   }
+  // blood splashed across the screen when you take a heavy hit
+  screenBlood(f) {
+    if (f < 0.04) return;
+    const root = $('#ui');
+    const n = f > 0.2 ? 3 : f > 0.1 ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      const d = el('div', 'sblood');
+      const x = Math.random() * 100, y = Math.random() * 100, sz = 90 + Math.random() * 180 * Math.min(1.6, 0.6 + f * 4);
+      d.style.cssText = `left:${x}%;top:${y}%;width:${sz}px;height:${sz}px;transform:translate(-50%,-50%) rotate(${Math.random() * 360}deg);`;
+      root.appendChild(d);
+      requestAnimationFrame(() => requestAnimationFrame(() => { d.style.opacity = '0'; }));
+      setTimeout(() => d.remove(), 5200);
+    }
+  }
   hurt(f) { const v = $('#vignette'); v.style.transition = 'none'; v.style.opacity = Math.min(0.7, 0.2 + f * 3); requestAnimationFrame(() => { v.style.transition = 'opacity 0.5s'; v.style.opacity = 0; }); }
+  // speech bubble that follows an entity
+  bubble(ent, text, color = '#fff', dur = 3) {
+    for (let i = this.bubbles.length - 1; i >= 0; i--) if (this.bubbles[i].ent === ent) { this.bubbles[i].el.remove(); this.bubbles.splice(i, 1); }
+    const d = el('div', 'bub', String(text));
+    d.style.color = color;
+    this.labelLayer.appendChild(d);
+    this.bubbles.push({ el: d, ent, t: dur, dur, y: (ent.label?.y || 2.2) + 0.6 });
+  }
   floatText(pos, text, color, size, yOff) {
     const d = el('div', 'ft', String(text));
     d.style.color = color; d.style.fontSize = size + 'px';
@@ -208,6 +257,15 @@ export class UI {
       d.style.left = p.x + 'px'; d.style.top = p.y + 'px';
     }
     for (const [e, d] of this.labels) if (!seen.has(e)) { d.remove(); this.labels.delete(e); }
+    for (let i = this.bubbles.length - 1; i >= 0; i--) {
+      const b = this.bubbles[i];
+      b.t -= dt;
+      if (b.t <= 0 || b.ent.dead && b.ent.type === 'enemy' && b.t < b.dur - 1.8) { b.el.remove(); this.bubbles.splice(i, 1); continue; }
+      const p = this.project(b.ent.root.position.clone().setY(b.ent.root.position.y + b.y));
+      b.el.style.display = p.ok ? '' : 'none';
+      b.el.style.left = p.x + 'px'; b.el.style.top = p.y + 'px';
+      b.el.style.opacity = Math.min(1, b.t * 2);
+    }
     for (let i = this.floats.length - 1; i >= 0; i--) {
       const f = this.floats[i];
       f.t += dt; f.pos.y += dt * (2.2 - f.t * 2); f.pos.x += f.vx * dt;
@@ -243,6 +301,7 @@ export class UI {
     if (G.buffs.wealth > 0) buffs.push(['skull', G.buffs.wealth, 'Shrine of Wealth']);
     if (G.buffs.warcry > 0) buffs.push(['cry', G.buffs.warcry, 'Battle Cry']);
     if (G.buffs.smoke > 0) buffs.push(['smoke', G.buffs.smoke, 'Smoke Bomb: +30% dodge']);
+    for (const k in BUFF_DEFS) if (G.buffs[k] > 0) { const sk = Object.values(SKILLS).find((x) => x.o && x.o.buff === k); buffs.push([sk ? sk.id : 'arcane', G.buffs[k], BUFF_DEFS[k].name]); }
     const bk = buffs.map((b) => b[0] + Math.ceil(b[1])).join();
     if (bk !== this._bk) { this._bk = bk; $('#hud-buffs').innerHTML = buffs.map(([ic, t, n]) => `<div class="buff" title="${n}">${skillIcon(ic)}<span>${Math.ceil(t)}</span></div>`).join(''); }
     $('#hud-loc').textContent = G.level.kind === 'town' ? 'Hollowmere' : `Sunken Wells · Floor ${G.level.floor}`;
@@ -535,12 +594,12 @@ export class UI {
   }
 
   renderSkills() {
-    const body = this.body('skills', 'Skill Trees', { left: '50%', top: '40px', width: '1180px', transform: 'translateX(-50%)', maxHeight: '92vh', overflowY: 'auto' });
+    const body = this.body('skills', 'Skill Trees', { left: '50%', top: '40px', width: 'min(1500px, 97vw)', transform: 'translateX(-50%)', maxHeight: '92vh', overflowY: 'auto' });
     if (!this.skSel) this.skSel = G.hotbar.rmb || 'firebolt';
     const NW = 56, CW = 80, RH = 74, PADX = 30, PADY = 10;
     let html = `<div class="sk-top"><span>Skill points: <b style="color:#ffd84d">${G.skillPoints}</b></span><span class="muted">Click a skill to learn a rank. Rows unlock at levels ${TIER_LEVEL.join(', ')}. Any class can learn any tree.</span></div><div class="sk-trees">`;
     for (const t of TREES) {
-      const W = PADX * 2 + CW * 2 + NW, H = PADY * 2 + RH * (TIER_LEVEL.length - 1) + NW;
+      const W = PADX * 2 + CW * Math.max(2, ...t.nodes.map((n) => n.col)) + NW, H = PADY * 2 + RH * (TIER_LEVEL.length - 1) + NW;
       const xy = (n) => [PADX + n.col * CW + NW / 2, PADY + n.tier * RH + NW / 2];
       let lines = '';
       for (const n of t.nodes) for (const r of n.req || []) {
@@ -572,7 +631,7 @@ export class UI {
           G.skills[id] = (G.skills[id] || 0) + 1; G.skillPoints--;
           if (G.skills[id] === 1 && SKILLS[id] && !Object.values(G.hotbar).includes(id)) { const free = SLOTKEYS.find((k) => !G.hotbar[k] || !(G.skills[G.hotbar[k]] > 0)); if (free) G.hotbar[free] = id; }
           if (id === 'pet_bond' && G.pet) G.pet.applyForm(true);
-          sfx('level'); this.refreshSlotIcons(); this.refresh();
+          invalidateBonus(); sfx('level'); this.refreshSlotIcons(); this.refresh();
         } else { sfx('ui'); this.renderSkills(); }
       };
       d.onmouseenter = () => this.showSkillTip(id);
@@ -815,6 +874,12 @@ export class UI {
       <div class="setrow"><span>Render scale <small class="muted">(lower is faster)</small></span><span><input type="range" min="50" max="100" step="5" value="${Math.round((Settings.renderScale || 1) * 100)}" id="set-rs"> <span id="sv-rs">${Math.round((Settings.renderScale || 1) * 100)}%</span></span></div>
       <div class="setrow"><span>Sharpening</span><span><input type="range" min="0" max="100" value="${Math.round((Settings.sharpen ?? 0.35) * 100)}" id="set-sh"> <span id="sv-sh">${Math.round((Settings.sharpen ?? 0.35) * 100)}%</span></span></div>
       <div class="setrow"><span>Fullscreen</span><button class="small" id="set-fs">Toggle (F11)</button></div>
+      <h3><span>Mature content</span></h3>
+      <div class="setrow"><span>Art style</span><select id="set-grit"><option value="gritty">Gritty (dark, grainy)</option><option value="classic">Classic (bright)</option></select></div>
+      <div class="setrow"><span>Realistic characters</span><input type="checkbox" id="set-real"></div>
+      <div class="setrow"><span>Blood and gore</span><select id="set-gore"><option value="off">Off</option><option value="low">Light</option><option value="max">Maximum</option></select></div>
+      ${check('profanity', 'Strong language')}${check('barks', 'Characters talk while you play')}
+      <div class="muted" style="font-size:12px">This game is rated Mature (violence, gore, strong language). You can tone it down here at any time.</div>
       <h3><span>Gameplay</span></h3>${check('damageNumbers', 'Show damage numbers')}${check('screenShake', 'Screen shake')}${check('autoLoot', 'Auto-pick up potions')}${check('showHelp', 'Show key hints')}
       <h3><span>Auto-attack</span></h3>${check('autoAttack', 'Attack nearby foes automatically (V)')}
       <div class="setrow"><span>Auto-attack with</span><select id="set-am"><option value="basic">Basic attack</option>${['rmb', 'q', 'w', 'e', 'r'].map((k) => `<option value="${k}">${k.toUpperCase()} slot${G.hotbar?.[k] ? ': ' + skillName(G.hotbar[k]) : ''}</option>`).join('')}</select></div>
@@ -835,6 +900,12 @@ export class UI {
       <h3><span>Controls</span></h3><div class="muted" style="line-height:1.6">Xbox and PlayStation controllers work everywhere: left stick moves, A/✕ attacks and talks, X/□ Y/△ B/○ LB/L1 RB/R1 cast your skills, LT/RT (L2/R2) drink potions, and in menus the d-pad moves the highlight, A/✕ selects, B/○ goes back, LB/RB switch tabs.<br>Left-click: move, attack, pick up, talk · Right-click / Q W E R: skills · 1 / 2: potions · T: town portal · V: auto-attack on/off · P: companion · I: inventory · C: character · K: skills · J: quest · Z: zodiac stars · Tab: big map · Alt: show item names · Mouse wheel: zoom · F5: save · Esc: menu</div>
       <div style="text-align:center;margin-top:12px"><button class="primary" id="set-done">Done</button></div>`;
     $('#set-q', body).value = Settings.quality;
+    $('#set-grit', body).value = Settings.grit || 'gritty';
+    $('#set-grit', body).onchange = (e) => { Settings.grit = e.target.value; saveSettings(); this.main.applyGrit?.(); msg('Art style applies fully the next time you enter a level.', '#9fd8a0'); };
+    $('#set-real', body).checked = Settings.realistic !== false;
+    $('#set-real', body).onchange = (e) => { Settings.realistic = e.target.checked; saveSettings(); msg('Character models change the next time you enter a level.', '#9fd8a0'); };
+    $('#set-gore', body).value = Settings.gore || 'max';
+    $('#set-gore', body).onchange = (e) => { Settings.gore = e.target.value; saveSettings(); };
     $('#set-am', body).value = Settings.autoMode;
     $('#set-am', body).onchange = (e) => { Settings.autoMode = e.target.value; saveSettings(); };
     $('#set-ar', body).oninput = (e) => { Settings.autoRange = +e.target.value; $('#sv-ar').textContent = e.target.value + 'm'; saveSettings(); };
@@ -855,52 +926,71 @@ export class UI {
 
   // ---------------- the Zodiac: star sign perk constellations ----------------
   renderZodiac() {
-    const body = this.body('zodiac', 'The Zodiac', { left: '50%', top: isTouch() ? '46px' : '50px', width: '980px', transform: 'translateX(-50%)' });
-    const W = 300, H = 230;
+    const body = this.body('zodiac', 'The Zodiac', { left: '50%', top: isTouch() ? '40px' : '44px', width: 'min(1100px, 97vw)', transform: 'translateX(-50%)', maxHeight: '94vh', overflowY: 'auto' });
     if (!this.zsky) {
       let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-      this.zsky = Array.from({ length: 260 }, () => `<circle cx="${(rnd() * 1200).toFixed(1)}" cy="${(rnd() * 690).toFixed(1)}" r="${(rnd() * 1.3 + 0.2).toFixed(2)}" fill="#fff" opacity="${(rnd() * 0.5 + 0.1).toFixed(2)}"/>`).join('');
+      this.zsky = Array.from({ length: 220 }, () => `<circle cx="${(rnd() * 1200).toFixed(1)}" cy="${(rnd() * 690).toFixed(1)}" r="${(rnd() * 1.3 + 0.2).toFixed(2)}" fill="#fff" opacity="${(rnd() * 0.5 + 0.1).toFixed(2)}"/>`).join('');
     }
-    const pos = (si, st) => { const c = si % 4, r = Math.floor(si / 4); return [c * W + 30 + st.x * 240, r * H + 34 + st.y * 160]; };
-    let lines = '', stars = '', labels = '';
-    SIGNS.forEach((sg, si) => {
-      const c = si % 4, r = Math.floor(si / 4);
-      const done = sg.stars.every((st) => starRank(st.id) >= st.ranks);
-      labels += `<text x="${c * W + W / 2}" y="${r * H + H - 12}" text-anchor="middle" class="zl${done ? ' done' : ''}">${sg.glyph}︎ ${sg.name}</text>`;
-      for (const st of sg.stars) {
-        if (!st.from) continue;
-        const [x1, y1] = pos(si, STARS[st.from]), [x2, y2] = pos(si, st);
-        lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="zline${starRank(st.id) ? ' on' : ''}"/>`;
-      }
-      for (const st of sg.stars) {
-        const [x, y] = pos(si, st), rk = starRank(st.id);
-        const state = rk >= st.ranks ? 'max' : rk ? 'part' : canLearn(st.id) ? 'open' : (!st.from || starRank(st.from)) ? 'wait' : 'lock';
-        const big = st.ranks === 1 ? 4 : 0;
-        stars += `<g class="zstar ${state}${this.zsel === st.id ? ' sel' : ''}" data-id="${st.id}"><circle cx="${x}" cy="${y}" r="26" class="hit"/><circle cx="${x}" cy="${y}" r="${13 + big}" class="glow"/><circle cx="${x}" cy="${y}" r="${6 + big / 2}" class="core"/>${st.ranks > 1 ? `<text x="${x}" y="${y + 27}" text-anchor="middle" class="zr">${rk}/${st.ranks}</text>` : ''}</g>`;
-      }
-    });
+    const view = this.zview || SIGNS[0].id;      // a sign id, or 'all'
     const pts = starPoints();
+    const stateOf = (st) => { const rk = starRank(st.id); return rk >= st.ranks ? 'max' : rk ? 'part' : canLearn(st.id) ? 'open' : (!st.from || starRank(st.from)) ? 'wait' : 'lock'; };
+    // ---- left: the twelve signs
+    const list = SIGNS.map((sg) => {
+      const pr = signProgress(sg), open = sg.stars.some((st) => canLearn(st.id));
+      return `<button class="zsign${view === sg.id ? ' on' : ''}${pr.got >= pr.max ? ' done' : ''}" data-sign="${sg.id}"><span class="zg">${sg.glyph}︎</span><span class="zn"><b>${sg.name}</b><small>${sg.theme}</small></span><span class="zp">${pr.got}/${pr.max}${open && pts > 0 ? '<i class="zdot"></i>' : ''}</span></button>`;
+    }).join('') + `<button class="zsign${view === 'all' ? ' on' : ''}" data-sign="all"><span class="zg">✦</span><span class="zn"><b>All signs</b><small>Overview map</small></span></button>`;
+    // ---- centre: one sign, large
+    let lines = '', stars = '', labels = '', W = 760, H = 470, title = '';
+    if (view === 'all') {
+      const CW = 300, CH = 230; W = 1200; H = 690;
+      const pos = (si, st) => { const c = si % 4, r = Math.floor(si / 4); return [c * CW + 30 + st.x * 240, r * CH + 34 + st.y * 160]; };
+      SIGNS.forEach((sg, si) => {
+        const c = si % 4, r = Math.floor(si / 4), pr = signProgress(sg);
+        labels += `<text x="${c * CW + CW / 2}" y="${r * CH + CH - 12}" text-anchor="middle" class="zl${pr.got >= pr.max ? ' done' : ''}" data-sign="${sg.id}">${sg.glyph}︎ ${sg.name} · ${pr.got}/${pr.max}</text>`;
+        for (const st of sg.stars) { if (!st.from) continue; const [x1, y1] = pos(si, STARS[st.from]), [x2, y2] = pos(si, st); lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="zline${starRank(st.id) ? ' on' : ''}"/>`; }
+        for (const st of sg.stars) { const [x, y] = pos(si, st); stars += `<g class="zstar ${stateOf(st)}${this.zsel === st.id ? ' sel' : ''}" data-id="${st.id}"><circle cx="${x}" cy="${y}" r="18" class="hit"/><circle cx="${x}" cy="${y}" r="${9 + (st.ranks === 1 ? 3 : 0)}" class="glow"/><circle cx="${x}" cy="${y}" r="${4 + (st.ranks === 1 ? 2 : 0)}" class="core"/></g>`; }
+      });
+      title = 'All twelve signs. Click a name to open that sign.';
+    } else {
+      const sg = SIGNS.find((g) => g.id === view), si = SIGNS.indexOf(sg);
+      const pos = (st) => [50 + st.x * (W - 100), 46 + st.y * (H - 120)];
+      title = `${sg.glyph}︎ ${sg.name} · ${sg.theme}`;
+      labels += `<text x="${W / 2}" y="${H / 2 + 60}" text-anchor="middle" class="zwm">${sg.glyph}︎</text>`;
+      for (const st of sg.stars) { if (!st.from) continue; const [x1, y1] = pos(STARS[st.from]), [x2, y2] = pos(st); lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="zline${starRank(st.id) ? ' on' : ''}"/>`; }
+      for (const st of sg.stars) {
+        const [x, y] = pos(st), rk = starRank(st.id), big = st.ranks === 1 ? 6 : 0;
+        const pips = Array.from({ length: st.ranks }, (_, i) => `<circle cx="${x - (st.ranks - 1) * 5 + i * 10}" cy="${y + 33 + big}" r="3" class="pip${i < rk ? ' on' : ''}"/>`).join('');
+        stars += `<g class="zstar ${stateOf(st)}${this.zsel === st.id ? ' sel' : ''}" data-id="${st.id}"><circle cx="${x}" cy="${y}" r="34" class="hit"/><circle cx="${x}" cy="${y}" r="${24 + big}" class="glow"/><circle cx="${x}" cy="${y}" r="${11 + big / 2}" class="core"/><text x="${x}" y="${y + 56 + big}" text-anchor="middle" class="zr zn2">${st.name}</text>${pips}</g>`;
+      }
+    }
     const sel = this.zsel && STARS[this.zsel];
     const sign = sel && SIGNS.find((g) => g.id === sel.sign);
     const rk = sel ? starRank(sel.id) : 0;
     const info = sel
-      ? `<div class="zname">${sign.glyph}︎ ${sel.name} <span class="muted">· ${sign.name}, ${sign.theme}</span></div>
-         <div>${sel.text}${sel.ranks > 1 ? ` <span class="muted">(rank ${rk} / ${sel.ranks}, now ${rk ? sel.text.replace(/\+([\d.]+)/g, (m, n) => '+' + +(n * rk).toFixed(1)).replace(/ per rank/g, '') : 'nothing'})</span>` : rk ? ' <span style="color:#9fd8a0">(learned)</span>' : ''}</div>
+      ? `<div class="zname">${sign.glyph}︎ ${sel.name} <span class="muted">· ${sign.name}</span></div>
+         <div>${sel.text}${sel.ranks > 1 ? ` <span class="muted">(rank ${rk} / ${sel.ranks}${rk ? ', now ' + sel.text.replace(/\+([\d.]+)/g, (m, n) => '+' + +(n * rk).toFixed(1)).replace(/ per rank/g, '') : ''})</span>` : rk ? ' <span style="color:#9fd8a0">(learned)</span>' : ''}</div>
          ${sel.from && !starRank(sel.from) ? `<div class="tt-bad">Learn ${STARS[sel.from].name} first.</div>` : ''}`
-      : `<div class="muted">Tap a star to see what it does. You earn one star point every second level (${starPointsTotal()} so far). A star needs the star it is linked from.</div>`;
-    body.innerHTML = `<div class="zhead"><span>Star points: <b style="color:#fff">${pts}</b></span><span class="muted">${signsCompleted()} of 12 signs complete</span></div>
-      <svg class="zsky" viewBox="0 0 1200 690" preserveAspectRatio="xMidYMid meet"><defs><radialGradient id="zbg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#1c1838"/><stop offset="1" stop-color="#05040c"/></radialGradient></defs>
-      <rect width="1200" height="690" fill="url(#zbg)"/>${this.zsky}${lines}${labels}${stars}</svg>
-      <div class="zinfo"><div class="ztext">${info}</div><div class="zbtns"><button class="primary" id="z-learn" ${sel && canLearn(sel.id) ? '' : 'disabled'}>Learn star</button><button class="small" id="z-reset" ${Object.keys(G.stars || {}).length ? '' : 'disabled'}>Reset (${respecCost().toLocaleString()} gold)</button></div></div>`;
+      : `<div class="muted">Tap a star to see what it does. You earn one star point every second level (${starPointsTotal()} so far). A star needs the star it is linked from. Gold-lit stars are ready to learn.</div>`;
+    const idx = SIGNS.findIndex((g) => g.id === view);
+    body.innerHTML = `<div class="zhead"><span>Star points: <b style="color:#fff">${pts}</b></span><span class="zttl">${title}</span><span class="muted">${signsCompleted()} of 12 signs complete</span></div>
+      <div class="zlayout"><div class="zlist">${list}</div><div class="zmain">
+      <svg class="zsky" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet"><defs><radialGradient id="zbg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#1c1838"/><stop offset="1" stop-color="#05040c"/></radialGradient></defs>
+      <rect width="${W}" height="${H}" fill="url(#zbg)"/>${view === 'all' ? '' : this.zsky}${lines}${labels}${stars}</svg>
+      <div class="zinfo"><div class="ztext">${info}</div><div class="zbtns"><button class="primary" id="z-learn" ${sel && canLearn(sel.id) ? '' : 'disabled'}>Learn star</button>${view !== 'all' ? '<span class="znav"><button class="small" id="z-prev">◀</button><button class="small" id="z-next">▶</button></span>' : ''}<button class="small" id="z-reset" ${Object.keys(G.stars || {}).length ? '' : 'disabled'}>Reset stars (${respecCost().toLocaleString()}g)</button></div></div></div></div>`;
+    body.querySelectorAll('[data-sign]').forEach((b) => (b.onclick = () => { this.zview = b.dataset.sign; this.zsel = null; sfx('ui'); this.renderZodiac(); }));
     body.querySelectorAll('.zstar').forEach((g) => {
       g.onclick = () => { this.zsel = g.dataset.id; sfx('ui'); this.renderZodiac(); };
       g.ondblclick = () => { if (learnStar(g.dataset.id)) this.afterStar(); };
     });
+    const step = (d) => { this.zview = SIGNS[(idx + d + SIGNS.length) % SIGNS.length].id; this.zsel = null; sfx('ui'); this.renderZodiac(); };
+    const pv = $('#z-prev', body), nx = $('#z-next', body);
+    if (pv) pv.onclick = () => step(-1);
+    if (nx) nx.onclick = () => step(1);
     $('#z-learn', body).onclick = () => { if (sel && learnStar(sel.id)) this.afterStar(); };
     $('#z-reset', body).onclick = () => {
       const cost = respecCost();
       if (G.gold < cost) { msg(`Resetting the stars costs ${cost.toLocaleString()} gold.`, '#ff8866'); return; }
-      this.choice('Reset the stars?', `All star points come back to you for ${cost.toLocaleString()} gold.`, [['Reset', () => { G.gold -= cost; G.stars = {}; invalidateBonus(); G.hp = Math.min(G.hp, maxHp()); G.mp = Math.min(G.mp, maxMp()); sfx('gold'); this.refresh(); }], ['Cancel', null]]);
+      this.choice('Reset the stars?', `All star points come back to you for ${cost.toLocaleString()} gold.`, [['Reset', () => { G.gold -= cost; G.stars = {}; invalidateBonus(); G.hp = Math.min(G.hp, maxHp()); G.mp = Math.min(G.mp, maxMp()); sfx('gold'); this.renderZodiac(); }], ['Keep', () => {}]]);
     };
   }
   afterStar() {
@@ -1001,9 +1091,11 @@ export class UI {
   // ---------------- wardrobe: change the hero's look at any time ----------------
   renderWardrobe() {
     const body = this.body('wardrobe', 'Wardrobe', { left: '24px', top: '60px', width: '440px', maxHeight: '86vh', overflowY: 'auto' });
+    Object.assign(G.look, { ...fullLook(G.look, G.cls) });
     const L = G.look, cls = CLASSES[G.cls];
     const sw = (key, list) => `<div class="swatches">${list.map((c) => `<div class="sw ${c === L[key] ? 'on' : ''}" style="background:${c}" data-wl="${key}" data-v="${c}"></div>`).join('')}</div>`;
     body.innerHTML = `<div class="muted" style="margin-bottom:6px">Change how your hero looks. Free, any time. Armor and weapons change your look when equipped, and the forge can dye and restyle them.</div>
+      ${bodyRows(L)}
       <h3><span>Clothing tint</span></h3>${sw('tint', ARMOR_TINTS)}
       <h3><span>Cape</span></h3>${sw('cape', CAPE_COLORS)}
       <div class="setrow"><span>Wear a cape</span><input type="checkbox" id="wd-cape" ${L.capeOn !== false ? 'checked' : ''}></div>
@@ -1165,6 +1257,7 @@ export class UI {
     } else this.fishResult(false, 'The line snaps. It got away.');
   }
   fishResult(ok, text, item) {
+    Barks.hero(ok ? 'fishCatch' : 'fishLose', 0.6, 0);
     const f = this.fish;
     f.state = 'idle';
     $('#fish-status').innerHTML = ok ? `<span style="color:${hex(itemColor(item))}">${text}</span>` : text;
@@ -1191,7 +1284,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.5 · 3D models by Kay Lousberg (KayKit, CC0) · Music and sound made in code</div>`;
+      <div class="foot">An original action RPG · v0.6 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music mostly made in code, boss theme by cynicmusic (CC0)</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };
@@ -1220,6 +1313,8 @@ export class UI {
         inner = `<div class="muted" style="text-align:center;margin-bottom:10px">${cls.desc}</div>
           ${['str', 'dex', 'vit', 'mag'].map((k) => `<div class="statbar"><span>${statName[k]}</span><div><i style="width:${(cls.base[k] / 20) * 100}%"></i></div><b>${cls.base[k]}</b></div>`).join('')}
           <h3><span>Starting skills</span></h3><div class="muted">${Object.keys(cls.skills).map(skillName).join(', ')}. You can learn every skill tree later.</div>`;
+      } else if (state.tab === 'body') {
+        inner = bodyRows(state);
       } else if (state.tab === 'look') {
         inner = `<h3><span>Weapons</span></h3><div class="chips">${cls.gear.map((g, i) => `<button class="chip ${state.gear === i ? 'on' : ''}" data-gear="${i}">${g.label}</button>`).join('')}</div>
           <h3><span>Armor tint</span></h3><div class="swatches">${ARMOR_TINTS.map((col) => `<div class="sw ${col === state.tint ? 'on' : ''}" style="background:${col}" data-tint="${col}"></div>`).join('')}</div>
@@ -1238,7 +1333,7 @@ export class UI {
       }
       c.innerHTML = `<div class="panel cls"><h2>Choose your class</h2>${Object.entries(CLASSES).map(([k, v]) => `<div class="clscard ${k === state.cls ? 'on' : ''}" data-cls="${k}"><div class="ic">${skillIcon(skillIconKey(Object.keys(v.skills)[0]))}</div><div><b>${v.title}</b><small>${v.desc}</small></div></div>`).join('')}</div>
         <div class="panel info"><h2>${cls.title}</h2>
-          <div class="crtabs">${tab('class', 'Class')}${tab('look', 'Appearance')}${tab('pet', 'Companion')}</div>
+          <div class="crtabs">${tab('class', 'Class')}${REAL_OK && Settings.realistic !== false ? tab('body', 'Body') : ''}${tab('look', 'Appearance')}${tab('pet', 'Companion')}</div>
           <div class="crbody">${inner}</div>
           <h3><span>Hero name</span></h3><input type="text" id="cr-name" maxlength="18" placeholder="Name your hero" value="${state.name}" style="width:100%">
           <div style="text-align:center;margin-top:14px"><button id="cr-rand">Randomize</button><button id="cr-back">Back</button><button id="cr-go" class="primary big">Begin</button></div>
@@ -1265,6 +1360,7 @@ export class UI {
         Object.assign(state, { cape: pk(CAPE_COLORS), tint: pk(ARMOR_TINTS), gear: Math.floor(Math.random() * cl.gear.length), helm: Math.random() < 0.7, hooded: !!cl.alt && Math.random() < 0.5, capeOn: Math.random() < 0.85, height: 0.9 + Math.random() * 0.2 });
         { const sk = pk(Object.keys(PET_SPECIES)); state.petSpecies = sk; state.pet = pk(PET_SPECIES[sk].coats).key; }
         Object.assign(state, { skin: pk(SKIN_TONES), shoulders: pk(DETAIL_OPTIONS.shoulders)[0], belt: pk(DETAIL_OPTIONS.belt)[0], back: pk(DETAIL_OPTIONS.back)[0], metal: pk(DETAIL_OPTIONS.metal)[0], scarf: pk(SCARF_COLORS) });
+        if (REAL_OK) { const sx = Math.random() < 0.5 ? 'm' : 'f'; Object.assign(state, defaultLook(state.cls, sx), { weight: 0.25 + Math.random() * 0.5, muscle: 0.25 + Math.random() * 0.6, hairStyle: pk(HAIR_STYLES.filter((h) => h[0] !== 'none'))[0], hairColor: pk(HAIR_COLORS), hairHi: Math.random() < 0.4 ? pk(HIGHLIGHT_COLORS) : '', skinTone: Math.floor(Math.random() * 6), eyes: pk(EYE_COLORS)[0], beard: sx === 'm' ? pk(BEARDS)[0] : 'none' }); }
         if (!state.name) state.name = pk(['Aldric', 'Wren', 'Corvin', 'Isolde', 'Bram', 'Mira', 'Talon', 'Sable', 'Rook', 'Elowen', 'Garrick', 'Nyx']);
         upd();
       };
@@ -1281,5 +1377,7 @@ export class UI {
     this.labels.clear();
     for (const f of this.floats) f.el.remove();
     this.floats = [];
+    for (const b of this.bubbles) b.el.remove();
+    this.bubbles = [];
   }
 }

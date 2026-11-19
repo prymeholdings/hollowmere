@@ -7,10 +7,13 @@ import { CLASSES, PET_COATS, affinity, burnPct, stunChance } from './skills.js';
 import { Vortex } from './vortex.js';
 import { buildPetModel, petStage, petCoatColor, PET_SPECIES, PET_SKILLS, petRank, ensurePets, addPetXp, petBonus } from './pets.js';
 import { Settings } from './settings.js';
+import { Barks } from './barks.js';
+import { REAL_OK, buildReal, RealChar, ARMOR_KIND, fullLook, realFor, NPC_SPECS } from './realchar.js';
+import { goreKind } from './gore.js';
 import { ENEMIES } from './data.js';
 
 const tmp = new THREE.Vector3();
-const DMG_COLORS = { phys: '#ffffff', fire: '#ffa040', frost: '#9fdcff', storm: '#c6b8ff', poison: '#9dff7a' };
+const DMG_COLORS = { phys: '#ffffff', fire: '#ffa040', frost: '#9fdcff', storm: '#c6b8ff', poison: '#9dff7a', arcane: '#b8a0ff', light: '#fff0a0', dark: '#c070e0', bleed: '#ff4a4a' };
 
 class Entity {
   constructor(type) {
@@ -84,6 +87,25 @@ export class Player extends Entity {
     this.lastHit = null;
     this.hitAnimCd = 0;
     this.refreshVisuals();
+    this.upgradeReal();
+  }
+  // swap the stylised stand-in for the realistic human once it has been built
+  async upgradeReal() {
+    if (!REAL_OK || Settings.realistic === false) return;
+    const look = fullLook(G.look, G.cls);
+    const al = G.equipment.armor ? lookOf(G.equipment.armor) : null;
+    const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls)].join('|');
+    if (this.realKey === key) return;
+    this.realKey = key;
+    const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { detail: (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) ? 'low' : 'medium' });
+    if (!res || this.realKey !== key || this.gone) return;
+    const old = this.model;
+    const rc = new RealChar(res, { scale: look.height || 1, look });
+    rc.play(old.baseName || 'Idle', 0);
+    this.root.remove(old.root);
+    this.root.add(rc.root);
+    this.model = rc;
+    this.refreshVisuals();
   }
   refreshVisuals() {
     this.model.dress(G.equipment, G.look || {}, CLASSES[G.cls] || CLASSES.Knight);
@@ -93,19 +115,26 @@ export class Player extends Entity {
     this.ranged = t?.ranged || null;
     this.attacks = t ? (WEAPON_ATTACKS[t.anim] || ATTACKS[G.cls]) : ['Unarmed_Melee_Attack_Punch_A', 'Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'];
     if (t && t.anim === '1h' && G.equipment.offhand && /Offhand/.test(typeOf(G.equipment.offhand).vis)) this.attacks = WEAPON_ATTACKS.dual;
+    if (this.realKey) this.upgradeReal();
   }
   setTarget(t) { this.target = t; this.repath = 0; }
   moveTo(p) { this.target = null; this.path = G.level.findPath(this.pos, p); }
   takeDamage(d) {
     if (this.dead) return;
     d = d * 100 / (100 + armor());
-    if (Math.random() < Math.min(0.25, stat('dex') * 0.004) + (G.buffs.smoke > 0 ? 0.3 : 0) + petBonus('dodge')) { G.main.floatText(this.pos, 'Dodge', '#cccccc', 16, 2.2); return; }
+    d *= 1 - Math.min(0.9, itemBonus('dr') / 100);
+    if (Math.random() < Math.min(0.25, stat('dex') * 0.004) + (G.buffs.smoke > 0 ? 0.3 : 0) + petBonus('dodge') + Math.min(0.6, itemBonus('dodge') / 100)) { G.main.floatText(this.pos, 'Dodge', '#cccccc', 16, 2.2); return; }
     G.hp -= d;
+    { const th = itemBonus('thorns'); if (th > 0) { let nb = null, bd = 3; for (const o of G.level.entities) if (o.type === 'enemy' && !o.dead) { const dd = flatDist(o.pos, this.pos); if (dd < bd) { bd = dd; nb = o; } } if (nb) nb.takeDamage(d * th / 100, false, 'phys'); } }
     G.main.floatText(this.pos, Math.round(d), '#ff5555', 20, 2.2);
+    G.main.gore.hit(this.pos, 'red', Math.min(1, d / maxHp() * 2.5), null);
+    G.main.onPlayerHurt?.(d);
+    if (G.hp > 0 && G.hp / maxHp() < 0.25) Barks.hero('low', 0.5, 8); else if (d / maxHp() > 0.12) Barks.hero('hurt', 0.4);
     G.main.hurtFlash(d / maxHp());
     sfx('hurt');
     if (G.hp <= 0) {
       G.hp = 0; this.dead = true; this.path = []; this.target = null;
+      G.main.gore.death(this.pos, 'red', 0.9, false, null);
       this.model.once('Death_A', { hold: true, timeScale: 0.9 });
       G.main.onPlayerDeath();
       return;
@@ -331,8 +360,10 @@ export class Enemy extends Entity {
     if (kind === 'fire' && burnPct() > 0) this.applyDot(d * burnPct() / 3, 3, 'fire');
     if (kind === 'storm' && Math.random() < stunChance()) this.stunT = Math.max(this.stunT || 0, 0.5);
     this.hp -= d;
+    this.lastDmg = d;
     this.aggro = true;
     this.hitT = 0.15;
+    G.main.gore.hit(this.pos, goreKind(this.data), Math.min(1, d / this.maxHp * 2.2 + (crit ? 0.25 : 0)), G.player ? G.player.pos : null);
     if (Settings.damageNumbers) G.main.floatText(this.pos, Math.round(d) + (crit ? '!' : ''), crit ? '#ffdd33' : DMG_COLORS[kind] || '#fff', crit ? 30 : 22, this.pickH * 2.2);
     sfx(crit ? 'crit' : 'hit');
     if (G.player) G.player.lastHit = this;
@@ -352,6 +383,12 @@ export class Enemy extends Entity {
     if (this.boss) G.main.addFameFromBoss(this.floor);
     G.level.dropLoot(this.pos.clone(), this.floor, this.elite, this.boss);
     G.main.fx.emit(this.pos.clone().setY(0.8), { count: this.boss ? 60 : 16, color: this.isSkel ? 0xd8d0b8 : this.data.color, speed: 4, life: 0.7, size: 0.5, gravity: 5 });
+    // overkill bursts the body apart
+    const big = (this.lastDmg || 0) > this.maxHp * 0.55 || this.hp < -this.maxHp * 0.35;
+    G.main.gore.death(this.pos, goreKind(this.data), (this.boss ? 2.2 : this.elite ? 1.4 : 1) * (this.pickR > 0.8 ? 1.3 : 1), big, G.player ? G.player.pos : null);
+    Barks.kill(this, big);
+    { const lk = itemBonus('life_kill'), mk = itemBonus('mana_kill'); if (lk) G.hp = Math.min(maxHp(), G.hp + lk); if (mk) G.mp = Math.min(maxMp(), G.mp + mk); }
+    if (big && Settings.gore === 'max' && goreKind(this.data) !== 'none') { this.model.visible = false; this.deathT = 0.4; G.main.sfxGore?.(); }
     if (this.boss) { G.main.shake(0.6); G.main.fx.explosion(this.pos, 0xff5522, 4); }
     this.deathT = this.char ? 2.6 : 0.6;
     if (this.char) this.char.once(this.isSkel ? 'Death_C_Skeletons' : 'Death_A', { hold: true, timeScale: 1.2 });
@@ -1116,6 +1153,7 @@ export class Interact extends Entity {
         }
         ly = 2.5;
         this.root.rotation.y = 0;
+        upgradeNpc(this, kind === 'quest' ? 'quest' : kind, 1);
         break;
       }
       case 'pond': case 'fish_hole': case 'millpond': {
@@ -1206,6 +1244,22 @@ export class Interact extends Entity {
   }
 }
 
+// swap a townsperson's stylised model for a realistic one (desktop only; phones keep the light models)
+async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false) {
+  const spec = NPC_SPECS[specKey];
+  if (!REAL_OK || Settings.realistic === false || !spec || (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches)) return;
+  const rc = await realFor(spec.look, 'Knight', null, lookOf, { kind: spec.kind, cloth: spec.cloth, scale, detail: 'low' });
+  if (!rc || ent.gone || !ent.root.parent && !ent.root) return;
+  if (spec.armor) { rc.wearPlates({ tint: 0xdfe8f4, glow: 0, rarity: 0 }, 'plate'); if (helm) rc.wearHelm({ vis: 'Knight_Helmet', tint: 0xdfe8f4 }); }
+  for (const g of (gear && gear.weapon) || []) rc.holdItem({ vis: g, tint: 0xdfe8f4 }, 'right');
+  for (const g of (gear && gear.offhand) || []) rc.holdItem({ vis: g, tint: 0xdfe8f4 }, 'left');
+  ent.root.remove(ent.char.root);
+  ent.root.add(rc.root);
+  ent.char = rc;
+  rc.play(ent.idleAnim || 'Idle', 0);
+}
+const VILLAGER_SPEC = { 'Marta the Baker': 'v_f1', 'Old Tobin': 'v_m1', Lettie: 'v_f1', Pell: 'v_m2', 'Hanne the Farmer': 'v_f2', 'Gaffer Rusk': 'v_m1', 'Wren the Bard': 'v_f3', 'Sister Ama': 'healer', 'Joss the Woodcutter': 'v_m2', 'Archer Tamsin': 'guardf', 'Merchant Faye': 'v_f2', Brin: 'v_m4', Dorran: 'v_m3', 'Delve the Miner': 'v_m3', 'Miller Odo': 'v_m1', 'Builder Mae': 'v_f3', 'Night Watchman Corwin': 'v_m4', Ivy: 'v_f3', 'Captain Arlo': 'guard', 'Guard Bexley': 'guard', 'Commander Hale': 'guard', 'Guard Osric': 'guard' };
+
 // ---------------------------------------------------------------- Villager (ambient townsfolk)
 export class Villager extends Entity {
   constructor(d) {
@@ -1224,11 +1278,12 @@ export class Villager extends Entity {
     this.idleAnim = { sit: 'Sit_Floor_Idle', fish: 'Sit_Floor_Idle', chair: 'Sit_Chair_Idle', guard: '2H_Melee_Idle', perform: 'Spellcasting' }[this.mode] || 'Idle';
     this.char.play(this.idleAnim, 0);
     this.talkCd = 0;
+    upgradeNpc(this, VILLAGER_SPEC[d.name] || 'v_m1', d.scale || 1, d.gear, !!d.helm);
   }
   talk() {
     if (this.talkCd > 0) return;
     this.talkCd = 3;
-    const line = pick(this.data.lines);
+    const line = Barks.villagerLine(this) ? Barks.villagerLine(this) : pick(this.data.lines);
     G.main.floatText(this.pos, `"${line}"`, '#f3e6c4', 15, 2.4 * (this.data.scale || 1));
     msg(`${this.data.name}: "${line}"`, '#e8dcc0');
     if (this.mode === 'wander') { this.path = []; this.wait = 3; }

@@ -12,6 +12,12 @@ export const Settings = {
   autoAttack: false, // attack nearby foes on your own
   autoMode: 'basic', // 'basic' or a hotbar slot: rmb q w e r
   autoRange: 8,
+  // mature content (both on by default, both can be switched off)
+  gore: 'max', // off | low | max
+  profanity: true,
+  barks: true,
+  grit: 'gritty', // gritty | classic
+  realistic: true, // realistic human models (off = the stylised heroes)
   // interface
   uiScale: 1, hudOpacity: 1, theme: 'bronze', showMinimap: true, showLog: true,
   touchSize: 1, touchOpacity: 0.9, leftHanded: false,

@@ -3,6 +3,7 @@ import { G, stat, rollDamage, maxHp, critChance, critMult, itemBonus } from './s
 import { Projectile, Ally } from './entities.js';
 import { flatDist, sfx, pick } from './util.js';
 import { petBonus } from './pets.js';
+import { SKILLS2, PASSIVES2, TREES2, castNew } from './skills2.js';
 
 const mag = () => stat('mag');
 const rank = (id) => G.skills[id] || 0;
@@ -91,6 +92,7 @@ export const SKILLS = {
     dur: () => 10 + rank('warcry') * 1.5,
     desc: (s) => `+30% damage and +40 armor for ${s.dur().toFixed(0)}s. Nearby foes are slowed.` },
 };
+Object.assign(SKILLS, SKILLS2);
 for (const k in SKILLS) {
   const s = SKILLS[k];
   s.id = k;
@@ -113,10 +115,11 @@ export const PASSIVES = {
   conduit: { name: 'Conduit', icon: 'conduit', desc: (r) => `+${r * 10}% lightning and poison damage. Lightning has a ${r * 3}% chance to stun.`, per: '+10% storm/poison damage, +3% stun' },
   fortune: { name: "Fortune's Favor", icon: 'fortune', desc: (r) => `+${r * 8}% gold and magic find.`, per: '+8% gold and magic find' },
 };
+Object.assign(PASSIVES, PASSIVES2);
 for (const k in PASSIVES) PASSIVES[k].id = k;
 
 // Three skill trees. tier = row (level gate), col = column, req = prerequisites (rank 1 needed)
-export const TIER_LEVEL = [1, 6, 12, 18, 30];
+export const TIER_LEVEL = [1, 6, 12, 18, 30, 45];
 export const MAX_ACTIVE = 15, MAX_PASSIVE = 10;
 export const TREES = [
   { id: 'might', name: 'Might', color: '#e0a050', nodes: [
@@ -141,6 +144,7 @@ export const TREES = [
     { id: 'inferno', tier: 3, col: 1, req: ['fire_wall'] }, { id: 'ball_lightning', tier: 3, col: 2, req: ['conduit'] },
     { id: 'cataclysm', tier: 4, col: 1, req: ['inferno', 'glacial'] }] },
 ];
+TREES.push(...TREES2);
 // damage multiplier for elemental affinities (used when foes take damage)
 export function affinity(kind) {
   if (kind === 'fire') return 1 + 0.1 * rank('pyromancy');
@@ -205,7 +209,7 @@ export function canCast(id) {
 }
 
 // persistent ground effects (Blizzard, Rain of Blades)
-const zones = [];
+export const zones = [];
 export function clearZones() { zones.length = 0; }
 export function updateZones(dt) {
   for (let i = zones.length - 1; i >= 0; i--) {
@@ -528,6 +532,9 @@ export function cast(id, at, targetEnt) {
         } });
       break;
     }
+    default:
+      castNew(id, { P, fx, pos, dir, at, targetEnt });
+      break;
   }
   return true;
 }

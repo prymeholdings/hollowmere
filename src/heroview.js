@@ -1,9 +1,13 @@
 // A small 3D view of the hero, wearing what is equipped, shown in the inventory. Drag to turn it.
 // Uses its own little renderer on a canvas that is moved into the inventory panel each time it redraws.
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { G } from './state.js';
 import { CharModel } from './assets.js';
 import { CLASSES } from './skills.js';
+import { realFor, fullLook } from './realchar.js';
+import { lookOf } from './items.js';
+import { Settings } from './settings.js';
 
 export class HeroView {
   constructor() {
@@ -39,6 +43,7 @@ export class HeroView {
     const rim = new THREE.DirectionalLight(0x88aaff, 1.6); rim.position.set(-3, 2, -3); this.scene.add(rim);
     const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.8, 0.08, 40), new THREE.MeshStandardMaterial({ color: 0x3a2c1c, roughness: 0.8, metalness: 0.2 }));
     disc.position.y = -0.04; this.scene.add(disc);
+    const pm = new THREE.PMREMGenerator(this.renderer); this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; this.scene.environmentIntensity = 0.5;
     this.pivot = new THREE.Group(); this.scene.add(this.pivot);
     return true;
   }
@@ -46,7 +51,7 @@ export class HeroView {
   mount(parent) { parent.appendChild(this.wrap); }
   signature() {
     const e = G.equipment || {};
-    return [G.cls, JSON.stringify(G.look || {}), ...['weapon', 'offhand', 'helm', 'armor', 'ring', 'amulet'].map((k) => (e[k] ? (e[k].name || '') + (e[k].mat || '') + (e[k].rarity || 0) : '-'))].join('|');
+    return [G.cls, JSON.stringify(G.look || {}), Settings.realistic, ...['weapon', 'offhand', 'helm', 'armor', 'ring', 'amulet'].map((k) => (e[k] ? (e[k].name || '') + (e[k].mat || '') + (e[k].rarity || 0) : '-'))].join('|');
   }
   rebuild() {
     const cls = CLASSES[G.cls] || CLASSES.Knight;
@@ -55,6 +60,16 @@ export class HeroView {
     this.model.applyLook(cls, G.look || {});
     this.model.dress(G.equipment, G.look || {}, cls);
     this.pivot.add(this.model.root);
+    if (Settings.realistic !== false) {
+      const sig = this.sig;
+      realFor(fullLook(G.look, G.cls), G.cls, G.equipment, lookOf).then((rc) => {
+        if (!rc || this.sig !== sig) return;
+        this.pivot.remove(this.model.root);
+        rc.dress(G.equipment, G.look || {}, cls);
+        this.model = rc; this.pivot.add(rc.root);
+        rc.play('Idle', 0);
+      });
+    }
     const box = new THREE.Box3().setFromObject(this.model.root);
     const h = Math.max(1, box.max.y - box.min.y);
     this.camera.position.set(0, h * 0.55, h * 3.0);

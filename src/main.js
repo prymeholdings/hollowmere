@@ -3,6 +3,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { Barks } from './barks.js';
+import { setRealItemLook, defaultLook, realFor, fullLook, buildReal, NPC_SPECS } from './realchar.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
@@ -10,9 +12,9 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 // Final pass: contrast-adaptive sharpening, color grading and vignette (original shader)
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, resolution: { value: new THREE.Vector2(1, 1) }, sharpen: { value: 0.35 }, vignette: { value: 0.32 }, saturation: { value: 1.08 }, contrast: { value: 1.06 }, lift: { value: new THREE.Vector3(0.0, 0.0, 0.012) }, gain: { value: new THREE.Vector3(1.02, 1.0, 0.97) } },
+  uniforms: { tDiffuse: { value: null }, resolution: { value: new THREE.Vector2(1, 1) }, sharpen: { value: 0.35 }, vignette: { value: 0.5 }, saturation: { value: 0.82 }, contrast: { value: 1.14 }, grain: { value: 0.045 }, time: { value: 0 }, lift: { value: new THREE.Vector3(0.012, 0.008, 0.0) }, gain: { value: new THREE.Vector3(1.04, 0.99, 0.92) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 resolution; uniform float sharpen, vignette, saturation, contrast; uniform vec3 lift, gain; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 resolution; uniform float sharpen, vignette, saturation, contrast, grain, time; uniform vec3 lift, gain; varying vec2 vUv;
     void main(){
       vec2 px = 1.0 / resolution;
       vec3 c = texture2D(tDiffuse, vUv).rgb;
@@ -28,6 +30,8 @@ const GradeShader = {
       c = (c - 0.5) * contrast + 0.5;
       vec2 d = vUv - 0.5;
       c *= 1.0 - vignette * smoothstep(0.25, 0.85, dot(d, d) * 2.2);
+      float gn = fract(sin(dot(vUv * resolution + fract(time) * 91.7, vec2(12.9898, 78.233))) * 43758.5453);
+      c += (gn - 0.5) * grain * (1.0 - l * 0.6);
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
 };
@@ -42,6 +46,7 @@ import { Sky, clockText, daylight } from './daynight.js';
 import { petBonus, ensurePets, buildPetModel, PET_SPECIES, newPetRecord, petCoatColor } from './pets.js';
 import { lookOf, starterItem, makeGem } from './items.js';
 setItemLook(lookOf);
+setRealItemLook(lookOf);
 import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL, weaponDamage, socketGem } from './state.js';
 import { Level } from './level.js';
 import { Player, Pet, Loot } from './entities.js';
@@ -51,6 +56,7 @@ import { flatDist, rand } from './util.js';
 import { QUEST_GIVER } from './data.js';
 import { loadAll, CharModel } from './assets.js';
 import { FX } from './fx.js';
+import { Gore } from './gore.js';
 import { sfx, playMusic, unlockAudio } from './audio.js';
 import { Settings, loadSettings, saveSettings } from './settings.js';
 import { CLASSES, SKILLS, PET_COATS, cast, canCast, updateZones, clearZones } from './skills.js';
@@ -106,6 +112,7 @@ class Main {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.5, 260);
     this.fx = new FX(this.scene);
+    this.gore = new Gore(this.scene);
     this.zoom = 0.82;
     this.keys = {};
     this.mouse = new THREE.Vector2();
@@ -186,8 +193,16 @@ class Main {
       if (q === 'medium') this.composer.addPass(new SMAAPass(size.x, size.y));
       this.grade = new ShaderPass(GradeShader);
       this.composer.addPass(this.grade);
+      this.applyGrit();
     }
     this.resize();
+  }
+  // 'gritty' (default) is the dark, desaturated, grainy late-90s dungeon look; 'classic' is the brighter storybook grade
+  applyGrit() {
+    if (!this.grade) return;
+    const g = Settings.grit !== 'classic';
+    const u = this.grade.uniforms;
+    u.saturation.value = g ? 0.82 : 1.08; u.contrast.value = g ? 1.14 : 1.06; u.vignette.value = g ? 0.5 : 0.32; u.grain.value = g ? 0.045 : 0.0;
   }
   applyShadowRes() {
     const L = G.level;
@@ -224,7 +239,7 @@ class Main {
     if (!G.level || G.level.kind !== 'town') this.menuScene();
     this.menuMode = true;
     this.creating = true;
-    this.creation = { cls: 'Knight', cape: CLASSES.Knight.cape, hooded: false, name: '', helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox', petSpecies: 'fox', petName: 'Pip', tab: 'class', skin: '#ffffff', ...CLASS_DETAILS.Knight };
+    this.creation = { cls: 'Knight', cape: CLASSES.Knight.cape, hooded: false, name: '', helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox', petSpecies: 'fox', petName: 'Pip', tab: 'class', skin: '#ffffff', ...CLASS_DETAILS.Knight, ...defaultLook('Knight', 'm') };
     const L = G.level;
     const spot = L.startPos.clone();
     this.podium = new THREE.Group();
@@ -259,6 +274,18 @@ class Main {
     this.podium.add(this.preview.root);
     this.preview.once('Cheer', { timeScale: 1.2 });
     sfx('buff');
+    if (Settings.realistic !== false) {
+      const kit = starterKit(s), stamp = (this.previewStamp = (this.previewStamp || 0) + 1);
+      clearTimeout(this.previewTimer);
+      this.previewTimer = setTimeout(() => realFor(fullLook(s, s.cls), s.cls, kit, lookOf, { scale: s.height }).then((rc) => {
+        if (!rc || stamp !== this.previewStamp || !this.podium) return;
+        this.podium.remove(this.preview.root);
+        rc.dress(kit, s, cls);
+        rc.root.position.y = 0.25; rc.root.rotation.y = 0.35;
+        this.podium.add(rc.root); this.preview = rc;
+        rc.once('Cheer', { timeScale: 1 });
+      }), 450);
+    }
   }
   closeCreation() {
     this.creating = false;
@@ -273,7 +300,7 @@ class Main {
     reset();
     G.heroName = (s.name || '').trim().slice(0, 18) || 'Wanderer';
     G.cls = s.cls;
-    G.look = { cape: s.cape, hooded: !!s.hooded, helm: s.helm, gear: s.gear, tint: s.tint, height: s.height, capeOn: s.capeOn, pet: s.pet, skin: s.skin, shoulders: s.shoulders, belt: s.belt, back: s.back, metal: s.metal, scarf: s.scarf };
+    G.look = { cape: s.cape, hooded: !!s.hooded, helm: s.helm, gear: s.gear, tint: s.tint, height: s.height, capeOn: s.capeOn, pet: s.pet, skin: s.skin, shoulders: s.shoulders, belt: s.belt, back: s.back, metal: s.metal, scarf: s.scarf, ...(s.sex ? { sex: s.sex, weight: s.weight, muscle: s.muscle, hairStyle: s.hairStyle, hairColor: s.hairColor, hairHi: s.hairHi, beard: s.beard, eyes: s.eyes, skinTone: s.skinTone } : {}) };
     G.petName = (s.petName || '').trim().slice(0, 14) || 'Pip';
     G.petSpecies = PET_SPECIES[s.petSpecies] ? s.petSpecies : 'fox';
     G.pets = null; ensurePets();
@@ -317,6 +344,7 @@ class Main {
   clearLevel() {
     this.ui.clearWorld();
     this.fx.clear();
+    this.gore?.clear();
     clearZones();
     if (G.level) G.level.dispose();
     if (this.sky) { this.sky.dispose(); this.sky = null; }
@@ -357,7 +385,9 @@ class Main {
       }
       this.ui.banner(`Floor ${floor}`, floor % 5 === 0 ? 'A guardian stirs in the deep' : 'The Sunken Wells');
       playMusic(dungeonTrack(floor));
-    } else { this.ui.banner('Hollowmere', 'A lantern-lit town above the Wells'); playMusic('town'); }
+      Barks.reset();
+      setTimeout(() => Barks.hero(floor % 5 === 0 ? 'boss' : 'down', 0.8, 0), 1500);
+    } else { this.ui.banner('Hollowmere', 'A lantern-lit town above the Wells'); playMusic('town'); Barks.reset(); setTimeout(() => Barks.hero('town', 0.5, 0), 1500); }
     sfx('door');
     saveGame();
   }
@@ -368,6 +398,7 @@ class Main {
     this.loadLevel('town', 0, arrive);
   }
 
+  barkLoot() { Barks.hero('loot', 0.7); }
   onLevelUp() {
     this.ui.banner(`Level ${G.lvl}!`, '+5 attribute points · +1 skill point');
     if (G.player) {
@@ -377,6 +408,7 @@ class Main {
       G.player.model.once('Cheer', { timeScale: 1.4 });
     }
     sfx('level');
+    setTimeout(() => Barks.hero('level', 1, 0), 400);
     this.ui.refresh();
   }
   addFameFromBoss(f) {
@@ -398,6 +430,8 @@ class Main {
     this.ui.floatText(pos, text, color, size, yOff);
   }
   shake(a) { if (Settings.screenShake) this.shakeAmt = Math.min(0.6, this.shakeAmt + a); }
+  sfxGore() { sfx('gib'); }
+  onPlayerHurt(d) { if (Settings.gore !== 'off') this.ui.screenBlood(d / maxHp()); }
   hurtFlash(f) { this.ui.hurt(f); if (f > 0.08) this.shake(f * 1.5); if (this.pad?.active) this.pad.rumble(Math.min(1, 0.25 + f * 2), 90 + f * 300); }
   snapCameraSoft() { /* camera lerps on its own; a quick catch-up after a blink */ this.camCatch = 0.25; }
 
@@ -414,6 +448,7 @@ class Main {
     G.gold -= lost;
     this.holding = false;
     sfx('die');
+    Barks.hero('death', 1, 0);
     setTimeout(() => { this.ui.closeAll(); this.ui.death(lost); }, 1400);
   }
   respawn() {
@@ -424,6 +459,7 @@ class Main {
 
   interact(e) {
     if (e.type === 'loot') { e.pickup(); this.ui.refresh(); return; }
+    if (e.type === 'interact' && e.kind !== 'villager') Barks.npc(e);
     switch (e.kind) {
       case 'merchant': this.ui.show('shop'); this.ui.show('inv'); sfx('ui'); break;
       case 'quest': this.ui.show('quest'); sfx('ui'); break;
@@ -580,6 +616,7 @@ class Main {
       this.fx.emit(G.player.pos.clone().setY(0.5), { count: 24, color: 0x4488ff, speed: 0.8, up: 3, life: 0.8, size: 0.25, spread: 0.5 });
     }
     sfx('heal');
+    Barks.hero(kind === 'hp' ? 'potion' : 'mana', 0.35);
   }
   castSlot(slot) {
     const id = G.hotbar[slot];
@@ -678,7 +715,7 @@ class Main {
 
   // ---------------- loop ----------------
   snapCamera() { this.camFocus = G.player ? G.player.pos.clone() : new THREE.Vector3(34, 0, 34); }
-  render() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
+  render() { if (this.grade) this.grade.uniforms.time.value = performance.now() / 1000; if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
 
   ambientFx(dt, t) {
     const L = G.level;
@@ -728,6 +765,7 @@ class Main {
       }
       this.ambientFx(dt, t);
       this.fx.update(dt);
+      this.gore.update(dt);
       this.render();
       return;
     }
@@ -748,6 +786,7 @@ class Main {
         updateZones(dt);
         if (!G.player.dead) G.player.hover = this.canPlay() ? this.pick() : null;
         this.fx.update(dt);
+        this.gore.update(dt);
         // boss music when a living guardian is close
         if (L.kind === 'dungeon') {
           const boss = L.entities.find((e) => e.type === 'enemy' && e.boss && !e.dead && flatDist(e.pos, G.player.pos) < 16);
@@ -774,11 +813,13 @@ class Main {
       if (this.sky) this.sky.update(dt, L, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));
       if (L.kind === 'town' && !this.menuMode) playMusic(daylight() < 0.25 ? 'town_night' : 'town');
       this.ui.update(dt);
+      Barks.update(dt);
       document.body.style.cursor = G.player.hover ? (G.player.hover.type === 'enemy' ? 'crosshair' : 'pointer') : 'default';
     }
     this.render();
   }
 }
 
+window.__THREE = THREE; window.__real = { buildReal, NPC_SPECS, fullLook };
 if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', () => { window.game = new Main(); });
 else window.game = new Main();

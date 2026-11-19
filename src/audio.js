@@ -76,16 +76,40 @@ const TRACKS = {
   boss: { bpm: 96, chords: [[45, 52, 57, 60], [46, 53, 58, 62], [41, 48, 53, 57], [44, 51, 56, 59]], scale: [57, 58, 60, 63, 64, 65, 68, 69], mood: 'battle' },
 };
 
+// CC0 recorded tracks (generated music is the fallback if one cannot be loaded)
+const FILE_TRACKS = { boss: 'assets/music/battle_theme_a.mp3', boss_deep: 'assets/music/battle_theme_a.mp3',
+  // supplied by the owner (private/ is left out of the public web build; generated music plays if absent)
+  town: 'assets/music/private/jacobs_prayer.mp3', town_night: 'assets/music/private/chopin_nocturne_72_1.mp3', menu: 'assets/music/private/jacobs_prayer.mp3',
+  abyss: 'assets/music/private/lobotomy.mp3', void: 'assets/music/private/lobotomy.mp3' };
+const fileBuf = {};
+let fileSrc = null;
+function stopFile() { if (fileSrc) { try { fileSrc.stop(); } catch (e) { /* already stopped */ } fileSrc = null; } }
+function playFile(name, url) {
+  const C = Audio.ctx;
+  const go = (buf) => {
+    if (Audio.track !== name) return;
+    stopFile();
+    const s = C.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(Audio.music); s.start();
+    fileSrc = s; Audio.fileTrack = name;
+  };
+  if (fileBuf[url]) return go(fileBuf[url]);
+  if (fileBuf[url] === false) return;
+  fetch(new URL(url, document.baseURI).href).then((r) => r.arrayBuffer()).then((ab) => C.decodeAudioData(ab)).then((b) => { fileBuf[url] = b; go(b); })
+    .catch(() => { fileBuf[url] = false; Audio.fileFailed = name; });
+}
+
 export function playMusic(name) {
   ctx();
   if (Audio.track === name) return;
   Audio.track = name;
+  stopFile(); Audio.fileTrack = null;
   Audio.beat = 0;
   const C = Audio.ctx;
   Audio.music.gain.cancelScheduledValues(C.currentTime);
   Audio.music.gain.setValueAtTime(0.0001, C.currentTime);
   Audio.music.gain.linearRampToValueAtTime(Audio.vol.music * 0.5, C.currentTime + 2.5);
   Audio.nextBeat = C.currentTime + 0.2;
+  if (FILE_TRACKS[name]) playFile(name, FILE_TRACKS[name]);
   if (!Audio.timer) Audio.timer = setInterval(schedule, 80);
 }
 
@@ -93,6 +117,7 @@ function schedule() {
   const C = Audio.ctx;
   const T = TRACKS[Audio.track];
   if (!T || !C) return;
+  if (Audio.fileTrack === Audio.track) return; // a recorded track is playing
   const spb = 60 / T.bpm / 2; // eighth notes
   while (Audio.nextBeat < C.currentTime + 0.35) {
     const t = Audio.nextBeat;
@@ -197,6 +222,11 @@ export function sfx(kind) {
     case 'level': [392, 523, 659, 784, 1046].forEach((f, i) => voice(t + i * 0.09, f, 0.8, { dest: D, gain: 0.08, type: 'triangle', rev: 0.6 })); break;
     case 'die': v(110, 0.4, { type: 'sawtooth', gain: 0.1, filter: 400 }); noise(t, 0.3, { gain: 0.15, filter: 600, dest: D }); break;
     case 'splash': noise(t, 0.4, { gain: 0.25, filter: 1200, type: 'bandpass', dest: D }); break;
+    case 'squelch': noise(t, 0.16, { gain: 0.3, filter: 700, type: 'lowpass', dest: D }); v(90 + Math.random() * 40, 0.14, { type: 'sine', gain: 0.18 }); break;
+    case 'gib': noise(t, 0.5, { gain: 0.5, filter: 450, dest: D }); v(60, 0.35, { type: 'sine', gain: 0.35 }); noise(t + 0.09, 0.2, { gain: 0.25, filter: 800, type: 'lowpass', dest: D }); break;
+    case 'bonecrack': noise(t, 0.05, { gain: 0.5, filter: 3500, type: 'highpass', dest: D }); v(220, 0.06, { type: 'square', gain: 0.1, filter: 1200 }); voice(t + 0.05, 160, 0.05, { dest: D, type: 'square', gain: 0.08, filter: 900 }); break;
+    case 'grunt': v(95 + Math.random() * 25, 0.22, { type: 'sawtooth', gain: 0.14, filter: 500 }); noise(t, 0.12, { gain: 0.06, filter: 500, dest: D }); break;
+    case 'scream': v(420, 0.5, { type: 'sawtooth', gain: 0.09, filter: 1600 }); v(520, 0.45, { type: 'sawtooth', gain: 0.05, filter: 1600 }); break;
     case 'ui': v(880, 0.05, { type: 'sine', gain: 0.04, rev: 0 }); break;
     case 'door': noise(t, 0.5, { gain: 0.2, filter: 300, dest: D }); break;
     case 'legend': [523, 659, 784, 1046, 1318].forEach((f, i) => voice(t + i * 0.05, f, 1.2, { dest: D, gain: 0.07, type: 'sine', rev: 0.8 })); break;

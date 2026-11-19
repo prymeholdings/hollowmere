@@ -21,7 +21,11 @@ for f in app/assets/*/*.glb; do
   rel=${f#app/}; d="$OUT/$(dirname "$rel")"; mkdir -p "$d"
   gzip -9nc "$f" | base64 -w0 > "$d/$(basename "${f%.glb}").txt"
 done
+mkdir -p "$OUT/assets/ara" "$OUT/assets/music"
+cp -r app/assets/ara/. "$OUT/assets/ara/"
+cp app/assets/music/*.mp3 "$OUT/assets/music/"
+cp app/assets/CREDITS.txt "$OUT/assets/" 2>/dev/null || true
 VER=$(cat "$OUT/game.js" "$OUT/style.css" "$OUT/index.html" | sha1sum | cut -c1-10)
-FILES=$(cd "$OUT" && { echo ./; find . -type f ! -name vercel.json ! -name sw.js | sed 's#^\./##' | sort; } | python3 -c "import sys,json;print(json.dumps([l.strip() for l in sys.stdin]))")
+FILES=$(cd "$OUT" && { echo ./; find . -type f ! -name vercel.json ! -name sw.js ! -path './assets/ara/*' ! -path './assets/music/*' | sed 's#^\./##' | sort; } | python3 -c "import sys,json;print(json.dumps([l.strip() for l in sys.stdin]))")
 sed -e "s|__VERSION__|$VER|" -e "s|__FILES__|$FILES|" web/sw.template.js > "$OUT/sw.js"
 du -sh "$OUT"; find "$OUT" -type f | wc -l
