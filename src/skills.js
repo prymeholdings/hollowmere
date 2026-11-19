@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { G, stat, rollDamage, maxHp, critChance, critMult, itemBonus } from './state.js';
 import { Projectile, Ally } from './entities.js';
 import { flatDist, sfx, pick } from './util.js';
+import { petBonus } from './pets.js';
 
 const mag = () => stat('mag');
 const rank = (id) => G.skills[id] || 0;
 const R = (id, base, per) => base * (1 + per * (rank(id) - 1));
-const spellPower = () => (G.buffs.power > 0 ? 1.5 : 1) * (G.buffs.warcry > 0 ? 1.15 : 1) * (1 + 0.08 * rank('elemental')) * (1 + itemBonus('spell') / 100);
+const spellPower = () => (G.buffs.power > 0 ? 1.5 : 1) * (G.buffs.warcry > 0 ? 1.15 : 1) * (1 + 0.08 * rank('elemental')) * (1 + (itemBonus('spell') + petBonus('spell')) / 100);
 // synergies: each rank of the source skill adds pct% to this skill
 export const SYNERGY = {
   firebolt: [['meteor', 8]], meteor: [['firebolt', 6]], lightning: [['nova', 4], ['blizzard', 4]],

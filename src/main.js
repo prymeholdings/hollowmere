@@ -34,6 +34,7 @@ const GradeShader = {
 export { G } from './state.js';
 import { setItemLook } from './assets.js';
 import { Sky, clockText, daylight } from './daynight.js';
+import { petBonus, ensurePets, buildPetModel, PET_SPECIES, newPetRecord, petCoatColor } from './pets.js';
 import { lookOf, starterItem, makeGem } from './items.js';
 setItemLook(lookOf);
 import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL, weaponDamage, socketGem } from './state.js';
@@ -71,18 +72,6 @@ function starterOutfit(type) {
   return { base: t[0], name: t[0], type, mat: 'rusted', slot: 'armor', rarity: 0, ilvl: 1, req: 1, armor: t[1], affixes: { ...t[2] }, sockets: 0, gems: [], value: 6 };
 }
 
-function makeFoxPreview(coat) {
-  const g = new THREE.Group();
-  const b = box(0.38, 0.32, 0.7, coat); b.position.y = 0.38; g.add(b);
-  const hd = sphere(0.2, coat); hd.position.set(0, 0.6, 0.38); g.add(hd);
-  const snout = box(0.1, 0.1, 0.18, 0xf2e6d9); snout.position.set(0, 0.55, 0.58); g.add(snout);
-  for (const x of [-0.1, 0.1]) { const ear = cone(0.07, 0.18, coat); ear.position.set(x, 0.82, 0.35); g.add(ear); }
-  for (const [x, z] of [[-0.12, -0.25], [0.12, -0.25], [-0.12, 0.25], [0.12, 0.25]]) { const l = box(0.08, 0.25, 0.08, 0x592e14); l.position.set(x, 0.12, z); g.add(l); }
-  const tail = box(0.12, 0.12, 0.45, coat); tail.position.set(0, 0.55, -0.5); tail.rotation.x = 0.6; g.add(tail);
-  const tip = sphere(0.09, 0xffdd88, 3); tip.position.set(0, 0.72, -0.7); g.add(tip);
-  g.scale.setScalar(0.85);
-  return g;
-}
 
 window.__G = G;
 window.__gen = (lvl, type) => generate(lvl, 0, 0, type);
@@ -224,7 +213,7 @@ class Main {
     if (!G.level || G.level.kind !== 'town') this.menuScene();
     this.menuMode = true;
     this.creating = true;
-    this.creation = { cls: 'Knight', cape: CLASSES.Knight.cape, hooded: false, name: '', helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox', petName: 'Pip', tab: 'class' };
+    this.creation = { cls: 'Knight', cape: CLASSES.Knight.cape, hooded: false, name: '', helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox', petSpecies: 'fox', petName: 'Pip', tab: 'class' };
     const L = G.level;
     const spot = L.startPos.clone();
     this.podium = new THREE.Group();
@@ -248,8 +237,9 @@ class Main {
     this.preview.applyLook(cls, s);
     this.preview.dress(starterKit(s), s, cls);
     if (this.previewPet) this.podium.remove(this.previewPet);
-    const coat = (PET_COATS.find((c) => c.key === s.pet) || PET_COATS[0]).color;
-    this.previewPet = makeFoxPreview(coat);
+    const psp = PET_SPECIES[s.petSpecies] ? s.petSpecies : 'fox';
+    this.previewRig = buildPetModel(psp, 0, petCoatColor(psp, s.pet));
+    this.previewPet = new THREE.Group(); this.previewPet.add(this.previewRig.root);
     this.previewPet.position.set(1.15, 0.25, 0.75);
     this.previewPet.rotation.y = -0.5;
     this.podium.add(this.previewPet);
@@ -274,6 +264,9 @@ class Main {
     G.cls = s.cls;
     G.look = { cape: s.cape, hooded: !!s.hooded, helm: s.helm, gear: s.gear, tint: s.tint, height: s.height, capeOn: s.capeOn, pet: s.pet };
     G.petName = (s.petName || '').trim().slice(0, 14) || 'Pip';
+    G.petSpecies = PET_SPECIES[s.petSpecies] ? s.petSpecies : 'fox';
+    G.pets = null; ensurePets();
+    if (PET_SPECIES[G.petSpecies].coats.some((c) => c.key === s.pet)) G.pets[G.petSpecies].coat = s.pet;
     G.base = { ...cls.base };
     for (const k in G.skills) G.skills[k] = 0;
     Object.assign(G.skills, cls.skills);
@@ -375,8 +368,8 @@ class Main {
     this.ui.refresh();
   }
   addFameFromBoss(f) { addFame(25 + f * 4); this.ui.banner('Guardian slain!', 'Your fame grows'); sfx('legend'); }
-  magicFind() { return Math.round(itemBonus('magic_find') + (G.buffs.wealth > 0 ? 50 : 0) + (G.skills.fortune || 0) * 8); }
-  goldFind() { return Math.round(itemBonus('gold_find') + (G.buffs.wealth > 0 ? 100 : 0) + (G.skills.fortune || 0) * 8); }
+  magicFind() { return Math.round(itemBonus('magic_find') + (G.buffs.wealth > 0 ? 50 : 0) + (G.skills.fortune || 0) * 8 + petBonus('magic_find')); }
+  goldFind() { return Math.round(itemBonus('gold_find') + (G.buffs.wealth > 0 ? 100 : 0) + (G.skills.fortune || 0) * 8 + petBonus('gold_find')); }
   randomTreasure() { return generate(Math.max(G.lvl, G.currentFloor) + 1, 80, 1); }
   flash(t) { this.ui.flash(t); }
   floatText(pos, text, color, size = 20, yOff = 2) {
@@ -440,7 +433,8 @@ class Main {
         }
         break;
       }
-      case 'pond': case 'fish_hole': this.ui.openFishing(); break;
+      case 'beastmaster': this.ui.petView = G.petSpecies; this.ui.show('pet'); msg('"Every beast has a heart worth earning. Pick the one that suits you." Companions keep their levels when swapped.', '#ffb066'); break;
+      case 'pond': case 'fish_hole': case 'millpond': this.ui.openFishing(e.kind); break;
       case 'well': {
         // Floor 1, plus every checkpoint (10, 20, ...) the hero has reached. Checkpoints are kept forever, even after death.
         const opts = [['Floor 1', () => this.loadLevel('dungeon', 1)]];
@@ -553,6 +547,7 @@ class Main {
       else if (k === 'c') this.ui.toggle('char');
       else if (k === 'k') this.ui.toggle('skills');
       else if (k === 'j') this.ui.toggle('quest');
+      else if (k === 'p') this.ui.toggle('pet');
       else if (e.key === 'Tab') this.bigMap = !this.bigMap;
       else if (e.key === 'F5') { e.preventDefault(); this.ui.saveNow(); }
       if (!this.canPlay() || e.repeat) return;
@@ -615,8 +610,8 @@ class Main {
         this.fx.emit(f, { count: 1, color: 0xff8a2a, speed: 0.15, up: 1.2, life: 0.5, size: 0.28, spread: 0.06, gravity: 0 });
       }
     }
-    if (L.lamps) L.lamps.forEach((l, i) => { l.intensity = 7 + Math.sin(t * 5 + i) * 0.5; });
-    if (L.water) { L.water.material.emissiveIntensity = 0.5 + Math.sin(t * 1.4) * 0.15; }
+    if (L.lamps && !this.sky) L.lamps.forEach((l, i) => { l.intensity = 7 + Math.sin(t * 5 + i) * 0.5; });
+    if (L.waters) L.waters.forEach((w, i) => { w.material.emissiveIntensity = (i ? 0.8 : 0.5) + Math.sin(t * 1.4 + i) * 0.15; });
   }
 
   frame() {
@@ -630,6 +625,7 @@ class Main {
         this.camera.position.set(p.x, 2.6, p.z + 7.4);
         this.camera.lookAt(p.x, 1.05, p.z);
         if (this.preview) { this.preview.update(dt); this.preview.root.rotation.y += dt * 0.25; }
+        if (this.previewRig) this.previewRig.anim(performance.now() / 1000, false, dt, 0);
       } else {
         const a = t * 0.05;
         this.camera.position.set(44 + Math.cos(a) * 34, 22, 44 + Math.sin(a) * 34);

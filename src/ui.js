@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg, MAX_LEVEL, socketGem, socketTargets, invalidateBonus } from './state.js';
-import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate, displayName, GEMS, makeGem, GEM_TIERS, maxSockets, upgradeItem, TYPES, typeOf, MATS } from './items.js';
+import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate, displayName, GEMS, makeGem, GEM_TIERS, maxSockets, upgradeItem, TYPES, typeOf, MATS, classItem } from './items.js';
 import { FAME_STEPS, QUEST_GIVER } from './data.js';
 import { hex, sfx, clamp } from './util.js';
 import { itemIcon, skillIcon } from './icons.js';
@@ -8,11 +8,20 @@ import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, 
 import { Settings, saveSettings } from './settings.js';
 import { Orb3D } from './orbs.js';
 import { clockText } from './daynight.js';
+import { PET_SPECIES, PET_SKILLS, PET_TREES, PET_TIER_LEVEL, PET_MAX_RANK, PET_MAX_LEVEL, STAGE_LEVELS, petStage, petXpToNext, learnPetSkill, ensurePets } from './pets.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const SLOTKEYS = ['rmb', 'q', 'w', 'e', 'r'];
 const KEYLABEL = { rmb: 'RMB', q: 'Q', w: 'W', e: 'E', r: 'R' };
+
+
+// Fishing spots: chance of a class-fitted legendary and of other treasure per catch.
+export const FISH_SPOTS = {
+  pond: { title: 'Fishing Pond', desc: 'A quiet pond by the farm. Mostly perch, the odd surprise.', legend: 0.01, legendMax: 0.01, treasure: 0.05 },
+  millpond: { title: 'Deepwater Millpond', desc: 'The old mill race runs deep and cold. Lost relics of the drowned city wash down here, and they always seem to suit whoever casts the line.', legend: 0.03, luck: 0.004, legendMax: 0.15, treasure: 0.14, classTreasure: true },
+  fish_hole: { title: 'Fishing Hole', desc: 'Dark water in the depths. Things sink down here.', legend: 0.015, legendMax: 0.015, treasure: 0.07, classTreasure: true },
+};
 
 export class UI {
   constructor(main) {
@@ -202,7 +211,8 @@ export class UI {
     const pet = G.pet;
     const pb = $('#pet-wrap .bar');
     const formName = { golem: 'Stone Golem', wyrm: 'Ember Wyrm', stag: 'Spirit Stag' }[G.petForm];
-    if (pet && !pet.dead && G.petAwayTime <= 0) { pb.firstElementChild.style.width = clamp(pet.hp / pet.maxHp, 0, 1) * 100 + '%'; pb.lastElementChild.textContent = `${G.petName}${formName ? ` · ${formName} ${Math.ceil(G.petFormTime)}s` : ''}`; }
+    const petLbl = `${G.petName} · Lv ${G.pets?.[G.petSpecies]?.lvl || 1} ${PET_SPECIES[G.petSpecies]?.stages[petStage()] || ''}`;
+    if (pet && !pet.dead && G.petAwayTime <= 0) { pb.firstElementChild.style.width = clamp(pet.hp / pet.maxHp, 0, 1) * 100 + '%'; pb.lastElementChild.textContent = formName ? `${G.petName} · ${formName} ${Math.ceil(G.petFormTime)}s` : petLbl; }
     else { pb.firstElementChild.style.width = '0%'; pb.lastElementChild.textContent = G.petAwayTime > 0 ? `${G.petName} is selling in town (${Math.ceil(G.petAwayTime)}s)` : `${G.petName} is resting in town`; }
     $('#hud-points').classList.toggle('hidden', !(G.statPoints || G.skillPoints));
     const buffs = [];
@@ -345,7 +355,7 @@ export class UI {
   show(name, ...args) {
     sfx('ui');
     this.close(name);
-    const fn = { inv: this.renderInv, char: this.renderChar, skills: this.renderSkills, shop: this.renderShop, quest: this.renderQuest, pause: this.renderPause, settings: this.renderSettings, forge: this.renderForge }[name];
+    const fn = { inv: this.renderInv, char: this.renderChar, skills: this.renderSkills, shop: this.renderShop, quest: this.renderQuest, pause: this.renderPause, settings: this.renderSettings, forge: this.renderForge, pet: this.renderPet }[name];
     if (fn) fn.call(this, ...args);
   }
   panel(name, title, style, closable = true) {
@@ -367,6 +377,7 @@ export class UI {
     if (this.open.shop) this.renderShop();
     if (this.open.quest) this.renderQuest();
     if (this.open.forge) this.renderForge();
+    if (this.open.pet) this.renderPet();
   }
 
   itemCell(it, onClick, onRight, selected, cls = 'cell') {
@@ -404,9 +415,10 @@ export class UI {
     const gold = el('div', '', `<div style="font-size:13px;color:#ffd84d;text-align:center;padding-top:20px">${G.gold.toLocaleString()}<br>gold</div>`);
     gold.style.gridColumn = 1; gold.style.gridRow = 3;
     eq.appendChild(gold);
-    const petInfo = el('div', '', `<div style="font-size:12px;text-align:center;padding-top:14px;color:#ffb066">${G.petName}<br><span class="muted">${{ golem: 'Golem', wyrm: 'Wyrm', stag: 'Stag' }[G.petForm] || 'Fox'}</span></div>`);
+    const petInfo = el('div', '', `<div style="font-size:12px;text-align:center;padding-top:14px;color:#ffb066">${G.petName}<br><span class="muted">${{ golem: 'Golem', wyrm: 'Wyrm', stag: 'Stag' }[G.petForm] || PET_SPECIES[G.petSpecies].stages[petStage()]}</span><br><button class="mini" id="inv-pet">Pet (P)</button></div>`);
     petInfo.style.gridColumn = 2; petInfo.style.gridRow = 3;
     eq.appendChild(petInfo);
+    const ipb = petInfo.querySelector('#inv-pet'); if (ipb) ipb.onclick = () => this.show('pet');
     body.appendChild(eq);
     body.appendChild(el('div', 'muted', `Backpack ${G.backpack.length}/${BACKPACK_MAX} · Right-click to ${this.open.shop ? 'sell' : 'equip or feed your pet'}`));
     const grid = el('div', 'grid');
@@ -790,18 +802,98 @@ export class UI {
     body.appendChild(b);
   }
 
+  // ---------------- companion (pet) panel ----------------
+  renderPet() {
+    ensurePets();
+    const body = this.body('pet', 'Companion', { left: '50%', top: '50px', width: '760px', transform: 'translateX(-50%)', maxHeight: '90vh', overflowY: 'auto' });
+    const view = this.petView && PET_SPECIES[this.petView] ? this.petView : G.petSpecies;
+    const sp = PET_SPECIES[view], rec = G.pets[view], active = view === G.petSpecies;
+    const stg = petStage(rec), inTown = G.level?.kind === 'town';
+    const next = STAGE_LEVELS.find((l) => l > rec.lvl);
+    const xpF = rec.lvl >= PET_MAX_LEVEL ? 1 : rec.xp / petXpToNext(rec.lvl);
+    const c6 = (c) => '#' + c.toString(16).padStart(6, '0');
+    let h = `<div class="pet-tabs">${Object.entries(PET_SPECIES).map(([k, v]) => `<button class="pt ${k === view ? 'on' : ''}" data-sp="${k}">${v.name}<small>Lv ${G.pets[k].lvl} · ${v.stages[petStage(G.pets[k])]}${k === G.petSpecies ? ' · active' : ''}</small></button>`).join('')}</div>
+      <div class="pet-head"><div><b style="font-size:18px;color:#ffb066">${active ? G.petName : sp.name}</b> <span class="muted">the ${sp.stages[stg]}</span><div class="muted">${sp.desc}</div></div>
+      <div style="text-align:right">${active ? '<span style="color:#7dff9a">Your active companion</span>' : `<button id="pet-swap" ${inTown ? '' : 'disabled'} class="primary">Take ${sp.name} as companion</button>${inTown ? '' : '<div class="muted" style="font-size:11px">Companions can only be swapped in town.</div>'}`}</div></div>
+      <div class="pet-xp"><div style="width:${(xpF * 100).toFixed(1)}%"></div><span>Pet level ${rec.lvl} / ${PET_MAX_LEVEL}${rec.lvl < PET_MAX_LEVEL ? ` · ${Math.floor(rec.xp)} / ${petXpToNext(rec.lvl)} XP` : ''}</span></div>
+      <div class="pet-stages">${sp.stages.map((n, i) => `<span class="${i <= stg ? 'on' : ''}">${n}<small>Lv ${STAGE_LEVELS[i]}</small></span>`).join('<i>➜</i>')}</div>
+      <div class="muted" style="text-align:center;margin:4px 0 8px">${next ? `Evolves at pet level ${next}.` : 'Fully evolved.'} Pets earn XP from every foe you slay. Each pet level grants 1 pet skill point.</div>
+      <h3><span>Coat</span></h3><div class="chips">${sp.coats.map((c) => `<button class="chip ${rec.coat === c.key ? 'on' : ''}" data-coat="${c.key}"><i class="dot" style="background:${c6(c.color)}"></i>${c.label}</button>`).join('')}</div>
+      <h3><span>${sp.name} skills · <b style="color:#ffd84d">${rec.points}</b> points</span></h3>`;
+    const NW = 56, CW = 150, RH = 92, W = CW * 2 + NW + 60, H = RH * 2 + NW + 20;
+    const xy = (n) => [30 + n.col * CW + NW / 2, 10 + n.tier * RH + NW / 2];
+    const tree = PET_TREES[view];
+    let lines = '', nodes = '', rows = '';
+    for (const n of tree) for (const r of n.req || []) {
+      const a = xy(tree.find((m) => m.id === r)), b = xy(n), on = (rec.skills[r] || 0) > 0;
+      lines += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${on ? '#ffb066' : '#3a3022'}" stroke-width="${on ? 4 : 3}" ${on ? '' : 'stroke-dasharray="6 5"'}/>`;
+    }
+    for (let i = 0; i < PET_TIER_LEVEL.length; i++) rows += `<div class="sk-tier" style="top:${10 + i * RH + NW / 2 - 8}px">Lv ${PET_TIER_LEVEL[i]}</div>`;
+    for (const n of tree) {
+      const S = PET_SKILLS[n.id], r = rec.skills[n.id] || 0;
+      const lockedTier = rec.lvl < PET_TIER_LEVEL[n.tier], missReq = (n.req || []).some((q) => !(rec.skills[q] > 0));
+      const can = active && !lockedTier && !missReq && rec.points > 0 && r < PET_MAX_RANK;
+      const [x, y] = xy(n);
+      nodes += `<div class="sk-node ${r ? 'learned' : ''} ${can ? 'avail' : ''} ${S.active ? 'active' : 'passive'} ${(lockedTier || missReq) && !r ? 'locked' : ''}" data-ps="${n.id}" style="left:${x - NW / 2}px;top:${y - NW / 2}px;--tc:#ffb066">${skillIcon(S.icon)}<span class="rk">${r}/${PET_MAX_RANK}</span></div>
+        <div class="pet-lbl" style="left:${x - 70}px;top:${y + NW / 2 + 2}px">${S.name}${S.active ? ' <i>(active)</i>' : ''}</div>`;
+    }
+    h += `<div class="pet-tree"><div class="sk-canvas" style="width:${W}px;height:${H + 18}px;margin:0 auto">${rows}<svg width="${W}" height="${H}">${lines}</svg>${nodes}</div></div>
+      <div id="pet-detail" class="muted" style="min-height:40px;text-align:center;padding:6px">${active ? 'Hover a skill to read it. Click to learn a rank.' : 'Make this pet your companion to spend its skill points. Each pet keeps its own level and skills.'}</div>`;
+    body.innerHTML = h;
+    body.querySelectorAll('[data-sp]').forEach((d) => (d.onclick = () => { this.petView = d.dataset.sp; sfx('ui'); this.renderPet(); }));
+    body.querySelectorAll('[data-coat]').forEach((d) => (d.onclick = () => { rec.coat = d.dataset.coat; sfx('ui'); if (active && G.pet) G.pet.applyForm(true); this.renderPet(); }));
+    const sw = $('#pet-swap', body);
+    if (sw) sw.onclick = () => this.swapPet(view);
+    body.querySelectorAll('[data-ps]').forEach((d) => {
+      const id = d.dataset.ps, S = PET_SKILLS[id];
+      const r = rec.skills[id] || 0;
+      d.onmouseenter = () => { const det = $('#pet-detail'); if (det) det.innerHTML = `<b style="color:#ffb066">${S.name}</b> · Rank ${r}/${PET_MAX_RANK}${S.active ? ' · <i>used automatically</i>' : ''}<br>${S.desc(Math.max(1, r))}${r < PET_MAX_RANK ? `<br><span style="color:#9a8a70">Next rank: ${S.desc(r + 1)}</span>` : ''}`; };
+      d.onclick = () => {
+        if (!active) { this.flash('Make this pet your companion first'); return; }
+        const err = learnPetSkill(id);
+        if (err) { this.flash(err); sfx('ui'); return; }
+        sfx('level'); G.pet?.applyForm(true); this.renderPet();
+      };
+    });
+  }
+  swapPet(sp) {
+    if (G.level?.kind !== 'town') { this.flash('Companions can only be swapped in town'); return; }
+    G.petSpecies = sp; G.petForm = ''; G.petFormTime = 0;
+    ensurePets();
+    if (G.pet) { G.pet.dead = false; G.pet.applyForm(true); G.pet.hp = G.pet.maxHp; G.pet.evolve(); }
+    msg(`${G.petName} is now a ${PET_SPECIES[sp].stages[petStage()]}.`, '#ffb066');
+    sfx('buff');
+    this.petView = sp;
+    this.refresh();
+  }
+
   // ---------------- fishing ----------------
-  openFishing() {
+  openFishing(spot = 'pond') {
     this.close('fish');
-    const body = this.panel('fish', 'Fishing', { left: '50%', top: '22%', width: '440px', transform: 'translateX(-50%)' });
-    body.innerHTML = `<p id="fish-status" style="text-align:center">Cast your line and wait for a bite.</p>
+    const S = FISH_SPOTS[spot] || FISH_SPOTS.pond;
+    const body = this.panel('fish', S.title, { left: '50%', top: '22%', width: '460px', transform: 'translateX(-50%)' });
+    body.innerHTML = `<p class="muted" style="text-align:center;margin:0 0 6px">${S.desc}</p>
+      <div class="fish-odds" id="fish-odds"></div>
+      <p id="fish-status" style="text-align:center">Cast your line and wait for a bite.</p>
       <div class="fishbar"><div class="zone"></div><div class="bob"></div></div>
       <p class="muted">When a fish bites, press <b>Space</b> (or Reel) while the gold marker is inside the green zone.</p>
       <div style="text-align:center"><button id="fish-cast" class="primary">Cast</button><button id="fish-reel" disabled>Reel (Space)</button></div>`;
-    this.fish = { state: 'idle', t: 0, pos: 0, dir: 1, zone: [0.4, 0.6] };
+    this.fish = { state: 'idle', t: 0, pos: 0, dir: 1, zone: [0.4, 0.6], spot };
     $('#fish-cast', body).onclick = () => this.castLine();
     $('#fish-reel', body).onclick = () => this.reel();
     $('.zone', body).style.display = 'none';
+    this.fishOdds();
+  }
+  // chance of hooking a class-fitted legendary at a spot (the millpond builds up luck with every catch)
+  legendChance(spot) {
+    const S = FISH_SPOTS[spot] || FISH_SPOTS.pond;
+    return Math.min(S.legendMax, S.legend + (S.luck ? (G.fishLuck || 0) * S.luck : 0));
+  }
+  fishOdds() {
+    const e = $('#fish-odds'); if (!e || !this.fish) return;
+    const S = FISH_SPOTS[this.fish.spot] || FISH_SPOTS.pond;
+    const cls = CLASSES[G.cls]?.title || G.cls;
+    e.innerHTML = `<span style="color:#ff8c1f">Legendary ${cls} gear: ${(this.legendChance(this.fish.spot) * 100).toFixed(1)}%</span> · <span style="color:#ffe14d">Treasure: ${Math.round(S.treasure * 100)}%</span>${S.luck ? `<br><span class="muted">Angler's luck: +${((G.fishLuck || 0) * S.luck * 100).toFixed(1)}% (grows with every catch here, resets on a legendary)</span>` : ''}`;
   }
   castLine() {
     const f = this.fish; if (!f) return;
@@ -838,8 +930,25 @@ export class UI {
     const f = this.fish;
     if (!f || f.state !== 'bite') return;
     if (f.pos >= f.zone[0] && f.pos <= f.zone[1]) {
-      if (Math.random() < 0.04) { const it = this.main.randomTreasure(); this.fishResult(true, `You hooked something heavy... a ${it.name}!`, it); }
-      else { const fish = makeFish(); this.fishResult(true, `You caught a ${fish.name}!`, fish); }
+      const S = FISH_SPOTS[f.spot] || FISH_SPOTS.pond;
+      const ilvl = Math.max(G.lvl, G.deepest || 0, G.currentFloor || 0) + 2;
+      const r = Math.random(), lc = this.legendChance(f.spot);
+      if (r < lc) {
+        const it = classItem(G.cls, ilvl, 3);
+        G.fishLuck = 0;
+        this.fishResult(true, `<b>LEGENDARY!</b> Something ancient glints on your hook... the ${displayName(it)}!`, it);
+        sfx('legend');
+        this.main.fx?.emit(G.player.pos.clone().setY(1.2), { count: 60, color: 0xff8c1f, speed: 4, up: 4, life: 1.2, size: 0.3 });
+        msg(`You fished up a legendary ${typeOf(it).name}: ${displayName(it)}!`, '#ff8c1f');
+      } else if (r < lc + S.treasure) {
+        const it = S.classTreasure ? classItem(G.cls, ilvl, 1 + (Math.random() < 0.35 ? 1 : 0)) : this.main.randomTreasure();
+        if (S.luck) G.fishLuck = (G.fishLuck || 0) + 1;
+        this.fishResult(true, `You hooked something heavy... a ${displayName(it)}!`, it);
+      } else {
+        const fish = makeFish(); if (S.luck) G.fishLuck = (G.fishLuck || 0) + 1;
+        this.fishResult(true, `You caught a ${fish.name}!`, fish);
+      }
+      this.fishOdds();
     } else this.fishResult(false, 'The line snaps. It got away.');
   }
   fishResult(ok, text, item) {
@@ -907,8 +1016,10 @@ export class UI {
           ${cls.headgear ? `<div class="setrow"><span>Wear ${state.cls === 'Mage' ? 'hat' : 'helmet'}</span><input type="checkbox" id="cr-helm" ${state.helm ? 'checked' : ''}></div>` : ''}
           <div class="setrow"><span>Height</span><span><input type="range" id="cr-height" min="88" max="112" value="${Math.round(state.height * 100)}"> ${Math.round(state.height * 100)}%</span></div>`;
       } else {
-        inner = `<h3><span>Companion</span></h3><div class="muted" style="margin-bottom:8px">Your lantern-tailed fox fights beside you and can sell loot in town.</div>
-          <div class="chips">${PET_COATS.map((p) => `<button class="chip ${state.pet === p.key ? 'on' : ''}" data-pet="${p.key}"><i class="dot" style="background:#${p.color.toString(16).padStart(6, '0')}"></i>${p.label}</button>`).join('')}</div>
+        const PS = PET_SPECIES[state.petSpecies] || PET_SPECIES.fox;
+        inner = `<h3><span>Companion</span></h3><div class="chips">${Object.entries(PET_SPECIES).map(([k, v]) => `<button class="chip ${state.petSpecies === k ? 'on' : ''}" data-psp="${k}">${v.name}</button>`).join('')}</div>
+          <div class="muted" style="margin:6px 0 8px">${PS.desc} Grows from ${PS.stages.join(' to ')} and has its own skill tree. You can meet the other companions at the Beastmaster in town.</div>
+          <h3><span>Coat</span></h3><div class="chips">${PS.coats.map((p) => `<button class="chip ${state.pet === p.key ? 'on' : ''}" data-pet="${p.key}"><i class="dot" style="background:#${p.color.toString(16).padStart(6, '0')}"></i>${p.label}</button>`).join('')}</div>
           <h3><span>Companion name</span></h3><input type="text" id="cr-petname" maxlength="14" value="${state.petName}" style="width:100%">`;
       }
       c.innerHTML = `<div class="panel cls"><h2>Choose your class</h2>${Object.entries(CLASSES).map(([k, v]) => `<div class="clscard ${k === state.cls ? 'on' : ''}" data-cls="${k}"><div class="ic">${skillIcon(skillIconKey(Object.keys(v.skills)[0]))}</div><div><b>${v.title}</b><small>${v.desc}</small></div></div>`).join('')}</div>
@@ -925,6 +1036,7 @@ export class UI {
       c.querySelectorAll('[data-tint]').forEach((d) => (d.onclick = () => { state.tint = d.dataset.tint; upd(); }));
       c.querySelectorAll('[data-gear]').forEach((d) => (d.onclick = () => { state.gear = +d.dataset.gear; upd(); }));
       c.querySelectorAll('[data-pet]').forEach((d) => (d.onclick = () => { state.pet = d.dataset.pet; upd(); }));
+      c.querySelectorAll('[data-psp]').forEach((d) => (d.onclick = () => { state.petSpecies = d.dataset.psp; state.pet = PET_SPECIES[state.petSpecies].coats[0].key; upd(); }));
       const chk = (id, key) => { const e = $(id, c); if (e) e.onchange = () => { state[key] = e.checked; upd(); }; };
       chk('#cr-hood', 'hooded'); chk('#cr-helm', 'helm'); chk('#cr-capeon', 'capeOn');
       const ht = $('#cr-height', c); if (ht) ht.onchange = () => { state.height = ht.value / 100; upd(); };
@@ -935,7 +1047,8 @@ export class UI {
       $('#cr-rand', c).onclick = () => {
         const pk = (a) => a[Math.floor(Math.random() * a.length)];
         const cl = CLASSES[state.cls];
-        Object.assign(state, { cape: pk(CAPE_COLORS), tint: pk(ARMOR_TINTS), gear: Math.floor(Math.random() * cl.gear.length), helm: Math.random() < 0.7, hooded: !!cl.alt && Math.random() < 0.5, capeOn: Math.random() < 0.85, height: 0.9 + Math.random() * 0.2, pet: pk(PET_COATS).key });
+        Object.assign(state, { cape: pk(CAPE_COLORS), tint: pk(ARMOR_TINTS), gear: Math.floor(Math.random() * cl.gear.length), helm: Math.random() < 0.7, hooded: !!cl.alt && Math.random() < 0.5, capeOn: Math.random() < 0.85, height: 0.9 + Math.random() * 0.2 });
+        { const sk = pk(Object.keys(PET_SPECIES)); state.petSpecies = sk; state.pet = pk(PET_SPECIES[sk].coats).key; }
         if (!state.name) state.name = pk(['Aldric', 'Wren', 'Corvin', 'Isolde', 'Bram', 'Mira', 'Talon', 'Sable', 'Rook', 'Elowen', 'Garrick', 'Nyx']);
         upd();
       };

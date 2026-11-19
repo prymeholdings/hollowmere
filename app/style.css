@@ -213,3 +213,22 @@ select { font-family: inherit; background: #0d0a07; color: #f3e2bd; border: 1px 
 .sock { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; border: 1px solid #c9a85a; vertical-align: middle; }
 .sock.empty { background: #0b0b0f; }
 #hud-clock { font-size: 13px; color: #d8d0ff; letter-spacing: 1px; }
+/* companion panel */
+.pet-tabs{display:flex;gap:6px;margin-bottom:10px}
+.pet-tabs .pt{flex:1;display:flex;flex-direction:column;align-items:center;padding:6px}
+.pet-tabs .pt small{font-size:11px;opacity:.7}
+.pet-tabs .pt.on{border-color:#ffb066;box-shadow:0 0 10px rgba(255,176,102,.35) inset}
+.pet-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}
+.pet-xp{position:relative;height:18px;background:#1a140e;border:1px solid #4a3a26;border-radius:9px;overflow:hidden}
+.pet-xp>div{height:100%;background:linear-gradient(90deg,#b0602a,#ffb066)}
+.pet-xp>span{position:absolute;inset:0;text-align:center;font-size:11px;line-height:18px;color:#fff;text-shadow:0 1px 2px #000}
+.pet-stages{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px}
+.pet-stages span{display:flex;flex-direction:column;align-items:center;padding:4px 10px;border:1px solid #3a3022;border-radius:6px;color:#8a7a60}
+.pet-stages span.on{color:#ffd84d;border-color:#ffb066}
+.pet-stages small{font-size:10px;opacity:.7}
+.pet-stages i{color:#6a5a40;font-style:normal}
+.pet-tree{position:relative;padding:6px 0}
+.pet-lbl{position:absolute;width:140px;text-align:center;font-size:11px;color:#d8c8a8;pointer-events:none}
+.pet-lbl i{color:#ffb066;font-style:normal}
+.fish-odds{text-align:center;font-size:12px;margin:0 0 6px;padding:5px;border:1px solid #3a3022;border-radius:6px;background:rgba(0,0,0,.25)}
+button.mini{font-size:10px;padding:2px 6px;margin-top:4px}

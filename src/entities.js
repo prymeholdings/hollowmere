@@ -4,6 +4,7 @@ import { box, sphere, capsule, cyl, cone, humanoid, ring, rand, pick, flatDist, 
 import { itemColor, typeOf, lookOf, displayName, GEMS } from './items.js';
 import { CharModel, prop, findSource, tintMaterial } from './assets.js';
 import { CLASSES, PET_COATS, affinity, burnPct, stunChance } from './skills.js';
+import { buildPetModel, petStage, petCoatColor, PET_SPECIES, PET_SKILLS, petRank, ensurePets, addPetXp, petBonus } from './pets.js';
 import { Settings } from './settings.js';
 
 const tmp = new THREE.Vector3();
@@ -96,7 +97,7 @@ export class Player extends Entity {
   takeDamage(d) {
     if (this.dead) return;
     d = d * 100 / (100 + armor());
-    if (Math.random() < Math.min(0.25, stat('dex') * 0.004) + (G.buffs.smoke > 0 ? 0.3 : 0)) { G.main.floatText(this.pos, 'Dodge', '#cccccc', 16, 2.2); return; }
+    if (Math.random() < Math.min(0.25, stat('dex') * 0.004) + (G.buffs.smoke > 0 ? 0.3 : 0) + petBonus('dodge')) { G.main.floatText(this.pos, 'Dodge', '#cccccc', 16, 2.2); return; }
     G.hp -= d;
     G.main.floatText(this.pos, Math.round(d), '#ff5555', 20, 2.2);
     G.main.hurtFlash(d / maxHp());
@@ -155,7 +156,7 @@ export class Player extends Entity {
     this.attackCd -= dt; this.castLock -= dt; this.hitAnimCd -= dt;
     if (this.pendingHit) { this.pendingHit.t -= dt; if (this.pendingHit.t <= 0) { const e = this.pendingHit.e; this.pendingHit = null; if (this.ranged) { if (!e.dead) this.shoot(e); } else this.doHit(e); } }
     G.hp = Math.min(maxHp(), G.hp + dt * (0.3 + stat('vit') * 0.03 + (G.skills.second_wind || 0) * 0.6 + itemBonus('regen')));
-    G.mp = Math.min(maxMp(), G.mp + dt * (0.8 + stat('mag') * 0.06) * (1 + (G.skills.arcane_flow || 0) * 0.12));
+    G.mp = Math.min(maxMp(), G.mp + dt * (0.8 + stat('mag') * 0.06) * (1 + (G.skills.arcane_flow || 0) * 0.12 + petBonus('mana_regen')));
     if (this.spinT > 0) { this.spinT -= dt; }
     const tg = this.target;
     if (tg && this.castLock <= 0) {
@@ -174,7 +175,7 @@ export class Player extends Entity {
         }
       }
     }
-    const speed = 6.2 * (G.buffs.speed > 0 ? 1.25 : 1) * (1 + (G.skills.swift_feet || 0) * 0.04);
+    const speed = 6.2 * (G.buffs.speed > 0 ? 1.25 : 1) * (1 + (G.skills.swift_feet || 0) * 0.04 + petBonus('move'));
     const moving = this.castLock <= 0 && this.followPath(this.path, speed, dt);
     if (moving && this.model.oneShot && !this.dead) { /* let attacks finish while moving */ }
     this.model.play(moving ? 'Running_A' : 'Idle', 0.15, moving ? 1.1 : 1);
@@ -324,6 +325,7 @@ export class Enemy extends Entity {
     if (this.dead) return;
     this.wake();
     d *= affinity(kind);
+    if (this.curse && this.curse.t > 0) d *= 1 + this.curse.pct;
     if (kind === 'fire' && burnPct() > 0) this.applyDot(d * burnPct() / 3, 3, 'fire');
     if (kind === 'storm' && Math.random() < stunChance()) this.stunT = Math.max(this.stunT || 0, 0.5);
     this.hp -= d;
@@ -342,6 +344,7 @@ export class Enemy extends Entity {
     this.dead = true;
     sfx('die');
     addXp(this.xp);
+    if (G.pet && !G.pet.dead && G.petAwayTime <= 0) addPetXp(Math.ceil(this.xp * 0.7));
     G.main.floatText(this.pos, `+${this.xp} xp`, '#c9a3ff', 16, 1.0);
     onKill(this.data.name, this.boss);
     if (this.boss) G.main.addFameFromBoss(this.floor);
@@ -378,6 +381,7 @@ export class Enemy extends Entity {
     if (this.data.shape === 'blob') this.model.scale.y = this.model.scale.x * (1 + Math.sin(this.t * 6) * 0.08);
     this.atkCd -= dt; this.slowT -= dt; this.stunT -= dt;
     this.tickDots(dt);
+    if (this.curse) { this.curse.t -= dt; if (this.curse.t <= 0) this.curse = null; else if (Math.random() < dt * 4) G.main.fx.emit(this.pos.clone().setY(this.pickH * 2), { count: 1, color: 0x9a40ff, speed: 0.4, life: 0.6, size: 0.35, rise: 0.6 }); }
     if (this.dead) return;
     const pl = G.player;
     if (!pl) return;
@@ -495,11 +499,14 @@ export class Ally extends Entity {
 export class Pet extends Entity {
   constructor() {
     super('pet');
+    ensurePets();
     this.path = [];
     this.repath = 0;
     this.atkCd = 0;
     this.target = null;
     this.t = 0;
+    this.cds = {};
+    this.auraT = 0;
     this.applyForm(true);
     this.hp = this.maxHp;
     this.root.visible = G.petAwayTime <= 0;
@@ -507,8 +514,9 @@ export class Pet extends Entity {
   buildModel() {
     if (this.model) this.root.remove(this.model);
     this.tail = this.tip = null;
-    const g = new THREE.Group();
+    this.rig = null;
     const f = G.petForm;
+    const g = new THREE.Group();
     if (f === 'golem') {
       const b = box(0.9, 1.0, 0.7, 0x80807a); b.position.y = 0.9; g.add(b);
       const hd = box(0.45, 0.4, 0.4, 0x8c8c85); hd.position.set(0, 1.6, 0.1); g.add(hd);
@@ -526,40 +534,133 @@ export class Pet extends Entity {
       for (const x of [-0.12, 0.12]) { const an = cone(0.05, 0.6, 0x99ddff, 1.5); an.position.set(x, 1.8, 0.5); an.rotation.z = x * 2; g.add(an); }
       for (const [x, z] of [[-0.15, -0.35], [0.15, -0.35], [-0.15, 0.35], [0.15, 0.35]]) { const l = box(0.1, 0.7, 0.1, 0xccddee); l.position.set(x, 0.35, z); g.add(l); }
     } else {
-      // Pip, a small lantern-tailed fox
-      const coat = (PET_COATS.find((c) => c.key === G.look?.pet) || PET_COATS[0]).color;
-      const b = box(0.38, 0.32, 0.7, coat); b.position.y = 0.38; g.add(b);
-      const hd = sphere(0.2, coat); hd.position.set(0, 0.6, 0.38); g.add(hd);
-      const snout = box(0.1, 0.1, 0.18, 0xf2e6d9); snout.position.set(0, 0.55, 0.58); g.add(snout);
-      for (const x of [-0.1, 0.1]) { const ear = cone(0.07, 0.18, coat); ear.position.set(x, 0.82, 0.35); g.add(ear); }
-      for (const [x, z] of [[-0.12, -0.25], [0.12, -0.25], [-0.12, 0.25], [0.12, 0.25]]) { const l = box(0.08, 0.25, 0.08, 0x592e14); l.position.set(x, 0.12, z); g.add(l); }
-      const tail = box(0.12, 0.12, 0.45, coat); tail.position.set(0, 0.55, -0.5); tail.rotation.x = 0.6; g.add(tail); this.tail = tail;
-      const tip = sphere(0.09, 0xffdd88, 3); tip.position.set(0, 0.72, -0.7); tip.castShadow = false; g.add(tip); this.tip = tip;
+      this.rig = buildPetModel(G.petSpecies, petStage(), petCoatColor());
+      g.add(this.rig.root);
     }
     this.model = g;
     this.root.add(g);
   }
   applyForm(initial = false) {
     const f = G.petForm;
+    const sp = PET_SPECIES[G.petSpecies];
     const prevFrac = this.maxHp ? this.hp / this.maxHp : 1;
-    this.maxHp = petMaxHp() * (f === 'golem' ? 2.5 : 1);
+    this.maxHp = petMaxHp() * sp.hp * (1 + 0.1 * petRank('dr_scales')) * (f === 'golem' ? 2.5 : 1);
     this.hp = this.maxHp * prevFrac;
-    this.dmgMul = f === 'golem' ? 1.3 : f === 'wyrm' ? 2.0 : 1;
-    this.speed = f === 'stag' ? 9 : 7;
-    this.pickR = f === 'golem' ? 0.7 : 0.5;
+    this.dmgMul = sp.dmg * (1 + 0.08 * petRank('fx_bite') + 0.09 * petRank('dr_claws') + 0.09 * petRank('im_hex')) * (f === 'golem' ? 1.3 : f === 'wyrm' ? 2.0 : 1);
+    this.speed = (f === 'stag' ? 9 : sp.speed) * (1 + 0.05 * petRank('dr_wings'));
+    this.ranged = !f && sp.ranged;
+    this.pickR = f === 'golem' ? 0.7 : 0.5 + petStage() * 0.08;
     this.buildModel();
     if (!initial) { G.main.fx.emit(this.pos.clone().setY(0.8), { count: 50, color: 0x99e6ff, speed: 3, life: 0.8, size: 0.6 }); G.main.fx.ring(this.pos, 0x99e6ff, 1.5); }
+  }
+  evolve() {
+    this.applyForm(true);
+    const fx = G.main.fx;
+    fx.emit(this.pos.clone().setY(0.6), { count: 80, color: 0xffd84d, speed: 3, life: 1.2, size: 0.6, rise: 2 });
+    fx.ring(this.pos, 0xffd84d, 2.5, 0.8);
+    fx.flash(this.pos, 0xffd84d, 30, 0.8);
   }
   goAway() { this.root.visible = false; this.target = null; }
   comeBack() { this.root.visible = true; if (G.player) this.pos.copy(G.player.pos).add(new THREE.Vector3(1, 0, 1)); }
   takeDamage(d) {
     if (this.dead || !this.root.visible) return;
-    d = d * (G.petForm === 'golem' ? 0.6 : 1);
+    if (Math.random() < petRank('im_blink') * 0.04) { G.main.floatText(this.pos, 'Flicker', '#c8a8ff', 14, 1.0); return; }
+    d = d * (G.petForm === 'golem' ? 0.6 : 1) * (1 - 0.03 * petRank('dr_wings'));
     this.hp -= d;
     if (Settings.damageNumbers) G.main.floatText(this.pos, Math.round(d), '#ffaa66', 16, 1.0);
     if (this.hp <= 0) {
       this.dead = true; this.root.visible = false;
       msg(`${G.petName} is badly hurt and flees back to town! (returns when you visit town)`, '#ff9966');
+    }
+  }
+  hitTarget(tg, mult = 1, kind = 'phys') {
+    const dmg = petDamage() * this.dmgMul * mult * rand(0.85, 1.15) * (G.buffs.warcry > 0 ? 1.3 : 1);
+    tg.takeDamage(dmg, false, kind);
+    if (G.petSpecies === 'imp' && Math.random() < petRank('im_mischief') * 0.03) {
+      const g = Math.max(1, Math.round((2 + G.currentFloor * 1.5) * rand(0.5, 1.5)));
+      G.gold += g; G.main.floatText(tg.pos, `+${g}g`, '#ffd84d', 14, 1.6);
+    }
+    return dmg;
+  }
+  // the pet's own abilities, used automatically in battle
+  useAbilities(dt, tg) {
+    const fx = G.main.fx;
+    for (const k in this.cds) this.cds[k] -= dt;
+    const ready = (id) => petRank(id) > 0 && !(this.cds[id] > 0) && !G.petForm;
+    const go = (id) => { this.cds[id] = PET_SKILLS[id].cd; this.rig?.anim(this.t, false, 0, true); };
+    const near = (c, r) => G.level.entities.filter((e) => e.type === 'enemy' && !e.dead && flatDist(e.pos, c) < r);
+    const sp = G.petSpecies;
+    if (sp === 'dragon' && petRank('dr_aura') > 0) {
+      this.auraT -= dt;
+      if (this.auraT <= 0) { this.auraT = 1; for (const e of near(this.pos, 2.6)) this.hitTarget(e, 0.12 * petRank('dr_aura'), 'fire'); if (Math.random() < 0.5) fx.emit(this.pos.clone().setY(0.4), { count: 6, color: 0xff6a1a, speed: 1.5, life: 0.5, size: 0.5, rise: 1 }); }
+    }
+    if (!tg) return;
+    const d = flatDist(tg.pos, this.pos);
+    if (sp === 'fox') {
+      if (ready('fx_fire') && d < 9) {
+        go('fx_fire');
+        const dir = tg.pos.clone().sub(this.pos).setY(0).normalize();
+        const p = new Projectile(dir, 0, 'enemy', 0x7ad8ff, { trail: 0x9fe8ff, kind: 'fire', size: 0.18, speed: 14, onHit: (n) => this.hitTarget(n, 1 + petRank('fx_fire') * 0.2, 'fire') });
+        p.root.position.copy(this.pos).addScaledVector(dir, 0.5); p.root.children.forEach((c) => (c.position.y = 0.6));
+        G.level.add(p); sfx('fire');
+      }
+      if (ready('fx_howl')) { go('fx_howl'); G.buffs.howl = 8; fx.ring(this.pos, 0xffb066, 4, 0.6); msg(`${G.petName} howls! You feel fierce.`, '#ffb066'); sfx('buff'); }
+      if (ready('fx_spirits')) {
+        go('fx_spirits');
+        for (let i = 0; i < 1 + Math.ceil(petRank('fx_spirits') / 4); i++) { const a = new SpiritFox(); a.root.position.copy(this.pos).add(new THREE.Vector3(Math.cos(i * 2.1), 0, Math.sin(i * 2.1))); G.level.add(a); }
+        fx.emit(this.pos.clone().setY(0.6), { count: 40, color: 0x9fe8ff, speed: 2.5, life: 0.9, size: 0.6 });
+        sfx('blink');
+      }
+    } else if (sp === 'dragon') {
+      if (ready('dr_breath') && d < 4.5) {
+        go('dr_breath');
+        const dir = tg.pos.clone().sub(this.pos).setY(0).normalize();
+        for (const e of near(this.pos, 5)) { const v = e.pos.clone().sub(this.pos).setY(0); if (v.length() < 0.1 || v.normalize().dot(dir) > 0.7) { this.hitTarget(e, 1.2 + petRank('dr_breath') * 0.25, 'fire'); e.applyDot(petDamage() * 0.3, 3, 'fire'); } }
+        for (let k = 0; k < 40; k++) { const a = (Math.random() - 0.5) * 0.9, r = 0.4 + Math.random() * 4.2; const dd = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), a); fx.emit(this.pos.clone().addScaledVector(dd, r).setY(0.7), { count: 1, color: Math.random() < 0.4 ? 0xffd04a : 0xff5a1a, speed: 0.8, rise: 1.2, life: 0.5, size: 0.7 }); }
+        sfx('fire');
+      }
+      if (ready('dr_roar') && near(this.pos, 5).length >= 2) {
+        go('dr_roar');
+        for (const e of near(this.pos, 5)) e.stunT = Math.max(e.stunT || 0, 1 + petRank('dr_roar') * 0.1);
+        fx.ring(this.pos, 0xffe0a0, 5, 0.6); G.main.shake(0.2); sfx('boom');
+      }
+      if (ready('dr_dive') && d < 10) {
+        go('dr_dive');
+        const c = tg.pos.clone();
+        this.pos.copy(c).add(new THREE.Vector3(0.8, 0, 0.8));
+        if (!G.level.walkable(this.pos)) this.pos.copy(c);
+        for (const e of near(c, 2.8)) this.hitTarget(e, 3 + petRank('dr_dive') * 0.5, 'fire');
+        fx.explosion(c, 0xff6a1a, 2.4); G.main.shake(0.35); sfx('boom');
+      }
+    } else if (sp === 'imp') {
+      if (ready('im_curse') && d < 9) {
+        go('im_curse');
+        tg.curse = { t: 6, pct: (10 + petRank('im_curse') * 3) / 100 };
+        fx.emit(tg.pos.clone().setY(1.6), { count: 20, color: 0x9a40ff, speed: 1, life: 0.8, size: 0.5, rise: 0.6 });
+        sfx('blink');
+      }
+      if (ready('im_drain') && d < 9) {
+        go('im_drain');
+        const dmg = this.hitTarget(tg, 1 + petRank('im_drain') * 0.2, 'poison');
+        G.hp = Math.min(maxHp(), G.hp + dmg * 2);
+        fx.beam(tg.pos.clone().setY(1), G.player.pos.clone().setY(1), 0xc040ff, 0.4);
+        G.main.floatText(G.player.pos, '+' + Math.round(dmg * 2), '#66ff88', 18, 2.2);
+      }
+      if (ready('im_hellfire') && d < 10) {
+        go('im_hellfire');
+        const c = tg.pos.clone();
+        let n = 0;
+        const rain = () => {
+          if (!G.level || n++ >= 6) return;
+          const p = c.clone().add(new THREE.Vector3(rand(-1.8, 1.8), 0, rand(-1.8, 1.8)));
+          fx.beam(p.clone().setY(8), p.clone().setY(0.2), 0xff5a1a, 0.2);
+          fx.explosion(p, 0xff4a1a, 1.2);
+          for (const e of near(p, 2)) this.hitTarget(e, 0.8 + petRank('im_hellfire') * 0.15, 'fire');
+          sfx('boom');
+          setTimeout(rain, 220);
+        };
+        rain();
+      }
     }
   }
   update(dt) {
@@ -576,31 +677,90 @@ export class Pet extends Entity {
       for (const e of G.level.entities) if (e.type === 'enemy' && !e.dead && e.aggro) { const d = flatDist(e.pos, pl.pos); if (d < bd) { bd = d; best = e; } }
       this.target = best;
     }
-    let moving = false;
+    // the fox fetches gold and potions lying near the hero
+    if (G.petSpecies === 'fox' && petRank('fx_scavenge') > 0 && !this.target) {
+      for (const e of G.level.entities) if (e.type === 'loot' && !e.item && e.pop >= 1 && flatDist(e.pos, this.pos) < 1.2) e.pickup();
+      if (!this.fetch || !this.fetch.root.parent) this.fetch = G.level.entities.find((e) => e.type === 'loot' && !e.item && flatDist(e.pos, pl.pos) < 7);
+    } else this.fetch = null;
+    this.useAbilities(dt, this.target);
+    let moving = false, attacked = false;
+    const reach = this.ranged ? 6.5 : 1.2 + (this.target ? this.target.pickR * 0.6 : 0);
     if (this.target) {
       const tg = this.target;
-      if (flatDist(tg.pos, this.pos) <= 1.2 + tg.pickR * 0.6) {
+      if (flatDist(tg.pos, this.pos) <= reach && (!this.ranged || G.level.lineClear(this.pos, tg.pos, 0.1))) {
         this.path = []; this.face(tg.pos, dt);
         if (this.atkCd <= 0) {
-          this.atkCd = 0.9;
-          tg.takeDamage(petDamage() * this.dmgMul * rand(0.8, 1.2) * (G.buffs.warcry > 0 ? 1.3 : 1), false, G.petForm === 'wyrm' ? 'fire' : 'phys');
-          this.model.position.z = 0.3;
-          if (G.petForm === 'wyrm') G.main.fx.emit(tg.pos.clone().setY(0.8), { count: 10, color: 0xff7733, speed: 2, life: 0.4, size: 0.5 });
+          this.atkCd = 0.9 / (1 + 0.06 * petRank('fx_swift'));
+          attacked = true;
+          if (this.ranged) {
+            const dir = tg.pos.clone().sub(this.pos).setY(0).normalize();
+            const p = new Projectile(dir, 0, 'enemy', 0xb050ff, { trail: 0x9040ff, kind: 'poison', size: 0.15, speed: 15, onHit: (n) => this.hitTarget(n, 0.9, 'poison') });
+            p.root.position.copy(this.pos).addScaledVector(dir, 0.4); p.root.children.forEach((c) => (c.position.y = 0.8));
+            G.level.add(p);
+          } else {
+            this.hitTarget(tg, 1, G.petForm === 'wyrm' || G.petSpecies === 'dragon' ? 'fire' : 'phys');
+            if (G.petForm === 'wyrm') G.main.fx.emit(tg.pos.clone().setY(0.8), { count: 10, color: 0xff7733, speed: 2, life: 0.4, size: 0.5 });
+          }
         }
       } else {
         this.repath -= dt;
         if (this.repath <= 0 || !this.path.length) { this.repath = 0.3; this.path = G.level.findPath(this.pos, tg.pos); }
         moving = this.followPath(this.path, this.speed, dt);
       }
+    } else if (this.fetch) {
+      this.repath -= dt;
+      if (this.repath <= 0 || !this.path.length) { this.repath = 0.3; this.path = G.level.findPath(this.pos, this.fetch.pos); }
+      moving = this.followPath(this.path, this.speed, dt);
     } else if (flatDist(pl.pos, this.pos) > 2.8) {
       this.repath -= dt;
       if (this.repath <= 0 || !this.path.length) { this.repath = 0.4; this.path = G.level.findPath(this.pos, pl.pos.clone().add(new THREE.Vector3(1.2, 0, 1.2))); }
       moving = this.followPath(this.path, this.speed, dt);
     } else this.path = [];
-    this.model.position.z *= 0.85;
-    this.model.position.y = moving ? Math.abs(Math.sin(this.t * 14)) * 0.12 : Math.sin(this.t * 2) * 0.01;
-    if (this.tail) this.tail.rotation.y = Math.sin(this.t * (moving ? 14 : 5)) * 0.5;
-    if (this.tip && G.level.kind === 'dungeon' && Math.random() < dt * 6) G.main.fx.emit(this.tip.getWorldPosition(tmp), { count: 1, color: 0xffcc66, speed: 0.3, life: 0.6, size: 0.25, rise: 0.4 });
+    if (this.rig) this.rig.anim(this.t, moving, dt, attacked);
+    else {
+      if (attacked) this.model.position.z = 0.3;
+      this.model.position.z *= 0.85;
+      this.model.position.y = moving ? Math.abs(Math.sin(this.t * 14)) * 0.12 : Math.sin(this.t * 2) * 0.01;
+    }
+    if (this.rig?.parts.lamps && G.level.kind === 'dungeon' && Math.random() < dt * 5) G.main.fx.emit(this.rig.parts.lamps[0].getWorldPosition(tmp), { count: 1, color: 0xffcc66, speed: 0.3, life: 0.6, size: 0.25, rise: 0.4 });
+  }
+}
+
+// Spirit foxes summoned by a Lantern Fox's Spirit Pack
+export class SpiritFox extends Entity {
+  constructor() {
+    super('ally');
+    this.rig = buildPetModel('fox', 1, 0x9fe8ff);
+    this.root.add(this.rig.root);
+    this.maxHp = petMaxHp() * 0.5; this.hp = this.maxHp;
+    this.pickR = 0.5; this.life = 12; this.atkCd = 0; this.path = []; this.repath = 0; this.target = null; this.t = 0;
+  }
+  takeDamage(d) { if (this.dead) return; this.hp -= d; if (this.hp <= 0) this.vanish(); }
+  vanish() { this.dead = true; G.main.fx.emit(this.pos.clone().setY(0.5), { count: 20, color: 0x9fe8ff, speed: 2, life: 0.6, size: 0.5 }); G.level.remove(this); }
+  update(dt) {
+    if (this.dead) return;
+    this.t += dt; this.life -= dt; this.atkCd -= dt;
+    if (this.life <= 0) return this.vanish();
+    if (this.target && (this.target.dead || !this.target.root.parent)) this.target = null;
+    if (!this.target) { let bd = 10; for (const e of G.level.entities) if (e.type === 'enemy' && !e.dead && !e.dormant) { const d = flatDist(e.pos, this.pos); if (d < bd) { bd = d; this.target = e; } } }
+    let moving = false, att = false;
+    const tg = this.target;
+    if (tg) {
+      if (flatDist(tg.pos, this.pos) < 1.2 + tg.pickR * 0.6) {
+        this.path = []; this.face(tg.pos, dt);
+        if (this.atkCd <= 0) { this.atkCd = 0.8; att = true; tg.takeDamage(petDamage() * 0.6, false, 'frost'); }
+      } else {
+        this.repath -= dt;
+        if (this.repath <= 0 || !this.path.length) { this.repath = 0.35; this.path = G.level.findPath(this.pos, tg.pos); }
+        moving = this.followPath(this.path, 8, dt);
+      }
+    } else if (G.player && flatDist(G.player.pos, this.pos) > 3) {
+      this.repath -= dt;
+      if (this.repath <= 0 || !this.path.length) { this.repath = 0.4; this.path = G.level.findPath(this.pos, G.player.pos); }
+      moving = this.followPath(this.path, 8, dt);
+    }
+    this.rig.anim(this.t, moving, dt, att);
+    if (Math.random() < dt * 8) G.main.fx.emit(this.pos.clone().setY(0.5), { count: 1, color: 0x9fe8ff, speed: 0.3, life: 0.5, size: 0.4, rise: 0.5 });
   }
 }
 
@@ -734,6 +894,7 @@ const NPC_LOOK = {
   quest: { model: 'Knight', cape: '#1f3f8c', gear: true },
   healer: { model: 'Mage', cape: '#e8e8e8', gear: false, tint: 0xffffff },
   blacksmith: { model: 'Barbarian', cape: '#5a3a1a', gear: true },
+  beastmaster: { model: 'Rogue', cape: '#7a5a2a', gear: false },
 };
 export class Interact extends Entity {
   constructor(kind, data) {
@@ -743,7 +904,7 @@ export class Interact extends Entity {
     let lc = '#fff6d9', ly = 1.5;
     const add = (o) => { this.root.add(o); return o; };
     switch (kind) {
-      case 'merchant': case 'quest': case 'healer': case 'blacksmith': {
+      case 'merchant': case 'quest': case 'healer': case 'blacksmith': case 'beastmaster': {
         const L = NPC_LOOK[kind];
         this.char = new CharModel(L.model, { scale: 0.75 });
         this.char.setGear(L.gear, L.gear);
@@ -761,6 +922,16 @@ export class Interact extends Entity {
           this.bob.position.y = 2.6;
           const rack = add(prop('weaponrack')); rack.scale.setScalar(5); rack.position.set(1.4, 0, -0.6);
           lc = '#a6ffa6';
+        } else if (kind === 'beastmaster') {
+          // the three companions she looks after, at their first stage
+          this.pens = [];
+          for (const [sp, x, z, ry] of [['fox', 1.3, 0.5, -0.6], ['dragon', -1.4, 0.3, 0.6], ['imp', 0.2, -1.3, 0]]) {
+            if (sp === G.petSpecies) continue;
+            const m = buildPetModel(sp, 0, PET_SPECIES[sp].coats[0].color);
+            m.root.position.set(x, 0, z); m.root.rotation.y = ry; add(m.root); this.pens.push(m);
+          }
+          const hay = add(prop('sack')); hay.scale.setScalar(8); hay.position.set(-1.1, 0, -1.1);
+          lc = '#ffb066';
         } else if (kind === 'blacksmith') {
           const r = add(prop('weaponrack')); r.scale.setScalar(5); r.position.set(-1.5, 0, -0.4);
           const a = add(prop('barrel')); a.scale.setScalar(5); a.position.set(1.4, 0, -0.3);
@@ -773,7 +944,7 @@ export class Interact extends Entity {
         this.root.rotation.y = 0;
         break;
       }
-      case 'pond': case 'fish_hole': {
+      case 'pond': case 'fish_hole': case 'millpond': {
         this.pickH = 0.1; this.pickR = 1.3;
         if (kind === 'fish_hole') {
           const pool = add(new THREE.Mesh(new THREE.CircleGeometry(1.1, 32), new THREE.MeshStandardMaterial({ color: 0x1f5f9f, roughness: 0.1, metalness: 0.4, emissive: 0x0a2a55, emissiveIntensity: 0.8 })));
@@ -782,8 +953,8 @@ export class Interact extends Entity {
         }
         const post = add(box(0.1, 1.0, 0.1, 0x59381a)); post.position.set(1.2, 0.5, 0);
         const sign = add(box(0.6, 0.35, 0.05, 0x8c6633)); sign.position.set(1.2, 1.0, 0.05);
-        const fish = add(box(0.3, 0.12, 0.06, 0x66b3ff, 1)); fish.position.set(1.2, 1.0, 0.09);
-        lc = '#99d9ff'; ly = 1.6; break;
+        const fish = add(box(0.3, 0.12, 0.06, kind === 'millpond' ? 0xff9a3a : 0x66b3ff, 1)); fish.position.set(1.2, 1.0, 0.09);
+        lc = kind === 'millpond' ? '#ffb066' : '#99d9ff'; ly = 1.6; break;
       }
       case 'well': this.pickR = 2.0; this.pickH = 1.0; lc = '#ffb366'; ly = 4.6; break;
       case 'stairs_down': case 'stairs_up': {
@@ -833,12 +1004,13 @@ export class Interact extends Entity {
         lc = hex(col); break;
       }
     }
-    this.label = { text: data.name || kind, color: lc, y: ly, always: ['merchant', 'quest', 'healer', 'blacksmith', 'well', 'portal', 'stairs_down', 'stairs_up'].includes(kind) };
+    this.label = { text: data.name || kind, color: lc, y: ly, always: ['merchant', 'quest', 'healer', 'blacksmith', 'beastmaster', 'millpond', 'well', 'portal', 'stairs_down', 'stairs_up'].includes(kind) };
   }
   update(dt) {
     this.t += dt;
     this.char?.update(dt);
-    if (this.char && G.player && flatDist(G.player.pos, this.pos) < 7) this.face(G.player.pos, dt * 0.3);
+    if (this.pens) for (const m of this.pens) m.anim(this.t, false, dt, 0);
+    if (this.char && !this.pens && G.player && flatDist(G.player.pos, this.pos) < 7) this.face(G.player.pos, dt * 0.3);
     if (this.bob) {
       if (this.kind === 'portal') {
         this.disc.material.opacity = 0.4 + Math.sin(this.t * 3) * 0.15;

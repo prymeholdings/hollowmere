@@ -248,6 +248,29 @@ export function starterItem(vis) {
   return it;
 }
 
+// ---------------------------------------------------------------- class-fitted gear (fishing treasure)
+export const CLASS_GEAR = {
+  Knight: ['sword', 'greatsword', 'plate', 'helm', 'crest', 'tower', 'bulwark'],
+  Barbarian: ['axe', 'greataxe', 'reaver', 'furs', 'horned', 'targe', 'spiked', 'sidearm'],
+  Mage: ['staff', 'wand', 'sceptre', 'robe', 'hat', 'crown', 'tome', 'grimoire'],
+  Rogue: ['dagger', 'handbow', 'crossbow', 'leathers', 'hood', 'parry', 'sideblade'],
+};
+const CLASS_STAT = { Knight: ['str', 'vit'], Barbarian: ['str', 'dex'], Mage: ['mag', 'mana'], Rogue: ['dex', 'crit'] };
+// A weapon or armor piece that suits the class, at least `minRarity`. Legendaries get the class's main stats.
+export function classItem(cls, ilvl, minRarity = 3) {
+  const types = CLASS_GEAR[cls] || CLASS_GEAR.Knight;
+  const it = generate(ilvl, 0, minRarity, pick(types));
+  if (it.rarity >= 3) {
+    const [a, b] = CLASS_STAT[cls] || CLASS_STAT.Knight;
+    it.affixes[a] = (it.affixes[a] || 0) + Math.max(3, Math.round(4 + ilvl * 0.25));
+    const vb = b === 'crit' ? Math.min(CAPS.crit || 15, 4 + Math.floor(ilvl / 25)) : Math.max(4, Math.round(6 + ilvl * 0.35));
+    it.affixes[b] = (it.affixes[b] || 0) + vb;
+    it.sockets = Math.max(it.sockets, Math.min(maxSockets(it), 1));
+    it.fished = true;
+  }
+  return it;
+}
+
 // ---------------------------------------------------------------- fish
 const FISH = [
   { name: 'Old Boot', form: '', value: 2, rarity: 0, w: 14 },
@@ -278,6 +301,7 @@ export function describe(it, playerLevel) {
   if (!it) return '';
   let s = `<div class="tt-name" style="color:${hex(itemColor(it))}">${displayName(it)}</div>`;
   if (it.customName) s += `<div class="tt-dim">(${it.name})</div>`;
+  if (it.fished) s += '<div class="tt-dim" style="color:#7fd0ff">Hooked from the Deepwater Millpond</div>';
   if (it.slot === 'fish') {
     s += '<div class="tt-sub">Fish</div>';
     s += it.form ? `<div class="tt-aff">Feed to your pet to become a ${FORM_INFO[it.form]}</div>` : '<div class="tt-dim">Not much use except to sell.</div>';

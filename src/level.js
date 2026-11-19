@@ -150,7 +150,7 @@ export class Level {
       { name: 'building_scaffolding', c: [45.5, 54.5], s: 5, ry: 0 },
       { name: 'building_tower_A_yellow', c: [52, 55], s: 4.5, ry: 0 },
     ];
-    this.blocked = [{ x: 4, y: 23, w: 7, h: 5, type: 'pond' }, { x: 16, y: 16, w: 2, h: 2, type: 'well' }];
+    this.blocked = [{ x: 4, y: 23, w: 7, h: 5, type: 'pond' }, { x: 8, y: 54, w: 5, h: 4, type: 'pond', deep: true }, { x: 16, y: 16, w: 2, h: 2, type: 'well' }];
     this.buildingObjs = [];
     for (const b of this.buildings) {
       const o = prop(b.name);
@@ -598,19 +598,34 @@ export class Level {
       this.placeProp('wall_straight', new THREE.Vector3(-0.6, 0, a), 2, Math.PI / 2);
       this.placeProp('wall_straight', new THREE.Vector3(W + 0.6, 0, a), 2, Math.PI / 2);
     }
-    // pond
-    const pond = this.blocked.find((b) => b.type === 'pond');
-    const pcx = (pond.x + (pond.w - 1) / 2) * CELL, pcz = (pond.y + (pond.h - 1) / 2) * CELL;
-    const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshStandardMaterial({ color: 0x2d6a9f, roughness: 0.08, metalness: 0.5, emissive: 0x0a2a4a, emissiveIntensity: 0.6, transparent: true, opacity: 0.92 }));
-    water.rotation.x = -Math.PI / 2; water.scale.set(pond.w * CELL / 2, pond.h * CELL / 2, 1); water.position.set(pcx, 0.06, pcz);
-    this.root.add(water);
-    this.water = water;
-    this.noAO.push(water);
-    const bank = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshStandardMaterial({ color: 0x6b5d45, roughness: 1 }));
-    bank.rotation.x = -Math.PI / 2; bank.scale.set(pond.w * CELL / 2 + 0.8, pond.h * CELL / 2 + 0.8, 1); bank.position.set(pcx, 0.03, pcz);
-    this.root.add(bank);
-    for (let i = 0; i < 7; i++) this.placeProp('waterlily_A', new THREE.Vector3(pcx + rand(-4, 4), 0.07, pcz + rand(-2.5, 2.5)), 6, rand(0, 6));
-    for (let i = 0; i < 10; i++) { const a = rand(0, Math.PI * 2); this.placeProp(pick(['waterplant_A', 'rock_single_A', 'rock_single_C']), new THREE.Vector3(pcx + Math.cos(a) * (pond.w + 0.5), 0, pcz + Math.sin(a) * (pond.h + 0.5)), 6, rand(0, 6)); }
+    // ponds (the farm pond and the deep millpond by the watermill)
+    this.waters = [];
+    for (const pond of this.blocked.filter((b) => b.type === 'pond')) {
+      const pcx = (pond.x + (pond.w - 1) / 2) * CELL, pcz = (pond.y + (pond.h - 1) / 2) * CELL;
+      const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshStandardMaterial({ color: pond.deep ? 0x1d4f86 : 0x2d6a9f, roughness: 0.08, metalness: 0.5, emissive: pond.deep ? 0x08305a : 0x0a2a4a, emissiveIntensity: pond.deep ? 0.9 : 0.6, transparent: true, opacity: 0.92 }));
+      water.rotation.x = -Math.PI / 2; water.scale.set(pond.w * CELL / 2, pond.h * CELL / 2, 1); water.position.set(pcx, 0.06, pcz);
+      this.root.add(water);
+      this.waters.push(water);
+      this.noAO.push(water);
+      const bank = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshStandardMaterial({ color: 0x6b5d45, roughness: 1 }));
+      bank.rotation.x = -Math.PI / 2; bank.scale.set(pond.w * CELL / 2 + 0.8, pond.h * CELL / 2 + 0.8, 1); bank.position.set(pcx, 0.03, pcz);
+      this.root.add(bank);
+      const sx = pond.w * 0.6, sz = pond.h * 0.5;
+      for (let i = 0; i < (pond.deep ? 4 : 7); i++) this.placeProp('waterlily_A', new THREE.Vector3(pcx + rand(-sx, sx), 0.07, pcz + rand(-sz, sz)), 6, rand(0, 6));
+      for (let i = 0; i < 10; i++) { const a = rand(0, Math.PI * 2); this.placeProp(pick(['waterplant_A', 'rock_single_A', 'rock_single_C']), new THREE.Vector3(pcx + Math.cos(a) * (pond.w + 0.5), 0, pcz + Math.sin(a) * (pond.h + 0.5)), 6, rand(0, 6)); }
+      if (pond.deep) {
+        // a little wooden jetty reaching out from the north bank, with a glow from the deep water
+        const wood = 0x7a5432, dark = 0x4a321c;
+        const jx = pcx, z0 = pond.y * CELL - 1.6;
+        for (let k = 0; k < 6; k++) { const pl = box(1.5, 0.08, 0.36, k % 2 ? wood : 0x86603a); pl.position.set(jx, 0.32, z0 + k * 0.42); this.root.add(pl); }
+        for (const [dx, dz] of [[-0.7, 0], [0.7, 0], [-0.7, 2.1], [0.7, 2.1]]) { const post = cyl(0.07, 0.08, 0.9, dark); post.position.set(jx + dx, 0.2, z0 + dz); this.root.add(post); }
+        this.placeProp('barrel', new THREE.Vector3(jx - 1.6, 0, z0 - 0.4), 5, 0.4);
+        this.placeProp('bucket_water', new THREE.Vector3(jx + 1.4, 0, z0 - 0.3), 7, 1);
+        const glow = new THREE.PointLight(0x4aa8ff, 4, 7, 1.6); glow.position.set(pcx, 0.4, pcz + 0.6); this.root.add(glow);
+        this.deepGlow = glow;
+      }
+    }
+    this.water = this.waters[0];
     // well
     this.placeProp('building_well_blue', this.toWorld(16.5, 16.5), 5, 0);
     const glow = new THREE.PointLight(0x66aaff, 6, 6, 1.5); glow.position.copy(this.toWorld(16.5, 16.5)).setY(0.8); this.root.add(glow);
@@ -659,6 +674,8 @@ export class Level {
     this.interact('quest', this.toWorld(t.c[0], t.front + 0.3), { name: QUEST_GIVER });
     this.interact('healer', this.toWorld(c.c[0] - 3, c.c[1] - 1), { name: 'Brother Fennick, Healer' });
     this.interact('pond', this.toWorld(7, 22).add(new THREE.Vector3(0, 0, -0.3)), { name: 'Fishing Pond' });
+    this.interact('beastmaster', this.toWorld(25, 21.5), { name: 'Rhosyn, Beastmaster' });
+    this.interact('millpond', this.toWorld(10, 52.9), { name: 'Deepwater Millpond - Legendary Fishing' });
     this.interact('well', this.toWorld(16.5, 16.5), { name: 'The Old Well - Enter the Sunken Wells' });
     if (G.portalFloor > 0) this.interact('portal', this.portalPos, { name: `Portal to Floor ${G.portalFloor}` });
     this.interact('blacksmith', this.toWorld(9.6, 15.5), { name: 'Hobb Ironhand, Blacksmith' }).root.rotation.y = Math.PI / 2;
