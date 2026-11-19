@@ -154,7 +154,7 @@ select { font-family: inherit; background: #0d0a07; color: #f3e2bd; border: 1px 
 .setrow { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #ffffff10; font-size: 15px; }
 /* ---- skill trees ---- */
 .sk-top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 14px; }
-.sk-trees { display: flex; gap: 14px; justify-content: center; }
+.sk-trees { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
 .sk-tree { border: 1px solid #3a3022; border-radius: 4px; background: radial-gradient(ellipse at 50% 20%, #2a2016aa, #0a0806cc); padding: 6px 4px 4px; }
 .sk-head { text-align: center; font-size: 19px; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px currentColor, 2px 2px 0 #000; }
 .sk-head small { display: block; font-size: 11px; color: #a89878; letter-spacing: 1px; text-shadow: none; }
@@ -333,3 +333,30 @@ label.filebtn { display: inline-block; font-family: inherit; background: linear-
 body.touch .zsky { max-height: calc(100vh / (var(--uiz, 1) * var(--uis, 1)) - 230px); width: auto; max-width: 100%; margin: 0 auto; }
 body.touch .zhead { margin-bottom: 2px; }
 body.touch .zinfo { margin-top: 4px; min-height: 0; }
+
+.sblood { position: absolute; pointer-events: none; z-index: 5; border-radius: 50%; opacity: .85; transition: opacity 4.5s ease-in; mix-blend-mode: normal;
+  background: radial-gradient(circle at 50% 50%, #6a0808 0%, #7a0a0a 28%, rgba(110,10,10,.85) 40%, rgba(90,6,6,.0) 70%),
+              radial-gradient(circle at 22% 30%, #7a0a0a 0 7%, transparent 8%), radial-gradient(circle at 78% 24%, #6a0808 0 5%, transparent 6%), radial-gradient(circle at 70% 78%, #7a0a0a 0 8%, transparent 9%), radial-gradient(circle at 30% 80%, #5a0606 0 4%, transparent 5%); }
+
+.bub { position: absolute; transform: translate(-50%,-100%); max-width: 240px; padding: 4px 9px; background: rgba(12,8,6,0.82); border: 1px solid rgba(200,160,90,0.5); border-radius: 4px; font: italic 13px Georgia, serif; text-align: center; text-shadow: 1px 1px 0 #000; pointer-events: none; z-index: 5; }
+
+.zlayout { display: flex; gap: 10px; align-items: flex-start; }
+.zlist { width: 190px; flex: none; display: flex; flex-direction: column; gap: 3px; }
+.zsign { display: flex; align-items: center; gap: 8px; text-align: left; padding: 5px 8px; background: #17120e; border: 1px solid #3a3022; border-radius: 3px; color: #cfc4a8; cursor: pointer; font-family: inherit; }
+.zsign:hover { border-color: var(--gold2); }
+.zsign.on { background: #2a2216; border-color: var(--gold); color: #fff; box-shadow: inset 0 0 12px #5a4a2a88; }
+.zsign.done .zp { color: #9fd8a0; }
+.zsign .zg { font-size: 22px; width: 26px; text-align: center; color: #c8b8f0; }
+.zsign .zn { flex: 1; display: flex; flex-direction: column; line-height: 1.15; }
+.zsign .zn small { color: #8a806a; font-size: 11px; }
+.zsign .zp { font-size: 12px; color: #b0a488; position: relative; }
+.zdot { position: absolute; right: -4px; top: -6px; width: 8px; height: 8px; border-radius: 50%; background: #ffd84d; box-shadow: 0 0 6px #ffd84d; }
+.zmain { flex: 1; min-width: 0; }
+.zttl { color: #e8dcc0; font-size: 16px; letter-spacing: 1px; }
+.zsky .zwm { fill: #6a5aa8; opacity: .12; font-size: 240px; }
+.zsky .zn2 { fill: #d8d0f0; font-size: 15px; }
+.zsky .pip { fill: #2a2640; stroke: #8a80c0; stroke-width: 1; }
+.zsky .pip.on { fill: #ffe7a0; stroke: #fff; }
+.zsky .zl { cursor: pointer; }
+.znav { display: flex; gap: 4px; justify-content: center; margin: 2px 0; }
+@media (max-width: 760px) { .zlayout { flex-direction: column; } .zlist { width: 100%; flex-direction: row; flex-wrap: wrap; } .zsign { flex: 1 1 45%; } }
