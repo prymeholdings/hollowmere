@@ -1,4 +1,4 @@
-import { generate, itemColor, sellPrice } from './items.js';
+import { generate, itemColor, sellPrice, starterItem, gemEffect, upgradeItem, isTwoHanded, displayName, SOCKET_SLOTS } from './items.js';
 import { ENEMIES, QUEST_GIVER, FAME_STEPS, FAME_RANKS } from './data.js';
 import { randi, pick, sfx } from './util.js';
 
@@ -15,6 +15,7 @@ export const G = {
 export function msg(t, c = '#e6e6e6') { G.onMessage(t, c); }
 
 export function reset() {
+  bonusCache = null;
   Object.assign(G, {
     heroName: 'Wanderer', cls: 'Knight', look: { cape: '#8c1f1f', hooded: false, helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox' }, lvl: 1, xp: 0, statPoints: 0, skillPoints: 1,
     base: { str: 10, dex: 10, vit: 10, mag: 10 },
@@ -22,9 +23,9 @@ export function reset() {
     hotbar: { rmb: 'firebolt', q: 'heal', w: 'nova', e: 'lightning', r: 'meteor' }, cds: {},
     gold: 80, fame: 0, fameRank: 0, hpPotions: 4, mpPotions: 2, scrolls: 2,
     equipment: {
-      weapon: { base: 'Rusted Shortblade', name: 'Rusted Shortblade', slot: 'weapon', rarity: 0, ilvl: 1, req: 1, dmg: [2, 5], affixes: {}, value: 6 },
+      weapon: starterItem('Knife'),
       offhand: null, helm: null,
-      armor: { base: 'Padded Tunic', name: 'Padded Tunic', slot: 'armor', rarity: 0, ilvl: 1, req: 1, armor: 3, affixes: {}, value: 6 },
+      armor: { base: 'Rusted Leathers', name: 'Rusted Leathers', type: 'leathers', mat: 'rusted', slot: 'armor', rarity: 0, ilvl: 1, req: 1, armor: 4, affixes: { dex: 1 }, sockets: 0, gems: [], value: 6 },
       ring: null, amulet: null,
     },
     backpack: [], deepest: 0, portalFloor: 0, quest: null, questOffer: null,
@@ -34,12 +35,27 @@ export function reset() {
   G.hp = maxHp(); G.mp = maxMp();
 }
 
-export function itemBonus(s) {
-  let t = 0;
-  for (const k in G.equipment) { const it = G.equipment[k]; if (it) t += it.affixes[s] || 0; }
+// Sum of a stat over all equipped items, including socketed gems. Cached per frame-ish via a version key.
+let bonusCache = null, bonusRefs = [];
+function bonusTable() {
+  const refs = Object.values(G.equipment);
+  if (bonusCache && refs.length === bonusRefs.length && refs.every((r, i) => r === bonusRefs[i])) return bonusCache;
+  const t = {};
+  const add = (k, v) => { t[k] = (t[k] || 0) + v; };
+  for (const slot in G.equipment) {
+    const it = G.equipment[slot];
+    if (!it) continue;
+    for (const k in it.affixes) add(k, it.affixes[k]);
+    if (it.gems) for (const g of it.gems) if (g) { const [k, v] = gemEffect(g, slot); add(k, v); }
+  }
+  if (t.all) for (const k of ['str', 'dex', 'vit', 'mag']) add(k, t.all);
+  bonusCache = t; bonusRefs = refs;
   return t;
 }
+export const invalidateBonus = () => { bonusCache = null; };
+export function itemBonus(s) { return bonusTable()[s] || 0; }
 export const stat = (s) => G.base[s] + itemBonus(s);
+export const elementalDamage = () => ({ fire: itemBonus('fire'), cold: itemBonus('cold'), light: itemBonus('light'), poison: itemBonus('poison') });
 export const maxHp = () => (40 + stat('vit') * 5 + G.lvl * 6 + itemBonus('life')) * (1 + 0.08 * (G.skills.toughness || 0));
 export const maxMp = () => (14 + stat('mag') * 3 + G.lvl * 2 + itemBonus('mana')) * (1 + 0.06 * (G.skills.arcane_flow || 0));
 export function armor() {
@@ -58,7 +74,7 @@ export function weaponDamage() {
 }
 export const rollDamage = () => { const d = weaponDamage(); return d[0] + Math.random() * (d[1] - d[0]); };
 export const attackSpeed = () => 1.15 * (1 + stat('dex') * 0.008 + itemBonus('aspd') / 100 + G.skills.mastery * 0.03) * (G.buffs.speed > 0 ? 1.3 : 1);
-export const critChance = () => 0.05 + stat('dex') * 0.002 + (G.skills.lethality || 0) * 0.015;
+export const critChance = () => Math.min(0.75, 0.05 + stat('dex') * 0.002 + (G.skills.lethality || 0) * 0.015 + itemBonus('crit') / 100);
 export const critMult = () => 2 + (G.skills.brutality || 0) * 0.15;
 export const petDamage = () => (3 + G.lvl * 1.4) * (1 + 0.15 * G.skills.pet_bond);
 export const petMaxHp = () => (35 + G.lvl * 10) * (1 + 0.15 * G.skills.pet_bond);
@@ -95,24 +111,57 @@ export function equipFromPack(i) {
   const it = G.backpack[i];
   if (!it || !(it.slot in G.equipment)) { msg("That can't be equipped."); return; }
   if (it.req > G.lvl) { msg(`You need to be level ${it.req} to use that.`, '#ff6666'); return; }
-  G.backpack.splice(i, 1);
+  // two-handed weapons free the off-hand; an off-hand replaces a two-handed weapon
+  if (it.slot === 'weapon' && isTwoHanded(it) && G.equipment.offhand) {
+    if (G.backpack.length >= BACKPACK_MAX) { msg('Your backpack is full. Make room for your off-hand first.', '#ff6666'); return; }
+    G.backpack.push(G.equipment.offhand); G.equipment.offhand = null;
+    msg('Two-handed weapon: your off-hand was moved to your backpack.', '#b8a888');
+  }
+  if (it.slot === 'offhand' && isTwoHanded(G.equipment.weapon)) {
+    if (G.backpack.length >= BACKPACK_MAX) { msg('Your backpack is full.', '#ff6666'); return; }
+    G.backpack.push(G.equipment.weapon); G.equipment.weapon = null;
+    msg('Your two-handed weapon was moved to your backpack.', '#b8a888');
+  }
+  const idx = G.backpack.indexOf(it);
+  G.backpack.splice(idx, 1);
   const old = G.equipment[it.slot];
   G.equipment[it.slot] = it;
-  if (old) G.backpack.splice(i, 0, old);
-  clampVitals(); sfx('pick');
+  if (old) G.backpack.splice(idx, 0, old);
+  invalidateBonus(); clampVitals(); sfx('pick');
   G.player?.refreshVisuals();
+}
+// put a gem from the backpack into an item's first empty socket
+export function socketGem(gemIdx, item) {
+  const gem = G.backpack[gemIdx];
+  if (!gem || gem.slot !== 'gem' || !item) return false;
+  upgradeItem(item);
+  let at = -1;
+  for (let i = 0; i < item.sockets; i++) if (!item.gems[i]) { at = i; break; }
+  if (at < 0) { msg('That item has no empty socket.', '#ff6666'); return false; }
+  item.gems[at] = { gem: gem.gem, tier: gem.tier };
+  G.backpack.splice(gemIdx, 1);
+  invalidateBonus(); clampVitals(); sfx('gold');
+  msg(`${gem.name} socketed into ${displayName(item)}.`, '#99ddff');
+  G.player?.refreshVisuals();
+  return true;
+}
+export function socketTargets() {
+  const out = [];
+  for (const s of SOCKET_SLOTS) { const it = G.equipment[s]; if (it && it.sockets > (it.gems || []).filter(Boolean).length) out.push({ it, where: 'eq' }); }
+  for (const it of G.backpack) if (SOCKET_SLOTS.includes(it.slot) && it.sockets > (it.gems || []).filter(Boolean).length) out.push({ it, where: 'bp' });
+  return out;
 }
 export function unequip(slot) {
   const it = G.equipment[slot];
   if (!it) return;
   if (G.backpack.length >= BACKPACK_MAX) { msg('Your backpack is full.', '#ff6666'); return; }
   G.equipment[slot] = null; G.backpack.push(it);
-  clampVitals(); G.player?.refreshVisuals();
+  invalidateBonus(); clampVitals(); G.player?.refreshVisuals();
 }
 export function pickupItem(it) {
   if (G.backpack.length >= BACKPACK_MAX) { msg('Your backpack is full!', '#ff6666'); return false; }
   G.backpack.push(it);
-  msg(`Picked up ${it.name}`, '#' + itemColor(it).toString(16).padStart(6, '0'));
+  msg(`Picked up ${displayName(it)}`, '#' + itemColor(it).toString(16).padStart(6, '0'));
   sfx('pick');
   return true;
 }
@@ -251,6 +300,9 @@ export function loadGame() {
   G.look = { ...look0, ...(d.look || {}) };
   G.base = { str: 10, dex: 10, vit: 10, mag: 10, ...d.base };
   G.skills = { ...SKILL_ZERO, ...d.skills };
+  for (const k in G.equipment) if (G.equipment[k]) upgradeItem(G.equipment[k]);
+  G.backpack.forEach(upgradeItem); (G.shopStock || []).forEach(upgradeItem);
+  invalidateBonus();
   G.cds = {};
   lastSaved = d.savedAt || 0;
   G.hp = Math.max(1, Math.min(G.hp, maxHp())); G.mp = Math.min(G.mp, maxMp());

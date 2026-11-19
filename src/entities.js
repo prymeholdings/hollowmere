@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { G, msg, maxHp, maxMp, armor, rollDamage, attackSpeed, critChance, critMult, stat, itemBonus, petDamage, petMaxHp, addXp, onKill, pickupItem } from './state.js';
+import { G, msg, maxHp, maxMp, armor, rollDamage, attackSpeed, critChance, critMult, stat, itemBonus, elementalDamage, petDamage, petMaxHp, addXp, onKill, pickupItem } from './state.js';
 import { box, sphere, capsule, cyl, cone, humanoid, ring, rand, pick, flatDist, sfx, hex } from './util.js';
-import { itemColor } from './items.js';
+import { itemColor, typeOf, lookOf, displayName } from './items.js';
 import { CharModel, prop } from './assets.js';
 import { CLASSES, PET_COATS } from './skills.js';
 import { Settings } from './settings.js';
@@ -44,6 +44,14 @@ class Entity {
 }
 
 // ---------------------------------------------------------------- Player
+const WEAPON_ATTACKS = {
+  '1h': ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Slice_Horizontal'],
+  '2h': ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice', '2H_Melee_Attack_Stab'],
+  dual: ['Dualwield_Melee_Attack_Stab', 'Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'],
+  cast: ['Spellcast_Shoot'],
+  shoot1: ['1H_Ranged_Shoot'],
+  shoot2: ['2H_Ranged_Shoot'],
+};
 const ATTACKS = {
   Knight: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Slice_Horizontal'],
   Barbarian: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Horizontal', '1H_Melee_Attack_Slice_Diagonal'],
@@ -54,11 +62,11 @@ export class Player extends Entity {
   constructor() {
     super('player');
     const cls = CLASSES[G.cls] || CLASSES.Knight;
-    const modelName = G.look?.hooded && cls.alt ? cls.alt : cls.model;
-    this.model = new CharModel(modelName, { scale: 0.72 * (G.look?.height || 1) });
+    this.model = new CharModel(cls.model, { scale: 0.72 * (G.look?.height || 1) });
     this.model.applyLook(cls, G.look || {});
     this.root.add(this.model.root);
     this.attacks = ATTACKS[G.cls] || ATTACKS.Knight;
+    this.ranged = null;
     this.light = new THREE.PointLight(0xffd9a6, 14, 13, 1.4);
     this.light.position.set(0, 3.2, 0);
     this.root.add(this.light);
@@ -74,7 +82,15 @@ export class Player extends Entity {
     this.hitAnimCd = 0;
     this.refreshVisuals();
   }
-  refreshVisuals() { this.model.setGear(!!G.equipment.weapon, true); }
+  refreshVisuals() {
+    this.model.dress(G.equipment, G.look || {}, CLASSES[G.cls] || CLASSES.Knight);
+    // attack style follows the weapon type
+    const w = G.equipment.weapon;
+    const t = w ? typeOf(w) : null;
+    this.ranged = t?.ranged || null;
+    this.attacks = t ? (WEAPON_ATTACKS[t.anim] || ATTACKS[G.cls]) : ['Unarmed_Melee_Attack_Punch_A', 'Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'];
+    if (t && t.anim === '1h' && G.equipment.offhand && /Offhand/.test(typeOf(G.equipment.offhand).vis)) this.attacks = WEAPON_ATTACKS.dual;
+  }
   setTarget(t) { this.target = t; this.repath = 0; }
   moveTo(p) { this.target = null; this.path = G.level.findPath(this.pos, p); }
   takeDamage(d) {
@@ -101,15 +117,32 @@ export class Player extends Entity {
     const ts = Math.max(1, clipDur * aspd * 1.15);
     this.model.once(anim, { timeScale: ts });
     sfx('swing');
-    const hitDelay = (clipDur * 0.4) / ts;
+    const hitDelay = (clipDur * (this.ranged ? 0.3 : 0.4)) / ts;
     this.pendingHit = { e, t: hitDelay };
+  }
+  // ranged basic attack: a bolt or magic missile that applies the normal weapon hit on impact
+  shoot(e) {
+    const from = this.pos.clone();
+    const dir = e.pos.clone().sub(from).setY(0).normalize();
+    from.addScaledVector(dir, 0.6);
+    const magic = this.ranged === 'magic';
+    const el = elementalDamage();
+    const col = magic ? (el.fire ? 0xff7a1a : el.cold ? 0x9fdcff : el.light ? 0xc6b8ff : el.poison ? 0x77ee33 : 0xb48cff) : 0xd8d8d0;
+    const p = new Projectile(dir, 0, 'enemy', col, { trail: magic ? col : null, kind: 'phys', blade: !magic, size: 0.16, speed: magic ? 18 : 24, life: 0.8, onHit: (n) => this.doHit(n) });
+    p.root.position.copy(from);
+    G.level.add(p);
   }
   doHit(e) {
     if (!e || e.dead) return;
     let d = rollDamage();
     const crit = Math.random() < critChance();
     if (crit) d *= critMult();
-    e.takeDamage(d, crit, 'phys');
+    const el = elementalDamage();
+    d += el.fire + el.light;
+    e.takeDamage(d, crit, el.fire > el.light ? (el.fire > 0 ? 'fire' : 'phys') : el.light > 0 ? 'storm' : 'phys');
+    if (el.cold > 0 && !e.dead) { e.slowT = Math.max(e.slowT || 0, 1.5); e.takeDamage(el.cold, false, 'frost'); }
+    if (el.poison > 0 && !e.dead) e.applyDot(el.poison * 1.2, 3, 'poison');
+    if (el.fire > 0) G.main.fx.emit(e.pos.clone().setY(1), { count: 5, color: 0xff7a22, speed: 2, life: 0.4, size: 0.35, rise: 1 });
     this.lastHit = e;
     G.main.fx.emit(e.pos.clone().setY(1), { count: crit ? 14 : 6, color: crit ? 0xffdd55 : 0xffffff, speed: 4, life: 0.25, size: 0.3 });
     if (crit) G.main.shake(0.12);
@@ -120,8 +153,8 @@ export class Player extends Entity {
     this.model.update(dt);
     if (this.dead) return;
     this.attackCd -= dt; this.castLock -= dt; this.hitAnimCd -= dt;
-    if (this.pendingHit) { this.pendingHit.t -= dt; if (this.pendingHit.t <= 0) { this.doHit(this.pendingHit.e); this.pendingHit = null; } }
-    G.hp = Math.min(maxHp(), G.hp + dt * (0.3 + stat('vit') * 0.03 + (G.skills.second_wind || 0) * 0.6));
+    if (this.pendingHit) { this.pendingHit.t -= dt; if (this.pendingHit.t <= 0) { const e = this.pendingHit.e; this.pendingHit = null; if (this.ranged) { if (!e.dead) this.shoot(e); } else this.doHit(e); } }
+    G.hp = Math.min(maxHp(), G.hp + dt * (0.3 + stat('vit') * 0.03 + (G.skills.second_wind || 0) * 0.6 + itemBonus('regen')));
     G.mp = Math.min(maxMp(), G.mp + dt * (0.8 + stat('mag') * 0.06) * (1 + (G.skills.arcane_flow || 0) * 0.12));
     if (this.spinT > 0) { this.spinT -= dt; }
     const tg = this.target;
@@ -129,7 +162,7 @@ export class Player extends Entity {
       if (tg.dead || !tg.root.parent) this.target = null;
       else {
         const isEnemy = tg.type === 'enemy';
-        const reach = isEnemy ? 1.4 + tg.pickR * 0.5 : tg.pickR + 1.0;
+        const reach = isEnemy ? (this.ranged ? 9 : 1.4 + tg.pickR * 0.5) : tg.pickR + 1.0;
         if (flatDist(tg.pos, this.pos) <= reach) {
           this.path = [];
           this.face(tg.pos, dt);
@@ -263,6 +296,30 @@ export class Enemy extends Entity {
     this.char.once('Skeletons_Awaken_Floor', { timeScale: 1.6 });
     G.main.fx.emit(this.pos.clone().setY(0.2), { count: 20, color: 0x9a8a70, speed: 2, life: 0.8, size: 0.6, rise: 1 });
   }
+  // damage over time (poison, burning). Stacks by kind: a new application refreshes and keeps the stronger one.
+  applyDot(dps, dur, kind = 'poison') {
+    if (this.dead) return;
+    this.dots = this.dots || {};
+    const o = this.dots[kind];
+    if (!o || o.dps <= dps) this.dots[kind] = { dps, t: dur, tick: 0 };
+    else o.t = Math.max(o.t, dur);
+  }
+  tickDots(dt) {
+    if (!this.dots) return;
+    for (const k in this.dots) {
+      const o = this.dots[k];
+      o.t -= dt; o.tick -= dt;
+      if (o.tick <= 0) {
+        o.tick = 0.5;
+        const dmg = o.dps * 0.5;
+        this.hp -= dmg;
+        if (Settings.damageNumbers) G.main.floatText(this.pos, Math.round(dmg), DMG_COLORS[k] || '#9dff7a', 15, this.pickH * 2);
+        G.main.fx.emit(this.pos.clone().setY(this.pickH), { count: 3, color: k === 'poison' ? 0x77ee33 : k === 'fire' ? 0xff6a1a : 0x9fdcff, speed: 0.8, life: 0.6, size: 0.35, rise: 1.2 });
+        if (this.hp <= 0) { this.die(); return; }
+      }
+      if (o.t <= 0) delete this.dots[k];
+    }
+  }
   takeDamage(d, crit = false, kind = 'phys') {
     if (this.dead) return;
     this.wake();
@@ -317,6 +374,8 @@ export class Enemy extends Entity {
     if (this.model.userData.float) this.model.position.y = Math.sin(this.t * 2.5) * 0.15;
     if (this.data.shape === 'blob') this.model.scale.y = this.model.scale.x * (1 + Math.sin(this.t * 6) * 0.08);
     this.atkCd -= dt; this.slowT -= dt; this.stunT -= dt;
+    this.tickDots(dt);
+    if (this.dead) return;
     const pl = G.player;
     if (!pl) return;
     if (this.dormant) { if (flatDist(pl.pos, this.pos) < 6) this.wake(); return; }
@@ -548,7 +607,7 @@ export class Projectile extends Entity {
     super('proj');
     this.dir = dir; this.dmg = dmg; this.targetType = targetType;
     this.speed = o.speed ?? 16; this.life = o.life ?? 1.4;
-    this.color = color; this.trail = o.trail; this.kind = o.kind || 'fire'; this.explode = o.explode;
+    this.color = color; this.trail = o.trail; this.kind = o.kind || 'fire'; this.explode = o.explode; this.onHit = o.onHit;
     if (o.blade) {
       const b = box(0.08, 0.04, 0.45, 0xdde4ee, 0.4);
       b.lookAt(dir);
@@ -578,7 +637,7 @@ export class Projectile extends Entity {
     for (const n of targets) {
       if (!n || n.dead || !n.root.visible) continue;
       if (flatDist(n.pos, this.pos) < 0.45 + n.pickR * 0.6) {
-        n.takeDamage(this.dmg, false, this.kind);
+        if (this.onHit) this.onHit(n); else n.takeDamage(this.dmg, false, this.kind);
         if (this.explode) for (const e of targets) if (e !== n && !e.dead && flatDist(e.pos, this.pos) < 2.5) e.takeDamage(this.dmg * 0.5, false, 'fire');
         this.impact();
         return;

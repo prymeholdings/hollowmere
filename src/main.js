@@ -32,6 +32,9 @@ const GradeShader = {
     }`,
 };
 export { G } from './state.js';
+import { setItemLook } from './assets.js';
+import { lookOf, starterItem } from './items.js';
+setItemLook(lookOf);
 import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL } from './state.js';
 import { Level } from './level.js';
 import { Player, Pet, Loot } from './entities.js';
@@ -45,6 +48,27 @@ import { sfx, playMusic, unlockAudio } from './audio.js';
 import { Settings, loadSettings } from './settings.js';
 import { CLASSES, SKILLS, PET_COATS, cast, updateZones, clearZones } from './skills.js';
 import { box, sphere, cone } from './util.js';
+
+// The starting outfit matches what was picked at character creation.
+const OUTFIT = { Knight: 'plate', Barbarian: 'furs', Mage: 'robe', Rogue: 'leathers' };
+const HELM_VIS = { Knight_Helmet: 'Knight_Helmet', Barbarian_Hat: 'Barbarian_Hat', Mage_Hat: 'Mage_Hat' };
+export function starterKit(s) {
+  const cls = CLASSES[s.cls];
+  const gear = cls.gear[s.gear || 0] || cls.gear[0];
+  const eq = { weapon: starterItem(gear.weapon[0]), offhand: gear.offhand[0] ? starterItem(gear.offhand[0]) : null, helm: null, armor: null, ring: null, amulet: null };
+  const helmVis = s.hooded ? 'Rogue_Head_Hooded' : HELM_VIS[cls.headgear];
+  if (helmVis && (s.helm !== false || s.hooded)) eq.helm = starterHelm(helmVis);
+  eq.armor = starterOutfit(OUTFIT[s.cls]);
+  return eq;
+}
+function starterHelm(vis) {
+  const t = { Knight_Helmet: ['helm', 'Rusted Helm', 4], Barbarian_Hat: ['horned', 'Rusted Horned Helm', 3], Mage_Hat: ['hat', 'Rusted Hat', 1], Rogue_Head_Hooded: ['hood', 'Rusted Hood', 2] }[vis];
+  return { base: t[1], name: t[1], type: t[0], mat: 'rusted', slot: 'helm', rarity: 0, ilvl: 1, req: 1, armor: t[2], affixes: {}, sockets: 0, gems: [], value: 6 };
+}
+function starterOutfit(type) {
+  const t = { plate: ['Rusted Plate', 7, {}], furs: ['Rusted Furs', 5, { life: 6 }], robe: ['Rusted Robes', 2, { mana: 6 }], leathers: ['Rusted Leathers', 4, { dex: 1 }] }[type];
+  return { base: t[0], name: t[0], type, mat: 'rusted', slot: 'armor', rarity: 0, ilvl: 1, req: 1, armor: t[1], affixes: { ...t[2] }, sockets: 0, gems: [], value: 6 };
+}
 
 function makeFoxPreview(coat) {
   const g = new THREE.Group();
@@ -60,6 +84,8 @@ function makeFoxPreview(coat) {
 }
 
 window.__G = G;
+window.__gen = (lvl, type) => generate(lvl, 0, 0, type);
+window.__CLASSES = CLASSES;
 const HOTKEYS = { q: 'q', w: 'w', e: 'e', r: 'r' };
 
 class Main {
@@ -211,9 +237,9 @@ class Main {
     const s = this.creation;
     const cls = CLASSES[s.cls];
     if (this.preview) this.podium.remove(this.preview.root);
-    const name = s.hooded && cls.alt ? cls.alt : cls.model;
-    this.preview = new CharModel(name, { scale: s.height });
+    this.preview = new CharModel(cls.model, { scale: s.height });
     this.preview.applyLook(cls, s);
+    this.preview.dress(starterKit(s), s, cls);
     if (this.previewPet) this.podium.remove(this.previewPet);
     const coat = (PET_COATS.find((c) => c.key === s.pet) || PET_COATS[0]).color;
     this.previewPet = makeFoxPreview(coat);
@@ -245,7 +271,7 @@ class Main {
     for (const k in G.skills) G.skills[k] = 0;
     Object.assign(G.skills, cls.skills);
     G.hotbar = { ...cls.hotbar };
-    if (G.equipment.weapon) G.equipment.weapon.name = G.equipment.weapon.base = cls.weapon;
+    G.equipment = starterKit(s);
     G.hp = maxHp(); G.mp = maxMp();
     restockShop();
     if (this.podium) { this.scene.remove(this.podium); this.podium = null; this.preview = null; this.previewPet = null; }
