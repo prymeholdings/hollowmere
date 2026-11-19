@@ -12,6 +12,18 @@ const TOWN = ['building_tavern_blue', 'building_market_red', 'building_church_bl
 
 export const Assets = { models: {}, anims: {}, ready: false };
 
+// The web build ships each model gzipped and base64-encoded as .txt (some hosts only serve text files).
+async function fetchModel(loader, url) {
+  if (!globalThis.HM_PACKED) return loader.loadAsync(url);
+  const r = await fetch(url.replace(/\.glb$/, '.txt'));
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const s = atob((await r.text()).trim());
+  const bin = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) bin[i] = s.charCodeAt(i);
+  const ab = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  return loader.parseAsync(ab, '');
+}
+
 export async function loadAll(base, onProgress) {
   const loader = new GLTFLoader();
   const jobs = [
@@ -23,7 +35,7 @@ export async function loadAll(base, onProgress) {
   let done = 0;
   await Promise.all(jobs.map(async ([kind, name, url]) => {
     try {
-      const g = await loader.loadAsync(url);
+      const g = await fetchModel(loader, url);
       g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
       Assets.models[name] = g.scene;
       if (kind === 'char') {

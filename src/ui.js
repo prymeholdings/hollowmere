@@ -1,3 +1,4 @@
+import { isTouch } from "./touch.js";
 import * as THREE from 'three';
 import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg, MAX_LEVEL, socketGem, socketTargets, invalidateBonus } from './state.js';
 import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate, displayName, GEMS, makeGem, GEM_TIERS, maxSockets, upgradeItem, TYPES, typeOf, MATS, classItem } from './items.js';
@@ -60,7 +61,7 @@ export class UI {
         <div id="hud-top-left">
           <div id="hud-name"></div><div id="hud-sub"></div>
           <div id="pet-wrap"><div class="bar pet"><div></div><span></span></div></div>
-          <div id="hud-points" class="hidden">✦ Points to spend: C attributes · K skills</div>
+          <div id="hud-points" class="hidden">✦ Points to spend: ${isTouch() || /[?&]touch=1/.test(location.search) ? "tap Hero / Skills" : "C attributes · K skills"}</div>
           <div id="hud-buffs"></div>
         </div>
         <div id="boss-bar" class="hidden"><div class="bn"></div><div class="bb"><div class="bf"></div><div class="bt"></div><i style="left:33%"></i><i style="left:66%"></i></div></div>
@@ -1054,12 +1055,12 @@ export class UI {
       <button id="m-cont" class="primary" ${hasSave() ? '' : 'disabled'}>Continue</button>
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
-      <button id="m-quit">Quit</button>
+      ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
       <div class="foot">An original action RPG · v0.4 · 3D models by Kay Lousberg (KayKit, CC0) · Music and sound made in code</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };
-    $('#m-quit').onclick = () => window.close();
+    if (window.hm) $('#m-quit').onclick = () => window.close();
   }
   confirmNew() {
     $('#menu').classList.add('hidden');
