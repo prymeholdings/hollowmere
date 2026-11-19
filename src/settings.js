@@ -14,11 +14,11 @@ export const Settings = {
   autoRange: 8,
 };
 export function loadSettings() {
-  const saved = localStorage.getItem(KEY);
+  let saved = null; try { saved = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
   // phones and tablets start on the fastest settings
   if (!saved && typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) Object.assign(Settings, { quality: 'low', renderScale: 0.8, showHelp: false });
   try { Object.assign(Settings, JSON.parse(saved || '{}')); } catch (e) { /* defaults */ }
   syncAudio();
 }
-export function saveSettings() { localStorage.setItem(KEY, JSON.stringify(Settings)); syncAudio(); }
+export function saveSettings() { try { localStorage.setItem(KEY, JSON.stringify(Settings)); } catch (e) { /* storage blocked */ } syncAudio(); }
 function syncAudio() { Audio.vol.master = Settings.master; Audio.vol.music = Settings.music; Audio.vol.sfx = Settings.sfx; applyVolumes(); }
