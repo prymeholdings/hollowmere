@@ -65,9 +65,12 @@ export const petMaxHp = () => (35 + G.lvl * 10) * (1 + 0.15 * G.skills.pet_bond)
 export const xpToNext = () => Math.floor(50 * Math.pow(G.lvl, 1.55));
 export const fameTitle = () => FAME_RANKS[G.fameRank];
 
+export const MAX_LEVEL = 200;
+export const MAX_FLOOR = 100;
 export function addXp(n) {
+  if (G.lvl >= MAX_LEVEL) { G.xp = 0; return; }
   G.xp += n;
-  while (G.xp >= xpToNext()) {
+  while (G.lvl < MAX_LEVEL && G.xp >= xpToNext()) {
     G.xp -= xpToNext();
     G.lvl++; G.statPoints += 5; G.skillPoints += 1;
     G.hp = maxHp(); G.mp = maxMp();
@@ -75,6 +78,7 @@ export function addXp(n) {
     sfx('level');
     G.main?.onLevelUp();
   }
+  if (G.lvl >= MAX_LEVEL) { G.xp = 0; msg(`You have reached the highest level, ${MAX_LEVEL}.`, '#ffd84d'); }
 }
 export function addFame(n) {
   G.fame += n;

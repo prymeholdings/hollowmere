@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G } from './state.js';
+import { G, MAX_FLOOR } from './state.js';
 import { ENEMIES, BOSSES, QUEST_GIVER } from './data.js';
 import { rand, randi, pick, box, cyl, cone, sphere } from './util.js';
 import { generate } from './items.js';
@@ -627,8 +627,8 @@ export class Level {
   populateDungeon() {
     const f = this.floor;
     this.interact('stairs_up', this.startPos.clone().add(new THREE.Vector3(-1.5, 0, -1.5)), { name: f === 1 ? 'Stairs Up to Hollowmere' : `Stairs Up to Floor ${f - 1}` });
-    this.interact('stairs_down', this.downPos, { name: `Stairs Down to Floor ${f + 1}` });
-    const pool = ENEMIES.filter((e) => e.minFloor <= f);
+    if (f < MAX_FLOOR) this.interact('stairs_down', this.downPos, { name: `Stairs Down to Floor ${f + 1}` });
+    const pool = ENEMIES.filter((e) => e.minFloor <= f && (f < 30 || e.minFloor >= f - 45));
     for (let i = 1; i < this.rooms.length; i++) {
       const r = this.rooms[i];
       const packs = 1 + (Math.random() < 0.4 + f * 0.03 ? 1 : 0);

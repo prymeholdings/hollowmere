@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg } from './state.js';
+import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg, MAX_LEVEL } from './state.js';
 import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate } from './items.js';
 import { FAME_STEPS, QUEST_GIVER } from './data.js';
 import { hex, sfx, clamp } from './util.js';
@@ -188,7 +188,7 @@ export class UI {
     $('.orb.hp .txt').textContent = `${Math.ceil(G.hp)} / ${Math.round(maxHp())}`;
     $('.orb.mp .txt').textContent = `${Math.floor(G.mp)} / ${Math.round(maxMp())}`;
     $('#lowhp').style.opacity = hpF < 0.3 ? (0.3 - hpF) * 2.5 * (0.7 + Math.sin(performance.now() / 200) * 0.3) : 0;
-    $('#xpbar div').style.width = (G.xp / xpToNext()) * 100 + '%';
+    $('#xpbar div').style.width = (G.lvl >= MAX_LEVEL ? 100 : (G.xp / xpToNext()) * 100) + '%';
     const pet = G.pet;
     const pb = $('#pet-wrap .bar');
     const formName = { golem: 'Stone Golem', wyrm: 'Ember Wyrm', stag: 'Spirit Stag' }[G.petForm];
@@ -427,7 +427,7 @@ export class UI {
     const d = weaponDamage();
     const cls = CLASSES[G.cls];
     const labels = { str: ['Strength', 'Melee damage'], dex: ['Dexterity', 'Attack speed, crit, dodge'], vit: ['Vitality', 'Life'], mag: ['Magic', 'Spell power, mana'] };
-    let html = `<div style="text-align:center;margin-bottom:8px"><div style="font-size:19px;color:#fff">${G.heroName}</div><div class="muted">Level ${G.lvl} ${cls.title} · ${G.xp} / ${xpToNext()} xp</div><div style="color:#c99bff;font-size:13px">${fameTitle()} (${G.fame}${G.fameRank < FAME_STEPS.length - 1 ? ' / ' + FAME_STEPS[G.fameRank + 1] : ''} fame)</div></div>
+    let html = `<div style="text-align:center;margin-bottom:8px"><div style="font-size:19px;color:#fff">${G.heroName}</div><div class="muted">Level ${G.lvl} ${cls.title} · ${G.lvl >= MAX_LEVEL ? "max level" : G.xp + " / " + xpToNext() + " xp"}</div><div style="color:#c99bff;font-size:13px">${fameTitle()} (${G.fame}${G.fameRank < FAME_STEPS.length - 1 ? ' / ' + FAME_STEPS[G.fameRank + 1] : ''} fame)</div></div>
       <h3><span>Attributes</span><span style="color:#ffd84d">${G.statPoints} points</span></h3>`;
     for (const k of ['str', 'dex', 'vit', 'mag']) html += `<div class="row"><span>${labels[k][0]} <small class="muted">${labels[k][1]}</small></span><span><span class="v">${stat(k)}</span> <button class="small" data-stat="${k}" ${G.statPoints ? '' : 'disabled'}>+</button></span></div>`;
     html += `<h3><span>Combat</span></h3>
@@ -644,14 +644,16 @@ export class UI {
     $('#set-done', body).onclick = () => { this.close('settings'); if (fromMenu) this.showMenu(); };
   }
 
-  choice(title, text, options) {
+  choice(title, text, options, grid = false) {
     this.close('choice');
-    const body = this.panel('choice', title, { left: '50%', top: '26%', width: '440px', transform: 'translateX(-50%)', textAlign: 'center' });
+    const body = this.panel('choice', title, { left: '50%', top: grid ? '16%' : '26%', width: grid ? '560px' : '440px', transform: 'translateX(-50%)', textAlign: 'center' });
     body.appendChild(el('p', '', text));
+    const wrap = grid ? el('div', 'choice-grid') : body;
+    if (grid) body.appendChild(wrap);
     for (const [label, fn] of options) {
       const b = el('button', '', label);
+      wrap.appendChild(b);
       b.onclick = () => { this.close('choice'); fn?.(); };
-      body.appendChild(b);
     }
   }
 

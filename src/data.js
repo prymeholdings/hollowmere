@@ -9,6 +9,17 @@ export const ENEMIES = [
   { name: 'Bone Hexer', shape: 'skel_mage', color: 0x9966ff, tint: 0xd0c0ff, hp: 26, dmg: 9, speed: 2.8, xp: 26, minFloor: 5, ranged: true, boltColor: 0xaa66ff },
   { name: 'Mirewitch', shape: 'wisp', color: 0x8c4dd9, hp: 30, dmg: 9, speed: 2.8, xp: 28, minFloor: 6, ranged: true },
   { name: 'Gravecrawler', shape: 'beast', color: 0x40404d, hp: 36, dmg: 10, speed: 4.2, xp: 26, minFloor: 8 },
+  { name: 'Frostbone Reaver', shape: 'skel_warrior', color: 0x9fd8ff, tint: 0xbfe8ff, emissive: 0x113355, hp: 48, dmg: 10, speed: 3.3, xp: 30, minFloor: 12 },
+  { name: 'Ember Imp', shape: 'wisp', color: 0xff3d1a, hp: 28, dmg: 11, speed: 3.6, xp: 28, minFloor: 15, ranged: true },
+  { name: 'Drowned Thrall', shape: 'skel_minion', color: 0x4d8c80, tint: 0x6fb0a0, hp: 40, dmg: 10, speed: 3.6, xp: 27, minFloor: 18 },
+  { name: 'Venomspitter', shape: 'skel_rogue', color: 0x66cc33, tint: 0x99dd66, emissive: 0x113300, hp: 34, dmg: 12, speed: 3.2, xp: 30, minFloor: 22, ranged: true, boltColor: 0x77ee33 },
+  { name: 'Ironhide Ogre', shape: 'brute', color: 0x5a5a66, tint: 0x8888a0, hp: 90, dmg: 14, speed: 2.7, xp: 44, minFloor: 28 },
+  { name: 'Void Hexer', shape: 'skel_mage', color: 0x3d1a66, tint: 0x6a3d99, emissive: 0x220044, hp: 38, dmg: 13, speed: 2.9, xp: 34, minFloor: 35, ranged: true, boltColor: 0x9933ff },
+  { name: 'Abyssal Hound', shape: 'beast', color: 0x1a0d26, hp: 46, dmg: 13, speed: 4.8, xp: 32, minFloor: 42 },
+  { name: 'Stormcaller', shape: 'wisp', color: 0x66ccff, hp: 40, dmg: 14, speed: 3.0, xp: 36, minFloor: 50, ranged: true },
+  { name: 'Obsidian Knight', shape: 'skel_warrior', color: 0x1a1a1f, tint: 0x33333d, emissive: 0x330800, hp: 70, dmg: 15, speed: 3.3, xp: 42, minFloor: 60 },
+  { name: 'Wellspawn Horror', shape: 'blob', color: 0x2a0d33, hp: 80, dmg: 15, speed: 3.0, xp: 40, minFloor: 70 },
+  { name: 'Deep Tyrant', shape: 'brute', color: 0x330d0d, tint: 0x662222, emissive: 0x330000, hp: 120, dmg: 18, speed: 2.9, xp: 56, minFloor: 82 },
 ];
 export const BOSSES = [
   { name: 'The Drowned Warden', shape: 'skel_warrior', color: 0x33668c, tint: 0x6699cc },

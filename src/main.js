@@ -32,7 +32,7 @@ const GradeShader = {
     }`,
 };
 export { G } from './state.js';
-import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop } from './state.js';
+import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL } from './state.js';
 import { Level } from './level.js';
 import { Player, Pet, Loot } from './entities.js';
 import { UI } from './ui.js';
@@ -310,7 +310,11 @@ class Main {
     this.ui.showHud();
     this.bossMusic = false;
     if (kind === 'dungeon') {
-      if (floor > G.deepest) { G.deepest = floor; if (floor > 1 && floor % 5 === 1) addFame(5 * floor); }
+      if (floor > G.deepest) {
+        G.deepest = floor;
+        if (floor > 1 && floor % 5 === 1) addFame(5 * floor);
+        if (floor % 10 === 0) msg(`Checkpoint reached! You can now start from Floor ${floor} at the Old Well, even after falling.`, '#ffd84d');
+      }
       this.ui.banner(`Floor ${floor}`, floor % 5 === 0 ? 'A guardian stirs in the deep' : 'The Sunken Wells');
       playMusic('dungeon');
     } else { this.ui.banner('Hollowmere', 'A lantern-lit town above the Wells'); playMusic('town'); }
@@ -403,10 +407,14 @@ class Main {
       }
       case 'pond': case 'fish_hole': this.ui.openFishing(); break;
       case 'well': {
+        // Floor 1, plus every checkpoint (10, 20, ...) the hero has reached. Checkpoints are kept forever, even after death.
         const opts = [['Floor 1', () => this.loadLevel('dungeon', 1)]];
-        if (G.deepest > 1) opts.push([`Floor ${G.deepest} (deepest reached)`, () => this.loadLevel('dungeon', G.deepest)]);
+        for (let c = 10; c <= Math.min(G.deepest, MAX_FLOOR); c += 10) opts.push([`Checkpoint: Floor ${c}`, () => this.loadLevel('dungeon', c)]);
         opts.push(['Stay in town', null]);
-        this.ui.choice('The Old Well', 'Cold air rises from the dark. Where will you descend?', opts);
+        const next = Math.min(MAX_FLOOR, (Math.floor(G.deepest / 10) + 1) * 10);
+        const txt = G.deepest >= 10 ? `Cold air rises from the dark. Deepest floor reached: ${G.deepest} of ${MAX_FLOOR}. Every tenth floor is a checkpoint you can always return to.`
+          : `Cold air rises from the dark. Reach Floor ${next} to unlock your first checkpoint.`;
+        this.ui.choice('The Old Well', txt, opts, true);
         break;
       }
       case 'portal':

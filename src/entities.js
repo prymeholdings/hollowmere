@@ -212,12 +212,13 @@ export class Enemy extends Entity {
     this.elite = elite;
     this.boss = boss;
     this.floor = floor;
-    const hpMul = 1 + 0.42 * (floor - 1), dmgMul = 1 + 0.26 * (floor - 1);
+    const f1 = floor - 1;
+    const hpMul = 1 + 0.42 * f1 + 0.004 * f1 * f1, dmgMul = 1 + 0.26 * f1 + 0.0015 * f1 * f1;
     this.maxHp = d.hp * hpMul * (elite ? 2.6 : 1);
     this.hp = this.maxHp;
     this.dmg = d.dmg * dmgMul * (elite ? 1.4 : 1);
     this.speed = d.speed;
-    this.xp = Math.floor(d.xp * (1 + 0.3 * (floor - 1)) * (elite ? 3 : 1));
+    this.xp = Math.floor(d.xp * (1 + 0.35 * f1 + 0.012 * f1 * f1) * (elite ? 3 : 1));
     this.ranged = !!d.ranged;
     const s = boss ? 1.9 : elite ? 1.2 : 1;
     const sk = SKEL[d.shape];

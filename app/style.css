@@ -171,3 +171,5 @@ select { font-family: inherit; background: #0d0a07; color: #f3e2bd; border: 1px 
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
 #toast.bad { background: linear-gradient(#3a1a1a, #240f0f); border-color: #ff6a5a; color: #ffd0c8; box-shadow: 0 6px 24px #000a, 0 0 18px #ff6a5a55; }
 #flash { z-index: 90; pointer-events: none; }
+.choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.choice-grid button { margin: 0; }
