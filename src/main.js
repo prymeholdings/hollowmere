@@ -33,6 +33,7 @@ const GradeShader = {
 };
 export { G } from './state.js';
 import { setItemLook } from './assets.js';
+import { Vortex } from './vortex.js';
 import { Sky, clockText, daylight } from './daynight.js';
 import { petBonus, ensurePets, buildPetModel, PET_SPECIES, newPetRecord, petCoatColor } from './pets.js';
 import { lookOf, starterItem, makeGem } from './items.js';
@@ -322,7 +323,7 @@ class Main {
     const p = new Player();
     let pos = L.startPos.clone();
     if (kind === 'dungeon' && arrive === 'up') pos = L.downPos.clone().add(new THREE.Vector3(1.5, 0, 1.5));
-    if (kind === 'town' && arrive === 'portal') pos = L.portalPos.clone().add(new THREE.Vector3(0, 0, 2));
+    if (kind === 'town' && arrive === 'portal') { pos = L.portalPos.clone().add(new THREE.Vector3(0, 0, 2)); this.emerge = 0.7; }
     if (arrive === 'resume' && loc && kind === 'town') pos = new THREE.Vector3(loc.x, 0, loc.z); // dungeon floors regenerate, so resume at their entrance
     if (!L.walkable(pos)) pos = L.toWorld(...L.nearestFloor(...L.cellOf(pos)));
     p.root.position.copy(pos);
@@ -482,11 +483,45 @@ class Main {
   usePortal() {
     if (!G.level || G.level.kind === 'town') { this.flash('You are already in town'); return; }
     if (G.scrolls <= 0) { this.flash('No Town Portal scrolls (buy them from the merchant)'); return; }
+    if (this.portalSeq) return;
     G.scrolls--;
     G.portalFloor = G.level.floor;
     sfx('blink');
-    this.enterTown('portal');
-    msg(`A portal back to floor ${G.portalFloor} waits beside the well.`, '#99bbff');
+    // tear open a black-hole vortex in front of the hero and get pulled through it
+    const pl = G.player, fwd = new THREE.Vector3(Math.sin(pl.root.rotation.y), 0, Math.cos(pl.root.rotation.y));
+    let at = pl.pos.clone().addScaledVector(fwd, 1.8);
+    if (!G.level.walkable(at)) at = pl.pos.clone();
+    const v = new Vortex({ radius: 1.5 });
+    v.root.position.copy(at).setY(1.9);
+    G.level.root.add(v.root);
+    this.portalSeq = { t: 0, v, from: pl.pos.clone(), at };
+    pl.model.once('Spellcast_Summon', { timeScale: 1.2 });
+    this.fx.flash?.(at.clone().setY(1.4), 0xb088ff, 25, 0.6);
+  }
+  updatePortalSeq(dt) {
+    const s = this.portalSeq, pl = G.player;
+    if (!s) return;
+    s.t += dt;
+    s.v.update(dt, this.camera);
+    if (!pl || pl.dead || !G.level) { s.v.dispose(); this.portalSeq = null; return; }
+    if (Math.random() < dt * 40) {
+      const a = Math.random() * 6.28, r = 2.5 + Math.random();
+      const p = s.at.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.3 + Math.random() * 2.2, Math.sin(a) * r));
+      const vel = s.at.clone().setY(1.9).sub(p).multiplyScalar(2.2);
+      this.fx.emit(p, { count: 1, color: Math.random() < 0.5 ? 0xb088ff : 0xf2e6ff, speed: 0.1, vel, life: 0.5, size: 0.22, gravity: 0, drag: 0 });
+    }
+    if (s.t > 0.6) {
+      const k = Math.min(1, (s.t - 0.6) / 0.9), e = k * k;
+      pl.root.position.set(s.from.x + (s.at.x - s.from.x) * e, 1.5 * e, s.from.z + (s.at.z - s.from.z) * e);
+      pl.root.scale.setScalar(Math.max(0.05, 1 - 0.95 * e));
+      pl.root.rotation.y += dt * (4 + 20 * k);
+      if (G.pet && !G.pet.dead) { G.pet.root.position.lerp(s.at, Math.min(1, dt * 3 * k)); G.pet.root.scale.setScalar(Math.max(0.05, 1 - e)); }
+    }
+    if (s.t >= 1.55) {
+      this.portalSeq = null;
+      this.enterTown('portal');
+      msg(`A portal back to floor ${G.portalFloor} swirls beside the well.`, '#c8a8ff');
+    }
   }
   drinkPotion(kind) {
     this.ui.pressSlot(kind);
@@ -559,7 +594,7 @@ class Main {
     window.addEventListener('keyup', (e) => { this.keys[e.key] = false; if (e.key === 'Tab') this.bigMap = false; });
     window.addEventListener('blur', () => { this.keys = {}; this.holding = false; });
   }
-  canPlay() { return !this.menuMode && G.player && !G.player.dead && !this.ui.anyModal(); }
+  canPlay() { return !this.menuMode && G.player && !G.player.dead && !this.ui.anyModal() && !this.portalSeq; }
 
   groundPoint() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
@@ -651,6 +686,13 @@ class Main {
         tick(dt);
         if (this.holding && this.canPlay()) { this.holdT -= dt; if (this.holdT <= 0) { this.holdT = 0.12; this.click(false); } }
         for (const e of L.entities.slice()) e.update(dt, t);
+        this.updatePortalSeq(dt);
+        if (this.emerge > 0) {
+          this.emerge -= dt;
+          const k = 1 - Math.max(0, this.emerge) / 0.7;
+          G.player.root.scale.setScalar(0.1 + 0.9 * (1 - (1 - k) * (1 - k)));
+          if (G.pet) G.pet.root.scale.setScalar(0.1 + 0.9 * k);
+        }
         updateZones(dt);
         if (!G.player.dead) G.player.hover = this.canPlay() ? this.pick() : null;
         this.fx.update(dt);

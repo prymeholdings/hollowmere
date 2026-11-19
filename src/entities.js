@@ -4,6 +4,7 @@ import { box, sphere, capsule, cyl, cone, humanoid, ring, rand, pick, flatDist, 
 import { itemColor, typeOf, lookOf, displayName, GEMS } from './items.js';
 import { CharModel, prop, findSource, tintMaterial } from './assets.js';
 import { CLASSES, PET_COATS, affinity, burnPct, stunChance } from './skills.js';
+import { Vortex } from './vortex.js';
 import { buildPetModel, petStage, petCoatColor, PET_SPECIES, PET_SKILLS, petRank, ensurePets, addPetXp, petBonus } from './pets.js';
 import { Settings } from './settings.js';
 
@@ -970,12 +971,11 @@ export class Interact extends Entity {
         lc = down ? '#ffd480' : '#99d6ff'; break;
       }
       case 'portal': {
-        this.bob = add(new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.12, 12, 32), new THREE.MeshStandardMaterial({ color: 0x6699ff, emissive: 0x6699ff, emissiveIntensity: 2.5 })));
-        this.bob.position.y = 1.3;
-        const disc = add(new THREE.Mesh(new THREE.CircleGeometry(0.85, 32), new THREE.MeshBasicMaterial({ color: 0x99bbff, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false })));
-        disc.position.y = 1.3;
-        this.disc = disc;
-        lc = '#99bbff'; ly = 2.6; break;
+        this.vortex = new Vortex({ radius: 1.5 });
+        this.vortex.root.position.y = 1.9;
+        add(this.vortex.root);
+        this.pickR = 1.1; this.pickH = 1.4;
+        lc = '#c8a8ff'; ly = 3.0; break;
       }
       case 'chest': {
         this.pickH = 0.4; this.pickR = 0.8;
@@ -1011,13 +1011,11 @@ export class Interact extends Entity {
     this.char?.update(dt);
     if (this.pens) for (const m of this.pens) m.anim(this.t, false, dt, 0);
     if (this.char && !this.pens && G.player && flatDist(G.player.pos, this.pos) < 7) this.face(G.player.pos, dt * 0.3);
-    if (this.bob) {
-      if (this.kind === 'portal') {
-        this.disc.material.opacity = 0.4 + Math.sin(this.t * 3) * 0.15;
-        if (G.main.camera) { this.bob.lookAt(G.main.camera.position); this.disc.lookAt(G.main.camera.position); }
-        if (Math.random() < dt * 20) G.main.fx.emit(this.pos.clone().setY(1.3), { count: 1, color: 0x88aaff, speed: 1.5, life: 0.6, size: 0.3 });
-      } else if (this.kind !== 'relic') { this.bob.rotation.y += dt; this.bob.position.y += Math.sin(this.t * 3) * 0.004; }
+    if (this.vortex) {
+      this.vortex.update(dt, G.main.camera);
+      if (Math.random() < dt * 14) { const a = Math.random() * 6.28; G.main.fx.emit(this.pos.clone().add(new THREE.Vector3(Math.cos(a) * 2.2, 0.2 + Math.random() * 2, Math.sin(a) * 2.2)), { count: 1, color: Math.random() < 0.5 ? 0xb088ff : 0xe8d8ff, speed: 0.2, life: 0.7, size: 0.2, gravity: 0 }); }
     }
+    if (this.bob && this.kind !== 'relic') { this.bob.rotation.y += dt; this.bob.position.y += Math.sin(this.t * 3) * 0.004; }
     if (this.shrineColor && !this.dead && Math.random() < dt * 10) G.main.fx.emit(this.pos.clone().setY(1.6), { count: 1, color: this.shrineColor, speed: 0.5, life: 0.8, size: 0.3, rise: 0.6 });
     if (this.kind === 'relic' && Math.random() < dt * 8) G.main.fx.emit(this.pos.clone().setY(0.6), { count: 1, color: 0xffcc55, speed: 0.4, life: 0.8, size: 0.3, rise: 0.6 });
   }

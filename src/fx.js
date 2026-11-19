@@ -66,6 +66,7 @@ export class FX {
       this.p.push({
         x: pos.x + (Math.random() - 0.5) * spread, y: pos.y + (Math.random() - 0.5) * spread, z: pos.z + (Math.random() - 0.5) * spread,
         vx: Math.cos(a) * sp * (o.flat ? 1 : 0.7), vy: (o.flat ? 0.2 : Math.random()) * sp * up + (o.rise ?? 0), vz: Math.sin(a) * sp * (o.flat ? 1 : 0.7),
+        ...(o.vel ? { vx: o.vel.x, vy: o.vel.y, vz: o.vel.z } : {}),
         life: (o.life ?? 0.7) * (0.6 + Math.random() * 0.6), t: 0,
         size: (o.size ?? 0.5) * (0.6 + Math.random() * 0.8),
         r: c.r, g: c.g, b: c.b, grav: o.gravity ?? 0, drag: o.drag ?? 1.5,
