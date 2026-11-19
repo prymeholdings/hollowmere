@@ -34,6 +34,7 @@ const GradeShader = {
 export { G } from './state.js';
 import { setItemLook } from './assets.js';
 import { Vortex } from './vortex.js';
+import { Pad } from './gamepad.js';
 import { Sky, clockText, daylight } from './daynight.js';
 import { petBonus, ensurePets, buildPetModel, PET_SPECIES, newPetRecord, petCoatColor } from './pets.js';
 import { lookOf, starterItem, makeGem } from './items.js';
@@ -109,6 +110,7 @@ class Main {
     this.flameT = 0;
     this.camFocus = new THREE.Vector3(34, 0, 34);
     this.ui = new UI(this);
+    this.pad = new Pad(this);
     this.clock = new THREE.Clock();
     this.applyQuality();
     this.resize();
@@ -378,7 +380,7 @@ class Main {
     this.ui.floatText(pos, text, color, size, yOff);
   }
   shake(a) { if (Settings.screenShake) this.shakeAmt = Math.min(0.6, this.shakeAmt + a); }
-  hurtFlash(f) { this.ui.hurt(f); if (f > 0.08) this.shake(f * 1.5); }
+  hurtFlash(f) { this.ui.hurt(f); if (f > 0.08) this.shake(f * 1.5); if (this.pad?.active) this.pad.rumble(Math.min(1, 0.25 + f * 2), 90 + f * 300); }
   snapCameraSoft() { /* camera lerps on its own; a quick catch-up after a blink */ this.camCatch = 0.25; }
 
   dropItem(it) {
@@ -566,8 +568,12 @@ class Main {
     if (!id) { this.flash('No skill on this key (press K)'); return; }
     const hv = G.player.hover && G.player.hover.type === 'enemy' ? G.player.hover : null;
     const at = hv ? hv.pos.clone() : this.groundPoint();
+    this.castWith(slot, at, hv);
+  }
+  castWith(slot, at, target) {
+    const id = G.hotbar[slot];
     this.ui.pressSlot(slot);
-    if (cast(id, at, hv)) this.ui.refresh?.();
+    if (cast(id, at, target && target.type === 'enemy' ? target : null)) this.ui.refresh?.();
   }
 
   // ---------------- input ----------------
@@ -678,6 +684,7 @@ class Main {
     const t = this.clock.elapsedTime;
     const L = G.level;
     if (!this.ready) { this.renderer.setClearColor(0x000000); this.renderer.render(this.scene, this.camera); return; }
+    this.pad.update(dt);
     if (this.menuMode) {
       if (this.creating && this.podium) {
         const p = this.podium.position;

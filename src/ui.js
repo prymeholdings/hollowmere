@@ -59,7 +59,7 @@ export class UI {
           <div id="barmid"><div id="hud-auto" title="Auto-attack (V to toggle, click to change)"></div><div id="xpbar"><div></div></div><div id="slots"></div></div>
           <div class="orb mp"><div class="fill"></div><canvas class="orbgl"></canvas><div class="orbframe"></div><div class="txt"></div></div>
         </div>
-        <div id="help">I Inventory · C Character · K Skills · J Quest · Tab Map · Alt Show items · Esc Menu</div>
+        <div id="help">I Inventory · C Character · K Skills · P Pet · J Quest · V Auto-attack · Tab Map · Alt Show items · Esc Menu</div>
       </div>
       <div id="flash"></div>
       <div id="banner"></div>
@@ -259,6 +259,13 @@ export class UI {
     this.slotEls.mp.querySelector('.cnt').textContent = G.mpPotions;
     this.slotEls.scroll.querySelector('.cnt').textContent = G.scrolls;
     $('#help').classList.toggle('hidden', !Settings.showHelp);
+    const padOn = !!this.main.pad?.active;
+    if (padOn !== this.helpPad) {
+      this.helpPad = padOn;
+      const g = (k) => this.main.pad.glyph(k);
+      $('#help').textContent = padOn ? `${g('A')} Attack/Talk · ${g('X')} ${g('Y')} ${g('B')} ${g('LB')} ${g('RB')} Skills · ${g('LT')}/${g('RT')} Potions · ${g('VIEW')} Inventory · D-pad: ◀ Skills ▶ Character ▲ Portal ▼ Auto · L3 Pet · R3 Map · ${g('START')} Menu`
+        : 'I Inventory · C Character · K Skills · P Pet · J Quest · V Auto-attack · Tab Map · Alt Show items · Esc Menu';
+    }
     this.mmTimer -= dt;
     if (this.mmTimer <= 0) { this.mmTimer = 0.12; this.drawMinimap(); }
     if (this.fish) this.updateFishing(dt);
@@ -774,7 +781,7 @@ export class UI {
       <div class="setrow"><span>Auto-attack with</span><select id="set-am"><option value="basic">Basic attack</option>${['rmb', 'q', 'w', 'e', 'r'].map((k) => `<option value="${k}">${k.toUpperCase()} slot${G.hotbar?.[k] ? ': ' + skillName(G.hotbar[k]) : ''}</option>`).join('')}</select></div>
       <div class="setrow"><span>Auto-attack range</span><span><input type="range" min="3" max="14" value="${Settings.autoRange}" id="set-ar"> <span id="sv-ar">${Settings.autoRange}m</span></span></div>
       <div class="muted" style="font-size:12px">With a skill chosen, it is cast whenever it is ready and you have the mana; otherwise you use your basic attack. Moving by clicking always wins.</div>
-      <h3><span>Controls</span></h3><div class="muted" style="line-height:1.6">Left-click: move, attack, pick up, talk · Right-click / Q W E R: skills · 1 / 2: potions · T: town portal · V: auto-attack on/off · P: companion · I: inventory · C: character · K: skills · J: quest · Tab: big map · Alt: show item names · Mouse wheel: zoom · F5: save · Esc: menu</div>
+      <h3><span>Controls</span></h3><div class="muted" style="line-height:1.6">Xbox and PlayStation controllers work everywhere: left stick moves, A/✕ attacks and talks, X/□ Y/△ B/○ LB/L1 RB/R1 cast your skills, LT/RT (L2/R2) drink potions, and in menus the d-pad moves the highlight, A/✕ selects, B/○ goes back, LB/RB switch tabs.<br>Left-click: move, attack, pick up, talk · Right-click / Q W E R: skills · 1 / 2: potions · T: town portal · V: auto-attack on/off · P: companion · I: inventory · C: character · K: skills · J: quest · Tab: big map · Alt: show item names · Mouse wheel: zoom · F5: save · Esc: menu</div>
       <div style="text-align:center;margin-top:12px"><button class="primary" id="set-done">Done</button></div>`;
     $('#set-q', body).value = Settings.quality;
     $('#set-am', body).value = Settings.autoMode;
