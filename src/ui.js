@@ -7,6 +7,7 @@ import { itemIcon, skillIcon } from './icons.js';
 import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, NODE, TIER_LEVEL, canCast, learnBlock, maxRank, isActive, skillName, skillIconKey, treePoints, synergyText } from './skills.js';
 import { Settings, saveSettings } from './settings.js';
 import { Orb3D } from './orbs.js';
+import { clockText } from './daynight.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -41,7 +42,7 @@ export class UI {
         <div id="hud-target" class="hidden"><div id="hud-target-name"></div><div class="bar"><div></div><span></span></div></div>
         <div id="hud-right">
           <div id="mmwrap"><canvas id="minimap" width="208" height="208"></canvas></div>
-          <div id="hud-loc"></div><div id="hud-gold"></div><div id="hud-fame" style="color:#c99bff"></div><div id="hud-quest"></div>
+          <div id="hud-loc"></div><div id="hud-clock"></div><div id="hud-gold"></div><div id="hud-fame" style="color:#c99bff"></div><div id="hud-quest"></div>
         </div>
         <div id="log"></div>
         <div id="hud-bottom">
@@ -213,6 +214,7 @@ export class UI {
     const bk = buffs.map((b) => b[0] + Math.ceil(b[1])).join();
     if (bk !== this._bk) { this._bk = bk; $('#hud-buffs').innerHTML = buffs.map(([ic, t, n]) => `<div class="buff" title="${n}">${skillIcon(ic)}<span>${Math.ceil(t)}</span></div>`).join(''); }
     $('#hud-loc').textContent = G.level.kind === 'town' ? 'Hollowmere' : `Sunken Wells · Floor ${G.level.floor}`;
+    $('#hud-clock').textContent = G.level.kind === 'town' ? clockText() : '';
     $('#hud-gold').textContent = `${G.gold.toLocaleString()} gold`;
     $('#hud-fame').textContent = `Fame: ${fameTitle()}`;
     const q = G.quest;
@@ -867,7 +869,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       <button id="m-quit">Quit</button>
-      <div class="foot">An original action RPG · v0.3 · 3D models by Kay Lousberg (KayKit, CC0) · Music and sound made in code</div>`;
+      <div class="foot">An original action RPG · v0.4 · 3D models by Kay Lousberg (KayKit, CC0) · Music and sound made in code</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };

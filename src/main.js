@@ -33,6 +33,7 @@ const GradeShader = {
 };
 export { G } from './state.js';
 import { setItemLook } from './assets.js';
+import { Sky, clockText, daylight } from './daynight.js';
 import { lookOf, starterItem, makeGem } from './items.js';
 setItemLook(lookOf);
 import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL, weaponDamage, socketGem } from './state.js';
@@ -212,6 +213,7 @@ class Main {
   menuScene() {
     this.clearLevel();
     G.level = new Level(this.scene, 'town', 0);
+    this.sky = new Sky(this.scene);
     this.applyShadowRes();
     this.menuMode = true;
   }
@@ -312,6 +314,7 @@ class Main {
     this.fx.clear();
     clearZones();
     if (G.level) G.level.dispose();
+    if (this.sky) { this.sky.dispose(); this.sky = null; }
     G.level = null; G.player = null; G.pet = null;
   }
 
@@ -321,6 +324,7 @@ class Main {
     G.currentFloor = floor;
     const L = new Level(this.scene, kind, floor);
     G.level = L;
+    if (kind === 'town') this.sky = new Sky(this.scene);
     this.applyShadowRes();
     const p = new Player();
     let pos = L.startPos.clone();
@@ -628,10 +632,18 @@ class Main {
         if (this.preview) { this.preview.update(dt); this.preview.root.rotation.y += dt * 0.25; }
       } else {
         const a = t * 0.05;
-        this.camera.position.set(34 + Math.cos(a) * 30, 20, 34 + Math.sin(a) * 30);
-        this.camera.lookAt(34, 0, 34);
+        this.camera.position.set(44 + Math.cos(a) * 34, 22, 44 + Math.sin(a) * 34);
+        this.camera.lookAt(44, 0, 44);
       }
-      if (L) { L.sun.position.set(54, 40, 44); L.sun.target.position.set(34, 0, 34); }
+      if (L) { L.sun.position.set(64, 40, 54); L.sun.target.position.set(44, 0, 44); }
+      if (L && this.sky) {
+        // the title screen shows a slowly turning evening sky; the creation podium is lit like late afternoon
+        const keep = G.timeOfDay;
+        this.menuT = ((this.menuT ?? 0.66) + dt / 240) % 1;
+        G.timeOfDay = this.creating ? 0.62 : 0.69 + 0.065 * Math.sin(this.menuT * Math.PI * 2);
+        this.sky.update(dt, L, this.creating && this.podium ? this.podium.position : new THREE.Vector3(44, 0, 44), this.creating ? null : this.fx, false);
+        G.timeOfDay = keep;
+      }
       this.ambientFx(dt, t);
       this.fx.update(dt);
       this.render();
@@ -668,6 +680,7 @@ class Main {
       this.camera.lookAt(this.camFocus.clone().add(new THREE.Vector3(0, 0.8, 0)));
       L.sun.position.copy(this.camFocus).add(new THREE.Vector3(14, 26, 10));
       L.sun.target.position.copy(this.camFocus);
+      if (this.sky) this.sky.update(dt, L, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));
       this.ui.update(dt);
       document.body.style.cursor = G.player.hover ? (G.player.hover.type === 'enemy' ? 'crosshair' : 'pointer') : 'default';
     }

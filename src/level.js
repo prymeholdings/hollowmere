@@ -26,6 +26,12 @@ const VILLAGERS = [
   { name: 'Merchant Faye', model: 'Rogue_Hooded', tint: 0xfff0b0, cape: '#c08020', at: [35.5, 41.5], roam: 3, lines: ['Silks from the coast! Well, from the cart.', 'Odessa undercuts me. Do not tell her I said that.', 'Everything is for sale, eventually.'] },
   { name: 'Brin', model: 'Mage', tint: 0xb0d0ff, mode: 'sit', at: [23, 30], ry: Math.PI, lines: ['Lovely day for doing nothing.', 'I counted the clouds. Nineteen.', 'Shh, I am thinking.'] },
   { name: 'Dorran', model: 'Knight', tint: 0xffc0a0, at: [36, 26], roam: 8, lines: ['My roof leaks. Again.', 'You look like someone who fights things.', 'Have you seen my goat?'] },
+  { name: 'Commander Hale', model: 'Knight', mode: 'guard', helm: true, headgear: 'Knight_Helmet', gear: { weapon: ['1H_Sword'], offhand: ['Badge_Shield'] }, cape: '#8c1f1f', at: [54, 13.5], lines: ['The keep has stood for three hundred years. It will stand three hundred more.', 'Every tenth floor, the Wells grow a new heart. Be ready.', 'If you see the Sovereign below, do not bow.'] },
+  { name: 'Guard Osric', model: 'Knight', mode: 'guard', helm: true, headgear: 'Knight_Helmet', gear: { weapon: ['2H_Sword'], offhand: [] }, cape: '#8c1f1f', at: [50.5, 22], ry: Math.PI / 2, lines: ['Barracks are full. Recruits everywhere.', 'Night watch is the worst. The Well sings at night.', 'Halt. Oh, it is you. Carry on.'] },
+  { name: 'Delve the Miner', model: 'Barbarian', tint: 0x9a9080, at: [54, 43], roam: 4, lines: ['We dug too close to the Wells once. Never again.', 'The deep rock glows. Pretty. Dangerous.', 'Gems come from down there, you know. Bring me a radiant one and I will weep.'] },
+  { name: 'Miller Odo', model: 'Knight', tint: 0xf0e0c0, at: [15, 50], roam: 5, lines: ['The wind turns the stones, the stones turn the grain.', 'Bread for the whole town, every morning.', 'At night the sails creak like old bones.'] },
+  { name: 'Builder Mae', model: 'Barbarian', tint: 0xffc890, at: [44, 50], roam: 4, lines: ['The town keeps growing. So do my blisters.', 'One more house and then I am taking a holiday.', 'Hand me that plank? No? Fine.'] },
+  { name: 'Night Watchman Corwin', model: 'Rogue_Hooded', tint: 0xa0a8c0, cape: '#1a1a2a', at: [32, 49.5], roam: 14, lines: ['I keep the lamps lit after dark.', 'The stars look different over the Well.', 'Odd sounds at midnight. Always at midnight.'] },
   { name: 'Ivy', model: 'Rogue', tint: 0xffe0a0, scale: 0.62, speed: 2.4, roam: 10, at: [40, 9], lines: ['Tag, you are it!', 'I can climb the windmill. Almost.', 'Is your sword heavy?'] },
 ];
 
@@ -103,8 +109,8 @@ export class Level {
   }
 
   genTown() {
-    this.alloc(48, 48);
-    this.carve(1, 1, 46, 46);
+    this.alloc(60, 60);
+    this.carve(1, 1, 58, 58);
     this.buildings = [
       { name: 'building_market_red', c: [8, 6.5], s: 6, ry: 0, npc: 'merchant' },
       { name: 'building_tavern_blue', c: [26, 6.5], s: 6.5, ry: 0 },
@@ -128,6 +134,21 @@ export class Level {
       { name: 'building_stage_A', c: [28, 43.5], s: 5, ry: 0 },
       { name: 'building_market_yellow', c: [35.5, 44], s: 5.5, ry: 0 },
       { name: 'building_tower_B_red', c: [44, 44.5], s: 4.5, ry: 0 },
+      // the keep district (east)
+      { name: 'building_castle_blue', c: [54, 7.5], s: 7, ry: 0 },
+      { name: 'building_barracks_red', c: [54.5, 18], s: 6, ry: -Math.PI / 2 },
+      { name: 'building_tower_catapult_red', c: [57, 25.5], s: 4.2, ry: -Math.PI / 2 },
+      { name: 'building_tavern_red', c: [54.5, 31], s: 6, ry: -Math.PI / 2 },
+      { name: 'building_home_A_red', c: [53, 38], s: 5.5, ry: -Math.PI / 2 },
+      { name: 'building_mine_yellow', c: [55, 47.5], s: 6, ry: -Math.PI / 2 },
+      // the mill road (south)
+      { name: 'building_watermill_green', c: [6, 54], s: 6, ry: 0 },
+      { name: 'building_windmill_red', c: [14, 54.5], s: 6, ry: 0 },
+      { name: 'building_market_blue', c: [22, 54], s: 5.5, ry: 0 },
+      { name: 'building_blacksmith_red', c: [30, 54], s: 5.5, ry: 0 },
+      { name: 'building_church_yellow', c: [38, 54], s: 5.5, ry: 0 },
+      { name: 'building_scaffolding', c: [45.5, 54.5], s: 5, ry: 0 },
+      { name: 'building_tower_A_yellow', c: [52, 55], s: 4.5, ry: 0 },
     ];
     this.blocked = [{ x: 4, y: 23, w: 7, h: 5, type: 'pond' }, { x: 16, y: 16, w: 2, h: 2, type: 'well' }];
     this.buildingObjs = [];
@@ -145,7 +166,8 @@ export class Level {
       this.buildingObjs.push(o);
     }
     for (const b of this.blocked) this.carve(b.x, b.y, b.w, b.h, 0);
-    this.trees = [[3, 9], [30, 10], [11, 31], [22, 31], [31, 21], [3, 31], [20, 11], [13, 11], [31, 30], [9, 20], [34, 12], [46, 20], [34, 30], [24, 36], [8, 36], [46, 40], [31, 46], [39, 33], [2, 37], [15, 38]];
+    this.trees = [[3, 9], [30, 10], [11, 31], [22, 31], [31, 21], [3, 31], [20, 11], [13, 11], [31, 30], [9, 20], [34, 12], [46, 20], [34, 30], [24, 36], [8, 36], [46, 40], [31, 46], [39, 33], [2, 37], [15, 38],
+      [47, 4], [47, 28], [58, 13], [58, 36], [51, 44], [47, 47], [2, 47], [10, 47], [26, 47], [36, 47], [58, 52], [19, 58], [34, 58], [2, 57]];
     for (const [x, y] of this.trees) this.cells[this.idx(x, y)] = 0;
     this.startPos = this.toWorld(17, 21);
     this.portalPos = this.toWorld(20, 19);
@@ -487,6 +509,11 @@ export class Level {
     path([[17, 33], [17, 38.5], [30, 39], [40, 38.5]], pw);
     path([[17, 38.5], [8, 39], [4, 39.5]], pw * 0.8);
     path([[40, 20], [33, 20.5], [28.5, 20]], pw * 0.7);
+    path([[40, 11.5], [45, 12], [50, 12.5], [54, 12]], pw);
+    path([[50, 12.5], [50, 22], [50.5, 31], [50, 38], [50, 46], [48, 49.5]], pw);
+    path([[40, 38.5], [44, 41], [46, 46], [48, 49.5]], pw * 0.8);
+    path([[4, 49.5], [14, 49.5], [26, 50], [38, 49.5], [48, 49.5], [54, 50]], pw);
+    path([[17, 38.5], [17, 49.5]], pw * 0.8);
     // farm field
     g.fillStyle = '#6a4e2e'; g.fillRect(toPx(2 * CELL), toPx(33.5 * CELL), toPx(10 * CELL) - toPx(2 * CELL), toPx(37.5 * CELL) - toPx(33.5 * CELL));
     for (let r = 0; r < 9; r++) { g.fillStyle = r % 2 ? '#5a4024' : '#7a9a3a'; g.fillRect(toPx(2.2 * CELL), toPx((33.8 + r * 0.42) * CELL), toPx(9.8 * CELL) - toPx(2.2 * CELL), 5); }
@@ -532,6 +559,22 @@ export class Level {
     outer.rotation.x = -Math.PI / 2; outer.position.set(47, -0.05, 47); outer.receiveShadow = true;
     this.root.add(outer);
     for (const o of this.buildingObjs) this.root.add(o);
+    // warm light spilling from doors and windows after dark
+    const gpos = [];
+    for (const b of this.buildings) {
+      if (/stage|scaffolding|well|bridge|archery|grain|tower_catapult/.test(b.name)) continue;
+      const dx = Math.sin(b.ry), dz = Math.cos(b.ry);
+      const c = new THREE.Vector3(b.c[0] * CELL, 0, b.c[1] * CELL);
+      for (const [off, h] of [[0, 1.2], [-1.1, 2.3], [1.1, 2.3]]) gpos.push(c.x + dx * 2.6 + dz * off, h, c.z + dz * 2.6 - dx * off);
+    }
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(gpos, 3));
+    const gc = document.createElement('canvas'); gc.width = gc.height = 64; const gx = gc.getContext('2d');
+    const grd = gx.createRadialGradient(32, 32, 0, 32, 32, 32); grd.addColorStop(0, 'rgba(255,220,150,1)'); grd.addColorStop(0.3, 'rgba(255,170,80,0.5)'); grd.addColorStop(1, 'rgba(255,140,40,0)');
+    gx.fillStyle = grd; gx.fillRect(0, 0, 64, 64);
+    const gt = new THREE.CanvasTexture(gc); gt.colorSpace = THREE.SRGBColorSpace;
+    this.windowGlow = new THREE.Points(gg, new THREE.PointsMaterial({ map: gt, size: 2.6, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffc070 }));
+    this.root.add(this.windowGlow);
+    this.noAO.push(this.windowGlow);
     // 3D grass and flowers on green areas only
     const gp = this.groundPx;
     const isGrass = (x, z) => {
@@ -586,19 +629,23 @@ export class Level {
       ['resource_lumber', [42, 19.5], 5], ['pallet', [45, 19], 6], ['ladder', [41.5, 13], 5], ['target', [41, 33], 6], ['target', [41, 37], 6], ['bucket_arrows', [42, 35], 7],
       ['crate_open', [33, 41.5], 6], ['crate_long_A', [38, 41.5], 6], ['flag_blue', [26, 41], 7], ['flag_yellow', [30.5, 41], 7], ['sack', [7, 41], 8], ['wheelbarrow', [9.5, 41], 6],
       ['resource_stone', [35, 25], 6], ['barrel', [38.5, 8.5], 6], ['bucket_water', [43, 8.5], 7], ['crate_A_big', [46, 30], 6]];
+    deco.push(['weaponrack', [51, 16], 5], ['weaponrack', [51, 20], 5], ['barrel', [51.5, 27], 6], ['crate_B_big', [52, 28.5], 6], ['flag_red', [51, 5], 7], ['flag_red', [57, 5], 7],
+      ['resource_stone', [52, 45], 6], ['crate_long_A', [52, 50.5], 6], ['resource_lumber', [43.5, 51], 5], ['pallet', [47.5, 51], 6], ['sack', [12, 51.5], 8], ['sack', [13, 51.2], 8], ['wheelbarrow', [19, 51.5], 6],
+      ['barrel', [28, 51.5], 6], ['crate_A_big', [33, 51.5], 6], ['bucket_water', [8.5, 51], 7], ['tent', [26, 46], 5]);
     for (const [n, [x, y], sc] of deco) { this.placeProp(n, this.toWorld(x, y), sc, rand(0, 6)); this.cells[this.idx(Math.round(x), Math.round(y))] = 2; }
     // farm fence
     for (let x = 2.5; x < 10; x += 1.5) { this.placeProp('fence_wood_straight', this.toWorld(x, 33.2), 3.2, 0); this.placeProp('fence_wood_straight', this.toWorld(x, 37.8), 3.2, 0); }
     for (let x = 2.4; x < 10; x += 0.9) for (let z = 34; z < 37.6; z += 0.85) { const c = this.placeProp('tree_single_A', this.toWorld(x + rand(-0.1, 0.1), z), rand(0.9, 1.3), rand(0, 6)); c.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.setHex(0xd8c050); } }); }
     for (let y = 33; y <= 38; y++) for (let x = 2; x <= 10; x++) if (this.cells[this.idx(x, y)] === 1) this.cells[this.idx(x, y)] = 2;
     // lamps
-    this.lamps = [];
-    for (const [x, y] of [[15, 13], [19, 13], [15, 21.5], [19, 21.5], [9, 21], [25, 21], [33, 10], [39, 18], [39, 29], [16, 36.5], [26, 37.5], [36, 37.5], [8, 37.5]]) {
+    this.lamps = []; this.lampBulbs = [];
+    for (const [x, y] of [[15, 13], [19, 13], [15, 21.5], [19, 21.5], [9, 21], [25, 21], [33, 10], [39, 18], [39, 29], [16, 36.5], [26, 37.5], [36, 37.5], [8, 37.5],
+      [48.5, 13], [48.5, 25], [48.5, 37], [10, 48], [24, 48], [36, 48], [47, 48.5]]) {
       const p = this.toWorld(x, y);
       const post = cyl(0.07, 0.09, 2.6, 0x262626); post.position.copy(p).setY(1.3); this.root.add(post);
       const cap = cone(0.3, 0.25, 0x262626, 0, 4); cap.position.copy(p).setY(2.95); this.root.add(cap);
-      const bulb = sphere(0.18, 0xffcc73, 2.5); bulb.position.copy(p).setY(2.7); bulb.castShadow = false; this.root.add(bulb);
-      if (this.lamps.length < 6) { const l = new THREE.PointLight(0xffcc73, 7, 9, 1.5); l.position.copy(p).setY(2.6); this.root.add(l); this.lamps.push(l); }
+      const bulb = sphere(0.18, 0xffcc73, 2.5); bulb.position.copy(p).setY(2.7); bulb.castShadow = false; this.root.add(bulb); this.lampBulbs.push(bulb);
+      if (this.lamps.length < 8) { const l = new THREE.PointLight(0xffcc73, 7, 9, 1.5); l.position.copy(p).setY(2.6); this.root.add(l); this.lamps.push(l); }
     }
   }
 
