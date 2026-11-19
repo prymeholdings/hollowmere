@@ -65,6 +65,14 @@ const TRACKS = {
   menu: { bpm: 70, chords: [[50, 57, 62, 65], [48, 55, 60, 64], [46, 53, 58, 62], [45, 52, 57, 61]], scale: [62, 64, 65, 67, 69, 72, 74], mood: 'warm' },
   town: { bpm: 84, chords: [[50, 57, 62, 65], [48, 55, 60, 67], [46, 53, 58, 65], [48, 55, 60, 64]], scale: [62, 64, 65, 67, 69, 71, 72, 74, 76], mood: 'warm' },
   dungeon: { bpm: 62, chords: [[45, 52, 57, 60], [46, 53, 58, 61], [45, 52, 57, 60], [43, 50, 55, 58]], scale: [57, 58, 60, 62, 64, 65, 69], mood: 'dark' },
+  // new in 0.4: night in town, a track for each depth band, deep and final guardians
+  town_night: { bpm: 58, chords: [[48, 55, 59, 64], [45, 52, 55, 60], [41, 48, 52, 57], [43, 50, 53, 59]], scale: [60, 62, 64, 67, 69, 71, 72, 76], mood: 'night' },
+  crypt: { bpm: 66, chords: [[40, 47, 52, 55], [41, 48, 53, 56], [40, 47, 52, 55], [38, 45, 50, 53]], scale: [52, 53, 55, 57, 59, 60, 64], mood: 'dark', drip: true, pulse: true },
+  abyss: { bpm: 54, chords: [[38, 45, 50, 53], [36, 43, 48, 51], [34, 41, 46, 50], [33, 40, 45, 48]], scale: [50, 51, 53, 55, 57, 58, 62], mood: 'abyss' },
+  ember: { bpm: 88, chords: [[43, 50, 55, 58], [44, 51, 56, 59], [41, 48, 53, 56], [42, 49, 54, 57]], scale: [55, 56, 59, 60, 62, 63, 66, 67], mood: 'tribal' },
+  void: { bpm: 50, chords: [[36, 42, 48, 54], [37, 43, 49, 55], [35, 41, 47, 53], [38, 44, 50, 56]], scale: [48, 50, 52, 54, 56, 58, 60], mood: 'void' },
+  boss_deep: { bpm: 112, chords: [[40, 47, 52, 55], [41, 48, 53, 57], [36, 43, 48, 52], [39, 46, 51, 54]], scale: [52, 53, 55, 58, 59, 60, 63, 64], mood: 'battle', arp: true },
+  final: { bpm: 124, chords: [[38, 45, 50, 53], [34, 41, 46, 50], [36, 43, 48, 52], [37, 44, 49, 52]], scale: [50, 51, 53, 55, 56, 58, 61, 62], mood: 'epic' },
   boss: { bpm: 96, chords: [[45, 52, 57, 60], [46, 53, 58, 62], [41, 48, 53, 57], [44, 51, 56, 59]], scale: [57, 58, 60, 63, 64, 65, 68, 69], mood: 'battle' },
 };
 
@@ -114,8 +122,47 @@ function schedule() {
         voice(t, midi(n) * 2.76, 1.5, { type: 'sine', gain: 0.015, attack: 0.002, release: 1.5, rev: 0.8 });
       }
       if (step === 6 && Math.random() < 0.3) noise(t, 1.5, { gain: 0.02, filter: 400, type: 'bandpass' });
+      if (T.drip && Math.random() < 0.06) { const f = 1200 + Math.random() * 1600; voice(t, f, 0.12, { type: 'sine', gain: 0.03, attack: 0.001, release: 0.12, rev: 0.9 }); voice(t + 0.05, f * 1.5, 0.08, { type: 'sine', gain: 0.015, attack: 0.001, release: 0.08, rev: 0.9 }); }
+      if (T.pulse && step % 4 === 0) voice(t, midi(chord[0] - 24), 0.25, { type: 'sine', gain: 0.1, attack: 0.002, release: 0.25, rev: 0 });
+    } else if (T.mood === 'night') {
+      // soft pad, a music-box melody and distant crickets
+      if (step === 0) for (const n of chord) voice(t, midi(n), spb * 8.5, { type: 'sine', gain: 0.028, attack: 1.2, rev: 0.7, detune: (Math.random() - 0.5) * 8 });
+      if (step === 0) voice(t, midi(chord[0] - 12), spb * 8, { type: 'sine', gain: 0.07, attack: 0.4, rev: 0.3 });
+      if ((step === 0 || step === 3 || step === 5) && Math.random() < 0.75) { const n = T.scale[(bar * 3 + step) % T.scale.length] + 12; voice(t, midi(n), 1.6, { type: 'sine', gain: 0.045, attack: 0.002, release: 1.6, rev: 0.7 }); voice(t, midi(n) * 3, 0.5, { type: 'sine', gain: 0.008, attack: 0.002, release: 0.5, rev: 0.7 }); }
+      if (Math.random() < 0.18) for (let k = 0; k < 3; k++) voice(t + k * 0.05, 4200 + Math.random() * 300, 0.03, { type: 'square', gain: 0.004, attack: 0.001, release: 0.03, filter: 5000, rev: 0.5 });
+    } else if (T.mood === 'abyss') {
+      // the drowned depths: a huge low drone, a wordless choir and slow water swells
+      if (step === 0 && bar % 2 === 0) {
+        voice(t, midi(chord[0] - 24), spb * 17, { type: 'sawtooth', gain: 0.06, attack: 3, filter: 180, rev: 0.4 });
+        for (const n of chord.slice(1)) for (const dt of [-7, 7]) voice(t, midi(n), spb * 16, { type: 'triangle', gain: 0.016, attack: 2.5, filter: 1400, rev: 0.85, detune: dt });
+      }
+      if (step === 4 && bar % 2 === 1) noise(t, 3, { gain: 0.025, filter: 300, type: 'lowpass' });
+      if (Math.random() < 0.07) { const n = T.scale[Math.floor(Math.random() * T.scale.length)]; voice(t, midi(n), 4, { type: 'sine', gain: 0.04, attack: 0.8, release: 3, rev: 0.9 }); }
+    } else if (T.mood === 'tribal') {
+      // ember halls: war drums, a growling bass and a snake-charmer lead
+      if (step === 0 || step === 3 || step === 6 || (step === 7 && bar % 2)) { voice(t, step === 0 ? 55 : 72, 0.3, { type: 'sine', gain: step === 0 ? 0.32 : 0.2, attack: 0.002, release: 0.3, rev: 0.15 }); noise(t, 0.08, { gain: 0.08, filter: 300 }); }
+      if (step === 2 || step === 5) noise(t, 0.06, { gain: 0.07, filter: 3000, type: 'bandpass', q: 3 });
+      if (step % 2 === 0) voice(t, midi(chord[0] - 12), spb * 1.8, { type: 'sawtooth', gain: 0.05, attack: 0.01, filter: 420, rev: 0.1 });
+      if (step === 0 && bar % 2 === 0) for (const n of chord) voice(t, midi(n), spb * 16, { type: 'sawtooth', gain: 0.018, attack: 1.2, filter: 700, rev: 0.6 });
+      if (step % 2 === 1 && Math.random() < 0.45) voice(t, midi(T.scale[(b * 5 + bar) % T.scale.length] + 12), spb * 1.6, { type: 'square', gain: 0.022, attack: 0.02, filter: 1600, rev: 0.4 });
+    } else if (T.mood === 'void') {
+      // the deepest floors: whole-tone shimmer, a heartbeat and reversed swells
+      if (step === 0) for (const n of chord) voice(t, midi(n + 12), spb * 8.5, { type: 'sine', gain: 0.02, attack: spb * 7, release: 0.2, rev: 0.9, detune: (Math.random() - 0.5) * 20 });
+      if (step === 0 || step === 1) voice(t, 48, 0.22, { type: 'sine', gain: step === 0 ? 0.2 : 0.13, attack: 0.003, release: 0.22, rev: 0.05 });
+      if (Math.random() < 0.09) { const n = T.scale[Math.floor(Math.random() * T.scale.length)] + 24; voice(t, midi(n), 2.5, { type: 'triangle', gain: 0.02, attack: 0.002, release: 2.5, rev: 0.95, detune: 30 }); }
+      if (step === 4 && Math.random() < 0.3) noise(t, 2.5, { gain: 0.02, filter: 2200, type: 'bandpass', q: 6 });
+    } else if (T.mood === 'epic') {
+      // the Hollow King: choir stabs, double-kick drums and a driving ostinato
+      if (step === 0) for (const n of chord) for (const dt of [-9, 0, 9]) voice(t, midi(n), spb * 8, { type: 'sawtooth', gain: 0.016, attack: 0.08, filter: 1800, rev: 0.6, detune: dt });
+      voice(t, midi(chord[0] - 12), spb * 0.8, { type: 'sawtooth', gain: 0.07, attack: 0.004, filter: 600, rev: 0 });
+      voice(t + spb / 2, midi(chord[0] - 12), spb * 0.4, { type: 'sawtooth', gain: 0.05, attack: 0.004, filter: 600, rev: 0 });
+      if (step % 2 === 0) { voice(t, 58, 0.28, { type: 'sine', gain: 0.32, attack: 0.002, release: 0.28, rev: 0.05 }); noise(t, 0.06, { gain: 0.1, filter: 180 }); }
+      if (step === 2 || step === 6) { noise(t, 0.22, { gain: 0.18, filter: 2400, type: 'bandpass' }); voice(t, 190, 0.15, { type: 'triangle', gain: 0.08, attack: 0.002, release: 0.15 }); }
+      voice(t, midi(T.scale[[0, 2, 4, 2, 5, 4, 2, 1][step]] + 12), spb * 0.9, { type: 'square', gain: 0.02, attack: 0.005, filter: 2400, rev: 0.25 });
+      if (step === 0 && bar % 4 === 3) noise(t, 1.5, { gain: 0.06, filter: 5000, type: 'highpass' });
     } else {
       if (step === 0) for (const n of chord) voice(t, midi(n), spb * 8, { type: 'sawtooth', gain: 0.03, attack: 0.1, filter: 1200, rev: 0.3 });
+      if (T.arp) voice(t, midi(chord[[0, 1, 2, 3, 2, 1, 2, 3][step]] + 12), spb * 0.9, { type: 'square', gain: 0.022, attack: 0.004, filter: 2600, rev: 0.2 });
       voice(t, midi(chord[0] - 12), spb * 0.9, { type: 'sawtooth', gain: 0.06, attack: 0.005, filter: 500, rev: 0 });
       if (step === 0 || step === 3 || step === 6) { voice(t, 60, 0.35, { type: 'sine', gain: 0.35, attack: 0.002, release: 0.35, rev: 0.1 }); noise(t, 0.12, { gain: 0.15, filter: 200 }); }
       if (step === 4) noise(t, 0.2, { gain: 0.15, filter: 2500, type: 'bandpass' });

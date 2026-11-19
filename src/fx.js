@@ -125,6 +125,33 @@ export class FX {
     this.scene.add(g);
     this.meshes.push({ m: g, t: 0, dur: 1.2, mat, upd: (k) => { g.scale.y = Math.min(1, k * 8); mat.opacity = k > 0.7 ? 0.9 * (1 - (k - 0.7) / 0.3) : 0.9; } });
   }
+  // a danger zone on the ground that fills up, then calls onDone (boss attacks)
+  telegraph(pos, radius, dur, color = 0xff3322, onDone) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
+    const edge = new THREE.Mesh(new THREE.RingGeometry(radius * 0.94, radius, 48), mat);
+    const fill = new THREE.Mesh(new THREE.CircleGeometry(radius, 48), mat.clone());
+    fill.material.opacity = 0.28;
+    for (const m of [edge, fill]) { m.rotation.x = -Math.PI / 2; g.add(m); }
+    edge.position.y = 0.09; fill.position.y = 0.08;
+    g.position.set(pos.x, 0, pos.z);
+    this.scene.add(g);
+    this.meshes.push({ m: g, t: 0, dur, mat, done: () => { fill.material.dispose(); onDone?.(); }, upd: (k) => { fill.scale.setScalar(Math.max(0.01, k)); mat.opacity = 0.35 + 0.35 * Math.abs(Math.sin(k * 14)); } });
+    return g;
+  }
+  // a line telegraph (charges)
+  lane(from, to, width, dur, color = 0xff3322, onDone) {
+    const len = Math.hypot(to.x - from.x, to.z - from.z);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(width, len), mat);
+    m.rotation.x = -Math.PI / 2; m.rotation.z = -Math.atan2(to.x - from.x, to.z - from.z) + Math.PI;
+    m.position.set((from.x + to.x) / 2, 0.09, (from.z + to.z) / 2);
+    m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(to.x - from.x, to.z - from.z), 0);
+    const g = new THREE.Group(); g.add(m);
+    this.scene.add(g);
+    this.meshes.push({ m: g, t: 0, dur, mat, done: onDone, upd: (k) => { mat.opacity = 0.2 + 0.35 * Math.abs(Math.sin(k * 12)); } });
+    return g;
+  }
   clear() {
     for (const o of this.meshes) this.scene.remove(o.m);
     this.meshes = [];
@@ -173,7 +200,7 @@ export class FX {
       const o = this.meshes[i];
       o.t += dt;
       o.upd(Math.min(1, o.t / o.dur), dt);
-      if (o.t >= o.dur) { this.scene.remove(o.m); o.m.traverse((c) => c.geometry?.dispose()); o.mat?.dispose(); this.meshes.splice(i, 1); }
+      if (o.t >= o.dur) { o.done?.(); this.scene.remove(o.m); o.m.traverse((c) => c.geometry?.dispose()); o.mat?.dispose(); this.meshes.splice(i, 1); }
     }
     for (const L of this.lights) {
       L.t += dt;

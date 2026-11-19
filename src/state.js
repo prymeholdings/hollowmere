@@ -32,7 +32,7 @@ export function reset() {
     },
     backpack: [], deepest: 0, portalFloor: 0, quest: null, questOffer: null,
     petName: 'Pip', petSpecies: 'fox', pets: null, petForm: '', petFormTime: 0, petAwayTime: 0, petPendingGold: 0,
-    shopStock: [], currentFloor: 0, kills: 0, fishCaught: 0, fishLuck: 0, buffs: {}, timeOfDay: 0.34,
+    shopStock: [], currentFloor: 0, kills: 0, fishCaught: 0, fishLuck: 0, wellsCleared: 0, buffs: {}, timeOfDay: 0.34,
   });
   G.hp = maxHp(); G.mp = maxMp();
 }
@@ -266,7 +266,7 @@ export function restockShop() {
 }
 
 // saving
-const SAVE_FIELDS = ['heroName', 'cls', 'look', 'hotbar', 'lvl', 'xp', 'statPoints', 'skillPoints', 'base', 'skills', 'gold', 'fame', 'fameRank', 'hp', 'mp', 'hpPotions', 'mpPotions', 'scrolls', 'equipment', 'backpack', 'deepest', 'portalFloor', 'quest', 'questOffer', 'petName', 'petForm', 'petFormTime', 'shopStock', 'kills', 'fishCaught', 'fishLuck', 'timeOfDay', 'petSpecies', 'pets'];
+const SAVE_FIELDS = ['heroName', 'cls', 'look', 'hotbar', 'lvl', 'xp', 'statPoints', 'skillPoints', 'base', 'skills', 'gold', 'fame', 'fameRank', 'hp', 'mp', 'hpPotions', 'mpPotions', 'scrolls', 'equipment', 'backpack', 'deepest', 'portalFloor', 'quest', 'questOffer', 'petName', 'petForm', 'petFormTime', 'shopStock', 'kills', 'fishCaught', 'fishLuck', 'wellsCleared', 'timeOfDay', 'petSpecies', 'pets'];
 export let lastSaved = 0;
 function readSaves() {
   const out = [];

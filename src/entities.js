@@ -7,6 +7,7 @@ import { CLASSES, PET_COATS, affinity, burnPct, stunChance } from './skills.js';
 import { Vortex } from './vortex.js';
 import { buildPetModel, petStage, petCoatColor, PET_SPECIES, PET_SKILLS, petRank, ensurePets, addPetXp, petBonus } from './pets.js';
 import { Settings } from './settings.js';
+import { ENEMIES } from './data.js';
 
 const tmp = new THREE.Vector3();
 const DMG_COLORS = { phys: '#ffffff', fire: '#ffa040', frost: '#9fdcff', storm: '#c6b8ff', poison: '#9dff7a' };
@@ -258,7 +259,7 @@ export class Enemy extends Entity {
     const s = boss ? 1.9 : elite ? 1.2 : 1;
     const sk = SKEL[d.shape];
     if (sk) {
-      this.char = new CharModel(sk.model, { scale: 0.72 * s * (d.shape === 'brute' ? 1.25 : 1), tint: d.tint, emissive: boss || elite ? (boss ? 0x551100 : 0x332200) : d.emissive, emissiveIntensity: 0.5 });
+      this.char = new CharModel(sk.model, { scale: 0.72 * s * (d.shape === 'brute' ? 1.25 : 1), tint: d.tint, emissive: boss || elite ? (boss ? (d.final ? 0x3a0a7a : 0x551100) : 0x332200) : d.emissive, emissiveIntensity: 0.5 });
       if (sk.hero) this.char.setGear(true, true);
       if (sk.weapon) this.char.attach(sk.weapon);
       if (sk.shield) this.char.attach(sk.shield, true);
@@ -387,11 +388,24 @@ export class Enemy extends Entity {
     const pl = G.player;
     if (!pl) return;
     if (this.dormant) { if (flatDist(pl.pos, this.pos) < 6) this.wake(); return; }
+    if (this.charge) {
+      // boss charge: rush along the telegraphed lane, hitting whatever is in the way once
+      const c = this.charge; c.t -= dt;
+      const step = new THREE.Vector3(c.to.x - this.pos.x, 0, c.to.z - this.pos.z);
+      const len = step.length();
+      if (len > 0.05) { step.multiplyScalar(Math.min(1, (dt * 24) / len)); this.pos.add(step); this.face(c.to, dt * 4); }
+      this.char?.play('Running_C', 0.1, 2);
+      if (!c.hit && G.player && flatDist(G.player.pos, this.pos) < 1.4) { c.hit = true; G.player.takeDamage(this.dmg * 1.6); G.main.shake(0.4); }
+      G.main.fx.emit(this.pos.clone().setY(0.3), { count: 2, color: 0x8a7a60, speed: 1, life: 0.5, size: 0.6, rise: 0.4 });
+      if (c.t <= 0 || len < 0.3) this.charge = null;
+      return;
+    }
     if (this.stunT > 0) { this.char?.play('Idle'); return; }
     const tg = this.pickTarget();
     if (!tg) { this.char?.play('Idle'); return; }
     const dist = flatDist(tg.pos, this.pos);
     if (!this.aggro && flatDist(pl.pos, this.pos) < 9) this.aggro = true;
+    if (this.boss && this.aggro && this.bossThink(dt, tg)) return;
     if (!this.aggro) { this.char?.play('Idle'); if (!this.char) this.model.rotation.y = Math.sin(this.t * 0.5) * 0.5; return; }
     if (dist > 30) { this.aggro = false; return; }
     const range = this.ranged ? 7 : 1.1 + this.pickR * 0.7 + (tg.pickR || 0.5) * 0.4;
@@ -495,6 +509,165 @@ export class Ally extends Entity {
     this.char.play(moving ? 'Running_C' : 'Idle', 0.2);
   }
 }
+
+// ---------------------------------------------------------------- boss abilities
+// Each guardian has a kit. Attacks are telegraphed on the ground; at 66% and 33% life it enters a new phase
+// (faster, summons help, new attacks), and after a long fight it enrages.
+const BOSS_KITS = {
+  'The Drowned Warden': { kit: ['slam', 'charge', 'slam', 'summon'], color: 0x4a9ad8, adds: ['skel_minion', 'skel_warrior'] },
+  'Mother of Cinders': { kit: ['nova', 'meteors', 'nova', 'summon'], color: 0xff5522, adds: ['skel_mage', 'wisp'] },
+  'Graveroot Colossus': { kit: ['quake', 'slam', 'charge', 'summon'], color: 0x9a7a4a, adds: ['brute', 'beast'] },
+  'The Lantern-Eater': { kit: ['charge', 'nova', 'meteors', 'summon'], color: 0x8a5aff, adds: ['wisp', 'skel_rogue'] },
+  'The Hollow King': { kit: ['nova', 'meteors', 'charge', 'quake', 'summon', 'vortex'], color: 0xa060ff, adds: ['skel_warrior', 'skel_mage', 'wisp'] },
+};
+function hurtNear(pos, r, dmg, kind = 'phys') {
+  const pl = G.player;
+  if (pl && !pl.dead && flatDist(pl.pos, pos) < r + 0.3) pl.takeDamage(dmg, kind);
+  const pet = G.pet;
+  if (pet && !pet.dead && pet.root.visible && flatDist(pet.pos, pos) < r + 0.3) pet.takeDamage(dmg * 0.6);
+}
+Enemy.prototype.bossThink = function (dt, tg) {
+  const K = BOSS_KITS[this.data.name] || BOSS_KITS['The Drowned Warden'];
+  const fx = G.main.fx;
+  const b = this.bb || (this.bb = { cd: 2.5, phase: 1, fightT: 0, enraged: false, castT: 0, step: 0 });
+  b.fightT += dt;
+  // phase changes
+  const frac = this.hp / this.maxHp;
+  const want = frac < 0.33 ? 3 : frac < 0.66 ? 2 : 1;
+  if (want > b.phase) {
+    b.phase = want;
+    this.speed *= 1.15;
+    b.castT = 1.3; b.cd = 1.6;
+    this.char?.once('Spellcast_Raise', { timeScale: 1 });
+    fx.ring(this.pos, K.color, 4, 0.8); fx.flash(this.pos, K.color, 40, 0.8); G.main.shake(0.5);
+    G.main.ui.banner(this.data.name, b.phase === 2 ? 'grows furious!' : 'is desperate - beware!');
+    sfx('nova');
+    this.bossSummon(K, 1 + b.phase);
+  }
+  if (!b.enraged && b.fightT > 110) {
+    b.enraged = true; this.dmg *= 1.5; this.speed *= 1.25;
+    msg(`${this.data.name} is ENRAGED!`, '#ff4433'); G.main.ui.banner(this.data.name, 'ENRAGED');
+    this.char?.setTint?.(0xff3322);
+  }
+  if (b.enraged && Math.random() < dt * 12) fx.emit(this.pos.clone().setY(1.5), { count: 1, color: 0xff3322, speed: 0.8, life: 0.6, size: 0.5, rise: 1.5 });
+  if (b.vortex) this.bossVortexTick(dt);
+  // while winding up an attack the boss stands still
+  if (b.castT > 0) { b.castT -= dt; this.face(tg.pos, dt * 2); this.char?.play('Idle'); return true; }
+  b.cd -= dt;
+  if (b.cd > 0) return false;
+  const pool = K.kit.filter((a) => (a !== 'summon' || b.phase >= 2) && (a !== 'vortex' || b.phase >= 3) && (a !== 'meteors' || b.phase >= 2 || this.data.name === 'Mother of Cinders'));
+  const act = pool[b.step++ % pool.length];
+  b.cd = (b.phase === 3 ? 3.2 : b.phase === 2 ? 4.2 : 5.2) * (b.enraged ? 0.7 : 1);
+  const pl = G.player, D = this.dmg;
+  switch (act) {
+    case 'slam': {
+      const at = tg.pos.clone(), r = 2.6 + b.phase * 0.3;
+      b.castT = 1.1;
+      this.char?.once('2H_Melee_Attack_Spin', { timeScale: 0.9 });
+      fx.telegraph(at, r, 1.1, K.color === 0xff5522 ? 0xff5522 : 0xff3322, () => { if (this.dead) return; fx.explosion(at, K.color, r); G.main.shake(0.35); hurtNear(at, r, D * 1.8); sfx('boom'); });
+      break;
+    }
+    case 'quake': {
+      b.castT = 1.4;
+      this.char?.once('2H_Melee_Attack_Chop', { timeScale: 0.7 });
+      const n = 5 + b.phase * 2;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + Math.random() * 0.3, rr = 2.5 + Math.random() * 3.5;
+        const at = this.pos.clone().add(new THREE.Vector3(Math.cos(a) * rr, 0, Math.sin(a) * rr));
+        fx.telegraph(at, 1.6, 1.0 + i * 0.08, 0xff3322, () => { if (this.dead) return; fx.explosion(at, K.color, 1.6); hurtNear(at, 1.6, D * 1.2); });
+      }
+      fx.telegraph(this.pos.clone(), 2.2, 1.4, 0xff3322, () => { if (this.dead) return; G.main.shake(0.4); hurtNear(this.pos, 2.2, D * 1.5); fx.ring(this.pos, K.color, 3); });
+      break;
+    }
+    case 'charge': {
+      const from = this.pos.clone(), dir = tg.pos.clone().sub(from).setY(0).normalize();
+      let len = Math.min(11, flatDist(tg.pos, from) + 3), to = from.clone().addScaledVector(dir, len);
+      while (len > 1 && !G.level.lineClear(from, to, 0.3)) { len -= 1; to = from.clone().addScaledVector(dir, len); }
+      b.castT = 0.9;
+      fx.lane(from, to, 1.8, 0.9, 0xff3322, () => { if (this.dead) return; this.charge = { to, t: 0.45, hit: false }; });
+      this.char?.once('2H_Melee_Attack_Stab', { timeScale: 0.8 });
+      break;
+    }
+    case 'nova': {
+      b.castT = 0.7;
+      this.char?.once('Spellcast_Long', { timeScale: 1.2 });
+      const waves = b.phase >= 2 ? 2 : 1, n = 10 + b.phase * 3;
+      for (let w = 0; w < waves; w++) setTimeout(() => {
+        if (this.dead || !G.level) return;
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2 + w * (Math.PI / n);
+          const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+          const p = new Projectile(dir, D * 0.8, 'ally', K.color, { trail: K.color, speed: 7, kind: 'fire', size: 0.28 });
+          p.root.position.copy(this.pos).addScaledVector(dir, 1.0);
+          G.level.add(p);
+        }
+        fx.ring(this.pos, K.color, 1.5); sfx('fire');
+      }, 500 + w * 550);
+      break;
+    }
+    case 'meteors': {
+      b.castT = 0.8;
+      this.char?.once('Spellcast_Summon', { timeScale: 1.1 });
+      const n = 3 + b.phase * 2;
+      for (let i = 0; i < n; i++) {
+        const at = pl.pos.clone().add(new THREE.Vector3(rand(-4, 4), 0, rand(-4, 4)));
+        if (i === 0) at.copy(pl.pos);
+        fx.telegraph(at, 1.8, 1.2 + i * 0.15, 0xff6a1a, () => { if (this.dead || !G.level) return; fx.explosion(at, 0xff6a1a, 1.8); hurtNear(at, 1.8, D * 1.4, 'fire'); sfx('boom'); });
+      }
+      break;
+    }
+    case 'summon': this.bossSummon(K, 1 + b.phase); b.castT = 1.0; this.char?.once('Spellcast_Raise'); break;
+    case 'vortex': {
+      if (b.vortex) break;
+      b.castT = 1.2;
+      const at = this.pos.clone().lerp(pl.pos, 0.5);
+      const v = new Vortex({ radius: 2.2, cIn: 0xb070ff, cOut: 0x1a0040 });
+      v.root.position.copy(at).setY(1.6);
+      G.level.root.add(v.root);
+      b.vortex = { v, at, t: 5.5 };
+      msg('The Hollow King tears open the void!', '#c8a8ff');
+      break;
+    }
+  }
+  return b.castT > 0;
+};
+Enemy.prototype.bossVortexTick = function (dt) {
+  const V = this.bb.vortex, pl = G.player;
+  V.v.update(dt, G.main.camera);
+  V.t -= dt;
+  if (V.t > 0.6 && pl && !pl.dead && !this.dead) {
+    const d = flatDist(pl.pos, V.at);
+    if (d > 0.4 && d < 12) {
+      const pull = new THREE.Vector3(V.at.x - pl.pos.x, 0, V.at.z - pl.pos.z).normalize().multiplyScalar(dt * 2.4);
+      const np = pl.pos.clone().add(pull);
+      if (G.level.walkable(np)) pl.pos.copy(np);
+    }
+    V.tick = (V.tick || 0) - dt;
+    if (d < 2.4 && V.tick <= 0) { V.tick = 0.5; pl.takeDamage(this.dmg * 0.5, 'void'); }
+  }
+  if (V.t <= 0.6) V.v.close();
+  if (V.t <= 0 || this.dead) {
+    G.main.fx.explosion(V.at, 0xa060ff, 3);
+    V.v.dispose();
+    this.bb.vortex = null;
+  }
+};
+Enemy.prototype.bossSummon = function (K, n) {
+  const alive = G.level.entities.filter((e) => e.type === 'enemy' && !e.dead && e.summoned).length;
+  n = Math.min(n, 8 - alive);
+  const pool = ENEMIES.filter((e) => e.minFloor <= this.floor && K.adds.includes(e.shape));
+  const fallback = ENEMIES.filter((e) => e.minFloor <= this.floor);
+  for (let i = 0; i < n; i++) {
+    const d = pick(pool.length ? pool : fallback);
+    const e = new Enemy(d, this.floor, false, false);
+    const a = Math.random() * Math.PI * 2;
+    let at = this.pos.clone().add(new THREE.Vector3(Math.cos(a) * 2.5, 0, Math.sin(a) * 2.5));
+    if (!G.level.walkable(at)) at = this.pos.clone();
+    e.root.position.copy(at); e.aggro = true; e.summoned = true; e.xp = Math.ceil(e.xp * 0.3);
+    G.level.add(e);
+    G.main.fx.emit(at.clone().setY(0.5), { count: 24, color: K.color, speed: 2, life: 0.7, size: 0.5, rise: 1.2 });
+  }
+};
 
 // ---------------------------------------------------------------- Pet
 export class Pet extends Entity {

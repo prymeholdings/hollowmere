@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G, MAX_FLOOR } from './state.js';
-import { ENEMIES, BOSSES, QUEST_GIVER } from './data.js';
+import { ENEMIES, BOSSES, QUEST_GIVER, FINAL_BOSS } from './data.js';
 import { rand, randi, pick, box, cyl, cone, sphere } from './util.js';
 import { generate, randomGem } from './items.js';
 import { Enemy, Interact, Loot, Villager } from './entities.js';
@@ -708,8 +708,10 @@ export class Level {
       }
     }
     if (f % 5 === 0) {
-      const b = { ...BOSSES[(f / 5 - 1) % BOSSES.length], hp: 260, dmg: 14, speed: 3.0, xp: 220 };
+      const fin = f >= MAX_FLOOR;
+      const b = fin ? { ...FINAL_BOSS, hp: 260 * 4, dmg: 14 * 1.4, speed: 3.2, xp: 220 * 10 } : { ...BOSSES[(f / 5 - 1) % BOSSES.length], hp: 260, dmg: 14, speed: 3.0, xp: 220 };
       const be = new Enemy(b, f, false, true);
+      if (fin) be.root.scale.setScalar(1.35);
       be.root.position.copy(this.downPos).add(new THREE.Vector3(2, 0, 2));
       this.add(be);
     }
@@ -735,6 +737,7 @@ export class Level {
     let n = Math.random() < 0.17 ? 1 : 0;
     if (elite) n = 2;
     if (boss) n = 4;
+    if (boss && f >= MAX_FLOOR) { n = 7; for (let i = 0; i < 3; i++) drops.push({ item: generate(f + 2, mf + 200, 3) }); }
     for (let i = 0; i < n; i++) drops.push({ item: generate(f + randi(0, 1), mf + (boss ? 100 : 0), boss && i === 0 ? 2 : elite ? 1 : 0) });
     if (Math.random() < 0.09) drops.push({ potion: Math.random() < 0.65 ? 'hp' : 'mp' });
     // gems: rare from regular monsters, likely from champions, guaranteed from guardians

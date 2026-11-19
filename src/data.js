@@ -27,6 +27,8 @@ export const BOSSES = [
   { name: 'Graveroot Colossus', shape: 'brute', color: 0x59472e, tint: 0xaa8866 },
   { name: 'The Lantern-Eater', shape: 'skel_warrior', color: 0x261f33, tint: 0x554466 },
 ];
+// the guardian at the bottom of the Wells (floor 100)
+export const FINAL_BOSS = { name: 'The Hollow King', shape: 'skel_mage', color: 0x6a2aff, tint: 0x6a4aa0, ranged: true, boltColor: 0xa060ff, final: true };
 export const QUEST_GIVER = 'Warden Ilsa Corvane';
 export const FAME_STEPS = [0, 40, 120, 300, 600, 1000, 1600, 2500, 4000];
 export const FAME_RANKS = ['Unknown', 'Local Curiosity', 'Well-Spoken Of', 'Trusted Delver', 'Hero of Hollowmere', 'Wellbreaker', 'Legend of the Deep', 'Myth-Touched', 'Undying Name'];

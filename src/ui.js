@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg, MAX_LEVEL, socketGem, socketTargets, invalidateBonus } from './state.js';
 import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate, displayName, GEMS, makeGem, GEM_TIERS, maxSockets, upgradeItem, TYPES, typeOf, MATS, classItem } from './items.js';
 import { FAME_STEPS, QUEST_GIVER } from './data.js';
-import { hex, sfx, clamp } from './util.js';
+import { hex, sfx, clamp, flatDist } from './util.js';
 import { itemIcon, skillIcon } from './icons.js';
 import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, NODE, TIER_LEVEL, canCast, learnBlock, maxRank, isActive, skillName, skillIconKey, treePoints, synergyText } from './skills.js';
 import { Settings, saveSettings } from './settings.js';
@@ -48,6 +48,7 @@ export class UI {
           <div id="hud-points" class="hidden">✦ Points to spend: C attributes · K skills</div>
           <div id="hud-buffs"></div>
         </div>
+        <div id="boss-bar" class="hidden"><div class="bn"></div><div class="bb"><div class="bf"></div><div class="bt"></div><i style="left:33%"></i><i style="left:66%"></i></div></div>
         <div id="hud-target" class="hidden"><div id="hud-target-name"></div><div class="bar"><div></div><span></span></div></div>
         <div id="hud-right">
           <div id="mmwrap"><canvas id="minimap" width="208" height="208"></canvas></div>
@@ -226,11 +227,21 @@ export class UI {
     $('#hud-loc').textContent = G.level.kind === 'town' ? 'Hollowmere' : `Sunken Wells · Floor ${G.level.floor}`;
     $('#hud-clock').textContent = G.level.kind === 'town' ? clockText() : '';
     this.updateAutoChip();
+    const boss = G.level.kind === 'dungeon' && G.level.entities.find((e) => e.type === 'enemy' && e.boss && !e.dead && e.aggro && flatDist(e.pos, G.player.pos) < 24);
+    const bb = $('#boss-bar');
+    bb.classList.toggle('hidden', !boss);
+    if (boss) {
+      const ph = boss.bb?.phase || 1;
+      bb.querySelector('.bn').innerHTML = `${boss.data.name}${boss.bb?.enraged ? ' <span style="color:#ff4433">· ENRAGED</span>' : ''} <small>Phase ${ph} / 3</small>`;
+      bb.querySelector('.bf').style.width = clamp(boss.hp / boss.maxHp, 0, 1) * 100 + '%';
+      bb.querySelector('.bt').textContent = `${Math.ceil(boss.hp).toLocaleString()} / ${Math.ceil(boss.maxHp).toLocaleString()}`;
+    }
     $('#hud-gold').textContent = `${G.gold.toLocaleString()} gold`;
     $('#hud-fame').textContent = `Fame: ${fameTitle()}`;
     const q = G.quest;
     $('#hud-quest').textContent = q ? `◆ ${q.title}: ${q.done ? 'Complete! Return to town' : q.type === 'slay' ? `${q.progress}/${q.count}` : `floor ${q.floor}`}` : '';
-    const tg = (pl.hover && pl.hover.type === 'enemy' && !pl.hover.dead) ? pl.hover : (pl.lastHit && !pl.lastHit.dead && pl.lastHit.root.parent ? pl.lastHit : null);
+    let tg = (pl.hover && pl.hover.type === 'enemy' && !pl.hover.dead) ? pl.hover : (pl.lastHit && !pl.lastHit.dead && pl.lastHit.root.parent ? pl.lastHit : null);
+    if (tg && tg === boss) tg = null; // the boss has its own big bar
     $('#hud-target').classList.toggle('hidden', !tg);
     if (tg) {
       const n = $('#hud-target-name'); n.textContent = tg.displayName(); n.style.color = tg.boss ? '#ff6644' : tg.elite ? '#ffcc33' : '#e8dcc0';

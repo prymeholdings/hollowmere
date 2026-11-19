@@ -85,6 +85,9 @@ window.__cast = (id, at, t) => cast(id, at, t);
 window.__socket = (i, it) => socketGem(i, it);
 const HOTKEYS = { q: 'q', w: 'w', e: 'e', r: 'r' };
 
+// music for each depth band of the Wells
+const dungeonTrack = (f) => (f >= 80 ? 'void' : f >= 50 ? 'ember' : f >= 25 ? 'abyss' : f >= 10 ? 'crypt' : 'dungeon');
+
 class Main {
   constructor() {
     G.main = this;
@@ -347,7 +350,7 @@ class Main {
         if (floor % 10 === 0) msg(`Checkpoint reached! You can now start from Floor ${floor} at the Old Well, even after falling.`, '#ffd84d');
       }
       this.ui.banner(`Floor ${floor}`, floor % 5 === 0 ? 'A guardian stirs in the deep' : 'The Sunken Wells');
-      playMusic('dungeon');
+      playMusic(dungeonTrack(floor));
     } else { this.ui.banner('Hollowmere', 'A lantern-lit town above the Wells'); playMusic('town'); }
     sfx('door');
     saveGame();
@@ -370,7 +373,16 @@ class Main {
     sfx('level');
     this.ui.refresh();
   }
-  addFameFromBoss(f) { addFame(25 + f * 4); this.ui.banner('Guardian slain!', 'Your fame grows'); sfx('legend'); }
+  addFameFromBoss(f) {
+    if (f >= MAX_FLOOR) {
+      addFame(2500); G.wellsCleared = (G.wellsCleared || 0) + 1;
+      this.ui.banner('The Hollow King falls!', 'The Sunken Wells are free. You are a Wellbreaker.');
+      msg('The heart of the Wells stops beating. Hollowmere will sing of this for a hundred years.', '#ffd84d');
+      sfx('legend');
+      return;
+    }
+    addFame(25 + f * 4); this.ui.banner('Guardian slain!', 'Your fame grows'); sfx('legend');
+  }
   magicFind() { return Math.round(itemBonus('magic_find') + (G.buffs.wealth > 0 ? 50 : 0) + (G.skills.fortune || 0) * 8 + petBonus('magic_find')); }
   goldFind() { return Math.round(itemBonus('gold_find') + (G.buffs.wealth > 0 ? 100 : 0) + (G.skills.fortune || 0) * 8 + petBonus('gold_find')); }
   randomTreasure() { return generate(Math.max(G.lvl, G.currentFloor) + 1, 80, 1); }
@@ -731,7 +743,8 @@ class Main {
         // boss music when a living guardian is close
         if (L.kind === 'dungeon') {
           const boss = L.entities.find((e) => e.type === 'enemy' && e.boss && !e.dead && flatDist(e.pos, G.player.pos) < 16);
-          if (!!boss !== this.bossMusic) { this.bossMusic = !!boss; playMusic(boss ? 'boss' : 'dungeon'); }
+          if (!!boss !== this.bossMusic) this.bossMusic = !!boss;
+          playMusic(boss ? (boss.data.final ? 'final' : L.floor >= 50 ? 'boss_deep' : 'boss') : dungeonTrack(L.floor));
         }
       }
       L.explore(G.player.pos);
@@ -751,6 +764,7 @@ class Main {
       L.sun.position.copy(this.camFocus).add(new THREE.Vector3(14, 26, 10));
       L.sun.target.position.copy(this.camFocus);
       if (this.sky) this.sky.update(dt, L, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));
+      if (L.kind === 'town' && !this.menuMode) playMusic(daylight() < 0.25 ? 'town_night' : 'town');
       this.ui.update(dt);
       document.body.style.cursor = G.player.hover ? (G.player.hover.type === 'enemy' ? 'crosshair' : 'pointer') : 'default';
     }
