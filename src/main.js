@@ -48,8 +48,8 @@ import { QUEST_GIVER } from './data.js';
 import { loadAll, CharModel } from './assets.js';
 import { FX } from './fx.js';
 import { sfx, playMusic, unlockAudio } from './audio.js';
-import { Settings, loadSettings } from './settings.js';
-import { CLASSES, SKILLS, PET_COATS, cast, updateZones, clearZones } from './skills.js';
+import { Settings, loadSettings, saveSettings } from './settings.js';
+import { CLASSES, SKILLS, PET_COATS, cast, canCast, updateZones, clearZones } from './skills.js';
 import { box, sphere, cone } from './util.js';
 
 // The starting outfit matches what was picked at character creation.
@@ -498,6 +498,29 @@ class Main {
     pl.model.once('Spellcast_Summon', { timeScale: 1.2 });
     this.fx.flash?.(at.clone().setY(1.4), 0xb088ff, 25, 0.6);
   }
+  // Auto-attack: when idle, fight the nearest foe in range with the basic attack or a chosen skill.
+  autoAttack(dt) {
+    if (!Settings.autoAttack || !this.canPlay() || this.holding) return;
+    const p = G.player, L = G.level;
+    if (p.path.length && !p.target) return; // the player is walking somewhere
+    this.autoT = (this.autoT || 0) - dt;
+    if (this.autoT > 0) return;
+    this.autoT = 0.2;
+    let best = null, bd = Settings.autoRange || 8;
+    for (const e of L.entities) {
+      if (e.type !== 'enemy' || e.dead || e.dormant) continue;
+      const d = flatDist(e.pos, p.pos);
+      if (d < bd && L.lineClear(p.pos, e.pos, 0.2)) { bd = d; best = e; }
+    }
+    if (!best) return;
+    const slot = Settings.autoMode;
+    const id = slot && slot !== 'basic' ? G.hotbar[slot] : null;
+    if (id && !canCast(id) && p.castLock <= 0) {
+      p.face?.(best.pos, 1);
+      if (cast(id, best.pos.clone(), best)) { this.ui.pressSlot(slot); this.ui.refresh?.(); return; }
+    }
+    if (p.target !== best && !(p.target && p.target.type === 'enemy' && !p.target.dead)) p.setTarget(best);
+  }
   updatePortalSeq(dt) {
     const s = this.portalSeq, pl = G.player;
     if (!s) return;
@@ -583,6 +606,7 @@ class Main {
       else if (k === 'k') this.ui.toggle('skills');
       else if (k === 'j') this.ui.toggle('quest');
       else if (k === 'p') this.ui.toggle('pet');
+      else if (k === 'v') { Settings.autoAttack = !Settings.autoAttack; saveSettings(); this.flash(`Auto-attack ${Settings.autoAttack ? 'on' : 'off'}`); }
       else if (e.key === 'Tab') this.bigMap = !this.bigMap;
       else if (e.key === 'F5') { e.preventDefault(); this.ui.saveNow(); }
       if (!this.canPlay() || e.repeat) return;
@@ -687,6 +711,7 @@ class Main {
         if (this.holding && this.canPlay()) { this.holdT -= dt; if (this.holdT <= 0) { this.holdT = 0.12; this.click(false); } }
         for (const e of L.entities.slice()) e.update(dt, t);
         this.updatePortalSeq(dt);
+        this.autoAttack(dt);
         if (this.emerge > 0) {
           this.emerge -= dt;
           const k = 1 - Math.max(0, this.emerge) / 0.7;

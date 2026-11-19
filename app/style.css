@@ -232,3 +232,5 @@ select { font-family: inherit; background: #0d0a07; color: #f3e2bd; border: 1px 
 .pet-lbl i{color:#ffb066;font-style:normal}
 .fish-odds{text-align:center;font-size:12px;margin:0 0 6px;padding:5px;border:1px solid #3a3022;border-radius:6px;background:rgba(0,0,0,.25)}
 button.mini{font-size:10px;padding:2px 6px;margin-top:4px}
+#hud-auto { align-self: center; margin-bottom: 4px; padding: 2px 10px; font-size: 11px; letter-spacing: 1px; color: #9a8a70; background: rgba(10,8,6,.7); border: 1px solid #4a3a26; border-radius: 10px; cursor: pointer; pointer-events: auto; user-select: none; }
+#hud-auto.on { color: #ffd84d; border-color: #c8902a; box-shadow: 0 0 8px rgba(255,200,80,.35); }

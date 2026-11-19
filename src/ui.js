@@ -56,7 +56,7 @@ export class UI {
         <div id="log"></div>
         <div id="hud-bottom">
           <div class="orb hp"><div class="fill"></div><canvas class="orbgl"></canvas><div class="orbframe"></div><div class="txt"></div></div>
-          <div id="barmid"><div id="xpbar"><div></div></div><div id="slots"></div></div>
+          <div id="barmid"><div id="hud-auto" title="Auto-attack (V to toggle, click to change)"></div><div id="xpbar"><div></div></div><div id="slots"></div></div>
           <div class="orb mp"><div class="fill"></div><canvas class="orbgl"></canvas><div class="orbframe"></div><div class="txt"></div></div>
         </div>
         <div id="help">I Inventory · C Character · K Skills · J Quest · Tab Map · Alt Show items · Esc Menu</div>
@@ -225,6 +225,7 @@ export class UI {
     if (bk !== this._bk) { this._bk = bk; $('#hud-buffs').innerHTML = buffs.map(([ic, t, n]) => `<div class="buff" title="${n}">${skillIcon(ic)}<span>${Math.ceil(t)}</span></div>`).join(''); }
     $('#hud-loc').textContent = G.level.kind === 'town' ? 'Hollowmere' : `Sunken Wells · Floor ${G.level.floor}`;
     $('#hud-clock').textContent = G.level.kind === 'town' ? clockText() : '';
+    this.updateAutoChip();
     $('#hud-gold').textContent = `${G.gold.toLocaleString()} gold`;
     $('#hud-fame').textContent = `Fame: ${fameTitle()}`;
     const q = G.quest;
@@ -769,9 +770,16 @@ export class UI {
       <div class="setrow"><span>Sharpening</span><span><input type="range" min="0" max="100" value="${Math.round((Settings.sharpen ?? 0.35) * 100)}" id="set-sh"> <span id="sv-sh">${Math.round((Settings.sharpen ?? 0.35) * 100)}%</span></span></div>
       <div class="setrow"><span>Fullscreen</span><button class="small" id="set-fs">Toggle (F11)</button></div>
       <h3><span>Gameplay</span></h3>${check('damageNumbers', 'Show damage numbers')}${check('screenShake', 'Screen shake')}${check('autoLoot', 'Auto-pick up potions')}${check('showHelp', 'Show key hints')}
-      <h3><span>Controls</span></h3><div class="muted" style="line-height:1.6">Left-click: move, attack, pick up, talk · Right-click / Q W E R: skills · 1 / 2: potions · T: town portal · I: inventory · C: character · K: skills · J: quest · Tab: big map · Alt: show item names · Mouse wheel: zoom · F5: save · Esc: menu</div>
+      <h3><span>Auto-attack</span></h3>${check('autoAttack', 'Attack nearby foes automatically (V)')}
+      <div class="setrow"><span>Auto-attack with</span><select id="set-am"><option value="basic">Basic attack</option>${['rmb', 'q', 'w', 'e', 'r'].map((k) => `<option value="${k}">${k.toUpperCase()} slot${G.hotbar?.[k] ? ': ' + skillName(G.hotbar[k]) : ''}</option>`).join('')}</select></div>
+      <div class="setrow"><span>Auto-attack range</span><span><input type="range" min="3" max="14" value="${Settings.autoRange}" id="set-ar"> <span id="sv-ar">${Settings.autoRange}m</span></span></div>
+      <div class="muted" style="font-size:12px">With a skill chosen, it is cast whenever it is ready and you have the mana; otherwise you use your basic attack. Moving by clicking always wins.</div>
+      <h3><span>Controls</span></h3><div class="muted" style="line-height:1.6">Left-click: move, attack, pick up, talk · Right-click / Q W E R: skills · 1 / 2: potions · T: town portal · V: auto-attack on/off · P: companion · I: inventory · C: character · K: skills · J: quest · Tab: big map · Alt: show item names · Mouse wheel: zoom · F5: save · Esc: menu</div>
       <div style="text-align:center;margin-top:12px"><button class="primary" id="set-done">Done</button></div>`;
     $('#set-q', body).value = Settings.quality;
+    $('#set-am', body).value = Settings.autoMode;
+    $('#set-am', body).onchange = (e) => { Settings.autoMode = e.target.value; saveSettings(); };
+    $('#set-ar', body).oninput = (e) => { Settings.autoRange = +e.target.value; $('#sv-ar').textContent = e.target.value + 'm'; saveSettings(); };
     body.querySelectorAll('[data-k]').forEach((r) => (r.oninput = () => { Settings[r.dataset.k] = r.value / 100; $('#sv-' + r.dataset.k).textContent = r.value + '%'; saveSettings(); }));
     body.querySelectorAll('[data-c]').forEach((c) => (c.onchange = () => { Settings[c.dataset.c] = c.checked; saveSettings(); }));
     $('#set-q', body).onchange = (e) => { Settings.quality = e.target.value; saveSettings(); this.main.applyQuality(); };
@@ -802,6 +810,23 @@ export class UI {
     body.appendChild(b);
   }
 
+  updateAutoChip() {
+    const c = $('#hud-auto'); if (!c) return;
+    const id = Settings.autoMode !== 'basic' ? G.hotbar[Settings.autoMode] : null;
+    const txt = `AUTO ${Settings.autoAttack ? 'ON' : 'OFF'} · ${id ? skillName(id) : 'Basic attack'}`;
+    if (c.textContent !== txt) { c.textContent = txt; c.classList.toggle('on', !!Settings.autoAttack); }
+    if (!c.onclick) {
+      c.onclick = (e) => {
+        e.stopPropagation();
+        // cycle: off -> basic -> each filled skill slot -> off
+        const modes = ['basic', ...['rmb', 'q', 'w', 'e', 'r'].filter((k) => G.hotbar[k] && (G.skills[G.hotbar[k]] || 0) > 0)];
+        if (!Settings.autoAttack) { Settings.autoAttack = true; Settings.autoMode = 'basic'; }
+        else { const i = modes.indexOf(Settings.autoMode); if (i < 0 || i === modes.length - 1) Settings.autoAttack = false; else Settings.autoMode = modes[i + 1]; }
+        saveSettings(); sfx('ui'); this.updateAutoChip();
+      };
+      c.onmousedown = (e) => e.stopPropagation();
+    }
+  }
   // ---------------- companion (pet) panel ----------------
   renderPet() {
     ensurePets();

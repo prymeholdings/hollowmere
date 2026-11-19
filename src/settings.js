@@ -9,6 +9,9 @@ export const Settings = {
   showHelp: true,
   screenShake: true,
   autoLoot: true,
+  autoAttack: false, // attack nearby foes on your own
+  autoMode: 'basic', // 'basic' or a hotbar slot: rmb q w e r
+  autoRange: 8,
 };
 export function loadSettings() {
   try { Object.assign(Settings, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* defaults */ }
