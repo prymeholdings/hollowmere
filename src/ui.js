@@ -7,6 +7,7 @@ import { itemIcon, skillIcon } from './icons.js';
 import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, NODE, TIER_LEVEL, canCast, learnBlock, maxRank, isActive, skillName, skillIconKey, treePoints, synergyText } from './skills.js';
 import { Settings, saveSettings } from './settings.js';
 import { Orb3D } from './orbs.js';
+import { SKIN_TONES, DETAIL_OPTIONS, SCARF_COLORS, CLASS_DETAILS } from './details.js';
 import { clockText } from './daynight.js';
 import { PET_SPECIES, PET_SKILLS, PET_TREES, PET_TIER_LEVEL, PET_MAX_RANK, PET_MAX_LEVEL, STAGE_LEVELS, petStage, petXpToNext, learnPetSkill, ensurePets } from './pets.js';
 
@@ -15,6 +16,20 @@ const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls)
 const SLOTKEYS = ['rmb', 'q', 'w', 'e', 'r'];
 const KEYLABEL = { rmb: 'RMB', q: 'Q', w: 'W', e: 'E', r: 'R' };
 
+
+// rows of the hero look editor shared by character creation and the in-game Wardrobe
+function detailRows(state) {
+  const chips = (key, opts) => `<div class="chips">${opts.map(([v, l]) => `<button class="chip ${state[key] === v ? 'on' : ''}" data-det="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
+  return `<h3><span>Skin tone</span></h3><div class="swatches">${SKIN_TONES.map((c) => `<div class="sw ${c === (state.skin || '#ffffff') ? 'on' : ''}" style="background:${c === '#ffffff' ? 'linear-gradient(135deg,#f2c8a8,#fff)' : c}" data-det="skin" data-v="${c}" title="${c === '#ffffff' ? 'Natural' : ''}"></div>`).join('')}</div>
+    <h3><span>Shoulders</span></h3>${chips('shoulders', DETAIL_OPTIONS.shoulders)}
+    <h3><span>Belt</span></h3>${chips('belt', DETAIL_OPTIONS.belt)}
+    <h3><span>On your back</span></h3>${chips('back', DETAIL_OPTIONS.back)}
+    <h3><span>Metal finish</span></h3>${chips('metal', DETAIL_OPTIONS.metal)}
+    <h3><span>Scarf</span></h3><div class="swatches">${SCARF_COLORS.map((c) => `<div class="sw ${c === (state.scarf || '') ? 'on' : ''}" style="background:${c || 'repeating-linear-gradient(45deg,#2a2218,#2a2218 4px,#4a3a26 4px,#4a3a26 8px)'}" data-det="scarf" data-v="${c}" title="${c ? '' : 'No scarf'}"></div>`).join('')}</div>`;
+}
+function bindDetails(root, state, onChange) {
+  root.querySelectorAll('[data-det]').forEach((d) => (d.onclick = () => { state[d.dataset.det] = d.dataset.v; onChange(); }));
+}
 
 // Fishing spots: chance of a class-fitted legendary and of other treasure per catch.
 export const FISH_SPOTS = {
@@ -374,7 +389,7 @@ export class UI {
   show(name, ...args) {
     sfx('ui');
     this.close(name);
-    const fn = { inv: this.renderInv, char: this.renderChar, skills: this.renderSkills, shop: this.renderShop, quest: this.renderQuest, pause: this.renderPause, settings: this.renderSettings, forge: this.renderForge, pet: this.renderPet }[name];
+    const fn = { inv: this.renderInv, char: this.renderChar, skills: this.renderSkills, shop: this.renderShop, quest: this.renderQuest, pause: this.renderPause, settings: this.renderSettings, forge: this.renderForge, pet: this.renderPet, wardrobe: this.renderWardrobe }[name];
     if (fn) fn.call(this, ...args);
   }
   panel(name, title, style, closable = true) {
@@ -397,6 +412,7 @@ export class UI {
     if (this.open.quest) this.renderQuest();
     if (this.open.forge) this.renderForge();
     if (this.open.pet) this.renderPet();
+    if (this.open.wardrobe) this.renderWardrobe();
   }
 
   itemCell(it, onClick, onRight, selected, cls = 'cell') {
@@ -453,6 +469,7 @@ export class UI {
     btn(selIt?.slot === 'fish' ? 'Feed Pet' : selIt?.slot === 'gem' ? 'Socket' : 'Equip', () => this.quickUse(this.sel.key, true), !selIt);
     if (this.open.shop) btn('Sell', () => this.sell(this.sel.key), !selIt);
     btn('Drop', () => { const it = G.backpack.splice(this.sel.key, 1)[0]; this.main.dropItem(it); this.sel = null; }, !selIt);
+    btn('Wardrobe', () => this.show('wardrobe'), false);
     btn(`Send ${G.petName} to sell commons`, () => petSellCommons(), G.level.kind === 'town' && !this.open.shop);
     body.appendChild(bar);
   }
@@ -845,6 +862,23 @@ export class UI {
       c.onmousedown = (e) => e.stopPropagation();
     }
   }
+  // ---------------- wardrobe: change the hero's look at any time ----------------
+  renderWardrobe() {
+    const body = this.body('wardrobe', 'Wardrobe', { left: '24px', top: '60px', width: '440px', maxHeight: '86vh', overflowY: 'auto' });
+    const L = G.look, cls = CLASSES[G.cls];
+    const sw = (key, list) => `<div class="swatches">${list.map((c) => `<div class="sw ${c === L[key] ? 'on' : ''}" style="background:${c}" data-wl="${key}" data-v="${c}"></div>`).join('')}</div>`;
+    body.innerHTML = `<div class="muted" style="margin-bottom:6px">Change how your hero looks. Free, any time. Armor and weapons change your look when equipped, and the forge can dye and restyle them.</div>
+      <h3><span>Clothing tint</span></h3>${sw('tint', ARMOR_TINTS)}
+      <h3><span>Cape</span></h3>${sw('cape', CAPE_COLORS)}
+      <div class="setrow"><span>Wear a cape</span><input type="checkbox" id="wd-cape" ${L.capeOn !== false ? 'checked' : ''}></div>
+      <div class="setrow"><span>Show helm</span><input type="checkbox" id="wd-helm" ${L.helm !== false ? 'checked' : ''}></div>
+      ${detailRows(L)}`;
+    const apply = () => { sfx('ui'); G.player?.refreshVisuals(); this.renderWardrobe(); };
+    bindDetails(body, L, apply);
+    body.querySelectorAll('[data-wl]').forEach((d) => (d.onclick = () => { L[d.dataset.wl] = d.dataset.v; apply(); }));
+    $('#wd-cape', body).onchange = (e) => { L.capeOn = e.target.checked; apply(); };
+    $('#wd-helm', body).onchange = (e) => { L.helm = e.target.checked; apply(); };
+  }
   // ---------------- companion (pet) panel ----------------
   renderPet() {
     ensurePets();
@@ -1057,7 +1091,8 @@ export class UI {
           <div class="setrow"><span>Wear a cape</span><input type="checkbox" id="cr-capeon" ${state.capeOn ? 'checked' : ''}></div>
           ${cls.alt ? `<div class="setrow"><span>Wear a hood</span><input type="checkbox" id="cr-hood" ${state.hooded ? 'checked' : ''}></div>` : ''}
           ${cls.headgear ? `<div class="setrow"><span>Wear ${state.cls === 'Mage' ? 'hat' : 'helmet'}</span><input type="checkbox" id="cr-helm" ${state.helm ? 'checked' : ''}></div>` : ''}
-          <div class="setrow"><span>Height</span><span><input type="range" id="cr-height" min="88" max="112" value="${Math.round(state.height * 100)}"> ${Math.round(state.height * 100)}%</span></div>`;
+          <div class="setrow"><span>Height</span><span><input type="range" id="cr-height" min="88" max="112" value="${Math.round(state.height * 100)}"> ${Math.round(state.height * 100)}%</span></div>
+          ${detailRows(state)}`;
       } else {
         const PS = PET_SPECIES[state.petSpecies] || PET_SPECIES.fox;
         inner = `<h3><span>Companion</span></h3><div class="chips">${Object.entries(PET_SPECIES).map(([k, v]) => `<button class="chip ${state.petSpecies === k ? 'on' : ''}" data-psp="${k}">${v.name}</button>`).join('')}</div>
@@ -1074,7 +1109,8 @@ export class UI {
         </div>`;
       const upd = () => { sfx('ui'); onChange(); render(); };
       c.querySelectorAll('[data-tab]').forEach((d) => (d.onclick = () => { state.tab = d.dataset.tab; sfx('ui'); render(); }));
-      c.querySelectorAll('[data-cls]').forEach((d) => (d.onclick = () => { state.cls = d.dataset.cls; state.cape = CLASSES[state.cls].cape; state.hooded = false; state.gear = 0; upd(); }));
+      c.querySelectorAll('[data-cls]').forEach((d) => (d.onclick = () => { state.cls = d.dataset.cls; state.cape = CLASSES[state.cls].cape; state.hooded = false; state.gear = 0; Object.assign(state, CLASS_DETAILS[state.cls]); upd(); }));
+      bindDetails(c, state, upd);
       c.querySelectorAll('[data-cape]').forEach((d) => (d.onclick = () => { state.cape = d.dataset.cape; upd(); }));
       c.querySelectorAll('[data-tint]').forEach((d) => (d.onclick = () => { state.tint = d.dataset.tint; upd(); }));
       c.querySelectorAll('[data-gear]').forEach((d) => (d.onclick = () => { state.gear = +d.dataset.gear; upd(); }));
@@ -1092,6 +1128,7 @@ export class UI {
         const cl = CLASSES[state.cls];
         Object.assign(state, { cape: pk(CAPE_COLORS), tint: pk(ARMOR_TINTS), gear: Math.floor(Math.random() * cl.gear.length), helm: Math.random() < 0.7, hooded: !!cl.alt && Math.random() < 0.5, capeOn: Math.random() < 0.85, height: 0.9 + Math.random() * 0.2 });
         { const sk = pk(Object.keys(PET_SPECIES)); state.petSpecies = sk; state.pet = pk(PET_SPECIES[sk].coats).key; }
+        Object.assign(state, { skin: pk(SKIN_TONES), shoulders: pk(DETAIL_OPTIONS.shoulders)[0], belt: pk(DETAIL_OPTIONS.belt)[0], back: pk(DETAIL_OPTIONS.back)[0], metal: pk(DETAIL_OPTIONS.metal)[0], scarf: pk(SCARF_COLORS) });
         if (!state.name) state.name = pk(['Aldric', 'Wren', 'Corvin', 'Isolde', 'Bram', 'Mira', 'Talon', 'Sable', 'Rook', 'Elowen', 'Garrick', 'Nyx']);
         upd();
       };

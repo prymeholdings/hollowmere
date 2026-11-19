@@ -35,6 +35,7 @@ export { G } from './state.js';
 import { setItemLook } from './assets.js';
 import { Vortex } from './vortex.js';
 import { Pad } from './gamepad.js';
+import { CLASS_DETAILS } from './details.js';
 import { Sky, clockText, daylight } from './daynight.js';
 import { petBonus, ensurePets, buildPetModel, PET_SPECIES, newPetRecord, petCoatColor } from './pets.js';
 import { lookOf, starterItem, makeGem } from './items.js';
@@ -219,7 +220,7 @@ class Main {
     if (!G.level || G.level.kind !== 'town') this.menuScene();
     this.menuMode = true;
     this.creating = true;
-    this.creation = { cls: 'Knight', cape: CLASSES.Knight.cape, hooded: false, name: '', helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox', petSpecies: 'fox', petName: 'Pip', tab: 'class' };
+    this.creation = { cls: 'Knight', cape: CLASSES.Knight.cape, hooded: false, name: '', helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox', petSpecies: 'fox', petName: 'Pip', tab: 'class', skin: '#ffffff', ...CLASS_DETAILS.Knight };
     const L = G.level;
     const spot = L.startPos.clone();
     this.podium = new THREE.Group();
@@ -268,7 +269,7 @@ class Main {
     reset();
     G.heroName = (s.name || '').trim().slice(0, 18) || 'Wanderer';
     G.cls = s.cls;
-    G.look = { cape: s.cape, hooded: !!s.hooded, helm: s.helm, gear: s.gear, tint: s.tint, height: s.height, capeOn: s.capeOn, pet: s.pet };
+    G.look = { cape: s.cape, hooded: !!s.hooded, helm: s.helm, gear: s.gear, tint: s.tint, height: s.height, capeOn: s.capeOn, pet: s.pet, skin: s.skin, shoulders: s.shoulders, belt: s.belt, back: s.back, metal: s.metal, scarf: s.scarf };
     G.petName = (s.petName || '').trim().slice(0, 14) || 'Pip';
     G.petSpecies = PET_SPECIES[s.petSpecies] ? s.petSpecies : 'fox';
     G.pets = null; ensurePets();
@@ -294,6 +295,7 @@ class Main {
   continueGame() {
     const loc = savedLoc();
     if (!loadGame()) { this.ui.toast('No save found', true); return; }
+    if (G.look && G.look.shoulders === undefined) Object.assign(G.look, CLASS_DETAILS[G.cls] || {}, { skin: G.look.skin || '#ffffff' });
     this.ui.hideMenu();
     this.menuMode = false;
     if (loc && loc.kind === 'dungeon' && loc.floor > 0) this.loadLevel('dungeon', loc.floor, 'resume', loc);

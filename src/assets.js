@@ -89,19 +89,19 @@ export function tintMaterial(mat, l, skinSafe = false) {
   if (l.tint !== 0xffffff) { mat.metalness = Math.max(mat.metalness || 0, 0.25); mat.roughness = Math.min(mat.roughness ?? 1, 0.6); }
 }
 // Tint cloth/metal but keep skin tones (faces and hands share the texture atlas with clothes).
-export function skinSafeTint(mat, color) {
+export function skinSafeTint(mat, color, skin = null) {
   const c = new THREE.Color(color);
-  if (mat.userData.tintU) { mat.userData.tintU.value.multiply(c); return; }
-  const u = { value: c };
-  mat.userData.tintU = u;
+  if (mat.userData.tintU) { mat.userData.tintU.value.copy(c); if (skin) mat.userData.skinU.value.set(skin); return; }
+  const u = { value: c }, su = { value: new THREE.Color(skin || 0xffffff) };
+  mat.userData.tintU = u; mat.userData.skinU = su;
   mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uTint = u;
-    sh.fragmentShader = 'uniform vec3 uTint;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+    sh.uniforms.uTint = u; sh.uniforms.uSkin = su;
+    sh.fragmentShader = 'uniform vec3 uTint;\nuniform vec3 uSkin;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
       vec3 dc = diffuseColor.rgb;
       float sk = step(0.45, dc.r) * step(0.2, dc.g) * step(0.11, dc.b) * step(dc.g, dc.r) * step(dc.b, dc.g) * step(0.36, dc.g / max(dc.r, 0.001)) * step(dc.b / max(dc.r, 0.001), 0.75);
-      diffuseColor.rgb *= mix(uTint, vec3(1.0), sk);`);
+      diffuseColor.rgb *= mix(uTint, uSkin, sk);`);
   };
-  mat.customProgramCacheKey = () => 'skintint';
+  mat.customProgramCacheKey = () => 'skintint2';
   mat.needsUpdate = true;
 }
 // procedural ring / amulet / gem meshes (also used for icons)
@@ -222,10 +222,22 @@ export class CharModel {
     // jewellery: an amulet glints on the chest, a ring on the left hand
     const am = W(equipment.amulet), rg = W(equipment.ring);
     if (am && this.bones.chest) { const j = jewelMesh(am, 'amulet'); j.position.set(0, 0.32, 0.36); j.scale.setScalar(0.55); this.bones.chest.add(j); this.worn.push(j); }
-    if (rg && this.bones['hand.l']) { const j = jewelMesh(rg, 'ring'); j.position.set(0, 0.12, 0); j.scale.setScalar(0.35); this.bones['hand.l'].add(j); this.worn.push(j); }
+    const handL = this.bones['hand.l'] || this.bones.handl;
+    if (rg && handL) { const j = jewelMesh(rg, 'ring'); j.position.set(0, 0.12, 0); j.scale.setScalar(0.35); handL.add(j); this.worn.push(j); }
     // class detail pieces (pauldrons, belts, pouches...)
     this.addDetails(al ? al.vis : own, look, al);
     if (look.capeOn === false) for (const k in this.parts) if (/Cape|Cloak/.test(k)) this.parts[k].visible = false;
+    // skin tone: recolour only the skin pixels of every body part, head and hood
+    const tone = look.skin && look.skin !== '#ffffff' ? look.skin : null;
+    this.root.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      const mm = o.material;
+      const live = mm.userData.tintU && mm.userData.tintU.value && mm.userData.tintU.value.isColor;
+      if (!tone && !live) return;
+      const tint = live ? mm.userData.tintU.value.clone() : new THREE.Color(0xffffff);
+      if (!o.userData.ownMat || !live) { o.material = mm.clone(); o.material.userData = {}; o.userData.ownMat = true; }
+      skinSafeTint(o.material, tint, tone || 0xffffff);
+    });
   }
   addDetails(outfit, look, al) { /* filled in by details.js */ if (CharModel.detailHook) CharModel.detailHook(this, outfit, look, al); }
   wear(l, boneName) {
