@@ -14,7 +14,10 @@ export const Settings = {
   autoRange: 8,
 };
 export function loadSettings() {
-  try { Object.assign(Settings, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* defaults */ }
+  const saved = localStorage.getItem(KEY);
+  // phones and tablets start on the fastest settings
+  if (!saved && typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) Object.assign(Settings, { quality: 'low', renderScale: 0.8, showHelp: false });
+  try { Object.assign(Settings, JSON.parse(saved || '{}')); } catch (e) { /* defaults */ }
   syncAudio();
 }
 export function saveSettings() { localStorage.setItem(KEY, JSON.stringify(Settings)); syncAudio(); }

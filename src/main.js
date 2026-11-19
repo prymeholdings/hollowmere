@@ -35,6 +35,7 @@ export { G } from './state.js';
 import { setItemLook } from './assets.js';
 import { Vortex } from './vortex.js';
 import { Pad } from './gamepad.js';
+import { Touch } from './touch.js';
 import { CLASS_DETAILS } from './details.js';
 import { Sky, clockText, daylight } from './daynight.js';
 import { petBonus, ensurePets, buildPetModel, PET_SPECIES, newPetRecord, petCoatColor } from './pets.js';
@@ -115,6 +116,7 @@ class Main {
     this.camFocus = new THREE.Vector3(34, 0, 34);
     this.ui = new UI(this);
     this.pad = new Pad(this);
+    this.touch = new Touch(this);
     this.clock = new THREE.Clock();
     this.applyQuality();
     this.resize();
@@ -699,6 +701,7 @@ class Main {
     const L = G.level;
     if (!this.ready) { this.renderer.setClearColor(0x000000); this.renderer.render(this.scene, this.camera); return; }
     this.pad.update(dt);
+    this.touch.update(dt);
     if (this.menuMode) {
       if (this.creating && this.podium) {
         const p = this.podium.position;

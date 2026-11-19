@@ -790,7 +790,7 @@ export class UI {
     b('Settings', () => { this.close('pause'); this.show('settings'); });
     b('Save Game', () => this.saveNow());
     b('Save & Quit to Title', () => { if (!this.saveNow()) return; this.close('pause'); this.main.toMenu(); });
-    b('Quit to Desktop', () => { if (!this.saveNow()) return; setTimeout(() => { if (window.hm && window.hm.quit) window.hm.quit(); else window.close(); }, 250); });
+    if (window.hm) b('Quit to Desktop', () => { if (!this.saveNow()) return; setTimeout(() => { if (window.hm && window.hm.quit) window.hm.quit(); else window.close(); }, 250); });
     const ls = el('div', 'muted', this.savedText()); ls.id = 'last-saved'; ls.style.marginTop = '8px'; ls.style.fontSize = '13px'; body.appendChild(ls);
   }
 
