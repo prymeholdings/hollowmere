@@ -210,18 +210,37 @@ export function restockShop() {
 
 // saving
 const SAVE_FIELDS = ['heroName', 'cls', 'look', 'hotbar', 'lvl', 'xp', 'statPoints', 'skillPoints', 'base', 'skills', 'gold', 'fame', 'fameRank', 'hp', 'mp', 'hpPotions', 'mpPotions', 'scrolls', 'equipment', 'backpack', 'deepest', 'portalFloor', 'quest', 'questOffer', 'petName', 'petForm', 'petFormTime', 'shopStock', 'kills', 'fishCaught'];
-export function saveGame() {
-  const d = { v: 1 };
-  for (const k of SAVE_FIELDS) d[k] = G[k];
-  d.gold += G.petPendingGold;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); return true; } catch (e) { msg('Could not save the game!', '#ff5555'); return false; }
+export let lastSaved = 0;
+function readSaves() {
+  const out = [];
+  try { const r = localStorage.getItem(SAVE_KEY); if (r) out.push(JSON.parse(r)); } catch (e) { /* corrupt local copy */ }
+  try { const r = window.hm && window.hm.loadFile && window.hm.loadFile(); if (r) out.push(JSON.parse(r)); } catch (e) { /* corrupt file copy */ }
+  out.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  return out;
 }
-export const hasSave = () => !!localStorage.getItem(SAVE_KEY);
+export function saveGame() {
+  if (!G.heroName || !G.cls) return false;
+  const d = { v: 2, savedAt: Date.now() };
+  for (const k of SAVE_FIELDS) d[k] = G[k];
+  d.gold += G.petPendingGold || 0;
+  if (G.level && G.player) {
+    const p = G.player.root.position;
+    d.loc = { kind: G.level.kind, floor: G.currentFloor || 0, x: +p.x.toFixed(2), z: +p.z.toFixed(2) };
+  }
+  let json;
+  try { json = JSON.stringify(d); } catch (e) { msg('Could not save the game!', '#ff5555'); return false; }
+  let ok = false;
+  try { localStorage.setItem(SAVE_KEY, json); ok = localStorage.getItem(SAVE_KEY) === json; } catch (e) { /* quota */ }
+  try { if (window.hm && window.hm.saveFile) ok = window.hm.saveFile(json) === true || ok; } catch (e) { /* ipc */ }
+  if (!ok) { msg('Could not save the game!', '#ff5555'); return false; }
+  lastSaved = d.savedAt;
+  return true;
+}
+export const hasSave = () => readSaves().length > 0;
+export function savedLoc() { const d = readSaves()[0]; return d && d.loc; }
 export function loadGame() {
-  const raw = localStorage.getItem(SAVE_KEY);
-  if (!raw) return false;
-  let d;
-  try { d = JSON.parse(raw); } catch (e) { return false; }
+  const d = readSaves()[0];
+  if (!d) return false;
   reset();
   const look0 = { ...G.look };
   for (const k of SAVE_FIELDS) if (k in d) G[k] = d[k];
@@ -229,6 +248,7 @@ export function loadGame() {
   G.base = { str: 10, dex: 10, vit: 10, mag: 10, ...d.base };
   G.skills = { ...SKILL_ZERO, ...d.skills };
   G.cds = {};
+  lastSaved = d.savedAt || 0;
   G.hp = Math.max(1, Math.min(G.hp, maxHp())); G.mp = Math.min(G.mp, maxMp());
   return true;
 }

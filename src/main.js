@@ -32,7 +32,7 @@ const GradeShader = {
     }`,
 };
 export { G } from './state.js';
-import { G, reset, msg, saveGame, loadGame, maxHp, maxMp, itemBonus, tick, addFame, restockShop } from './state.js';
+import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop } from './state.js';
 import { Level } from './level.js';
 import { Player, Pet, Loot } from './entities.js';
 import { UI } from './ui.js';
@@ -102,6 +102,11 @@ class Main {
     this.ui.setLoading(1);
     this.ui.hideLoading();
     this.ready = true;
+    // autosave every minute while playing, and whenever the window closes or is hidden
+    const auto = () => { if (!this.menuMode && !this.creating && G.player && G.hp > 0) saveGame(); };
+    setInterval(auto, 60000);
+    window.addEventListener('beforeunload', auto);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) auto(); });
     this.ui.showMenu();
     this.menuScene();
     playMusic('menu');
@@ -255,10 +260,13 @@ class Main {
     saveGame();
   }
   continueGame() {
-    if (!loadGame()) { this.flash('No save found'); return; }
+    const loc = savedLoc();
+    if (!loadGame()) { this.ui.toast('No save found', true); return; }
     this.ui.hideMenu();
     this.menuMode = false;
-    this.enterTown();
+    if (loc && loc.kind === 'dungeon' && loc.floor > 0) this.loadLevel('dungeon', loc.floor, 'resume', loc);
+    else if (loc && loc.kind === 'town') { restockShop(); this.loadLevel('town', 0, 'resume', loc); }
+    else this.enterTown();
     msg(`Welcome back, ${G.heroName}.`, '#f0c674');
   }
   toMenu() {
@@ -276,7 +284,7 @@ class Main {
     G.level = null; G.player = null; G.pet = null;
   }
 
-  loadLevel(kind, floor, arrive = 'down') {
+  loadLevel(kind, floor, arrive = 'down', loc = null) {
     this.ui.closeAll();
     this.clearLevel();
     G.currentFloor = floor;
@@ -287,6 +295,7 @@ class Main {
     let pos = L.startPos.clone();
     if (kind === 'dungeon' && arrive === 'up') pos = L.downPos.clone().add(new THREE.Vector3(1.5, 0, 1.5));
     if (kind === 'town' && arrive === 'portal') pos = L.portalPos.clone().add(new THREE.Vector3(0, 0, 2));
+    if (arrive === 'resume' && loc && kind === 'town') pos = new THREE.Vector3(loc.x, 0, loc.z); // dungeon floors regenerate, so resume at their entrance
     if (!L.walkable(pos)) pos = L.toWorld(...L.nearestFloor(...L.cellOf(pos)));
     p.root.position.copy(pos);
     L.add(p);
@@ -500,7 +509,7 @@ class Main {
       else if (k === 'k') this.ui.toggle('skills');
       else if (k === 'j') this.ui.toggle('quest');
       else if (e.key === 'Tab') this.bigMap = !this.bigMap;
-      else if (e.key === 'F5') { e.preventDefault(); if (saveGame()) this.flash('Game saved'); }
+      else if (e.key === 'F5') { e.preventDefault(); this.ui.saveNow(); }
       if (!this.canPlay() || e.repeat) return;
       if (HOTKEYS[k]) this.castSlot(HOTKEYS[k]);
       else if (k === '1') this.drinkPotion('hp');

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, petDamage, petMaxHp, msg } from './state.js';
+import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg } from './state.js';
 import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate } from './items.js';
 import { FAME_STEPS, QUEST_GIVER } from './data.js';
 import { hex, sfx, clamp } from './util.js';
@@ -54,6 +54,7 @@ export class UI {
       <div id="banner"></div>
       <div id="panels"></div>
       <div id="tooltip" class="hidden"></div>
+      <div id="toast"></div>
       <div id="menu" class="hidden"></div>
       <div id="create" class="hidden"></div>
       <div id="loading"><div class="title" style="font-size:64px">HOLLOWMERE</div><div class="muted" id="load-txt">Loading the Sunken Wells...</div><div class="lb"><div></div></div></div>`;
@@ -111,6 +112,21 @@ export class UI {
     while (lg.children.length > 7) lg.removeChild(lg.firstChild);
     setTimeout(() => { d.style.opacity = 0; }, 7000);
     setTimeout(() => d.remove(), 8200);
+  }
+  toast(t, bad = false) {
+    const f = $('#toast'); f.textContent = t; f.className = 'on' + (bad ? ' bad' : '');
+    clearTimeout(this.toastT); this.toastT = setTimeout(() => (f.className = ''), 1800);
+  }
+  saveNow() {
+    const ok = saveGame();
+    this.toast(ok ? 'Game saved' : 'Save failed!', !ok);
+    if (ok) sfx('ui');
+    const ls = $('#last-saved'); if (ls) ls.textContent = this.savedText();
+    return ok;
+  }
+  savedText() {
+    if (!lastSaved) return 'Not saved yet this session';
+    return 'Last saved ' + new Date(lastSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
   flash(t) { const f = $('#flash'); f.textContent = t; clearTimeout(this.flashT); this.flashT = setTimeout(() => (f.textContent = ''), 1200); }
   banner(t, sub = '') {
@@ -599,9 +615,10 @@ export class UI {
     const b = (t, fn) => { const x = el('button', '', t); x.style.width = '100%'; x.style.margin = '5px 0'; x.onclick = fn; body.appendChild(x); };
     b('Resume', () => this.close('pause'));
     b('Settings', () => { this.close('pause'); this.show('settings'); });
-    b('Save Game', () => { if (saveGame()) this.flash('Game saved'); });
-    b('Save & Quit to Title', () => { saveGame(); this.close('pause'); this.main.toMenu(); });
-    b('Quit to Desktop', () => { saveGame(); window.close(); });
+    b('Save Game', () => this.saveNow());
+    b('Save & Quit to Title', () => { if (!this.saveNow()) return; this.close('pause'); this.main.toMenu(); });
+    b('Quit to Desktop', () => { if (!this.saveNow()) return; setTimeout(() => { if (window.hm && window.hm.quit) window.hm.quit(); else window.close(); }, 250); });
+    const ls = el('div', 'muted', this.savedText()); ls.id = 'last-saved'; ls.style.marginTop = '8px'; ls.style.fontSize = '13px'; body.appendChild(ls);
   }
 
   renderSettings(fromMenu = false) {
