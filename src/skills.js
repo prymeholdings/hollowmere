@@ -12,7 +12,11 @@ export const SYNERGY = {
   firebolt: [['meteor', 8]], meteor: [['firebolt', 6]], lightning: [['nova', 4], ['blizzard', 4]],
   nova: [['blizzard', 6]], blizzard: [['nova', 6], ['lightning', 3]], slam: [['earthquake', 6]], earthquake: [['slam', 6], ['whirlwind', 3]],
   whirlwind: [['slam', 4]], knives: [['blades', 6]], blades: [['knives', 6], ['smoke', 3]], heal: [['bones', 5]],
+  ice_lance: [['glacial', 6], ['nova', 3]], glacial: [['ice_lance', 6], ['blizzard', 4]], fire_wall: [['inferno', 6], ['firebolt', 3]], inferno: [['fire_wall', 6], ['meteor', 4]],
+  venom: [['toxic_cloud', 6]], toxic_cloud: [['venom', 6]], ball_lightning: [['lightning', 6], ['conduit', 3]], cataclysm: [['meteor', 5], ['blizzard', 5], ['ball_lightning', 5]],
 };
+// slows from frost spells last longer with Cryomancy
+const chill = (t) => t * (1 + 0.1 * rank('cryomancy'));
 const syn = (id) => 1 + (SYNERGY[id] || []).reduce((a, [src, pct]) => a + rank(src) * pct / 100, 0);
 
 export const SKILLS = {
@@ -57,6 +61,31 @@ export const SKILLS = {
   blades: { name: 'Rain of Blades', icon: 'blades', school: 'Cunning', cost: () => 24 + rank('blades') * 2, cd: 4, anim: 'Spellcast_Raise',
     mult: () => R('blades', 0.6, 0.18) * syn('blades'),
     desc: (s) => `Blades fall on the cursor area for 3s, about 10 strikes of ${Math.round(s.mult() * 100)}% weapon damage.` },
+  // ---- Elements tree
+  ice_lance: { name: 'Ice Lance', icon: 'icelance', school: 'Frost', cost: () => 6 + rank('ice_lance'), cd: 0, anim: 'Spellcast_Shoot',
+    dmg: () => R('ice_lance', 7 + mag() * 1.0 + G.lvl * 1.4, 0.28) * spellPower() * syn('ice_lance'),
+    desc: (s) => `A shard of ice pierces through every foe in a line for ${Math.round(s.dmg())} damage and chills them.` },
+  venom: { name: 'Venom Bolt', icon: 'venom', school: 'Poison', cost: () => 7 + rank('venom'), cd: 0.3, anim: 'Spellcast_Shoot',
+    dmg: () => R('venom', 5 + mag() * 0.8 + G.lvl * 1.2, 0.3) * spellPower() * syn('venom'),
+    desc: (s) => `A glob of venom poisons its target for ${Math.round(s.dmg() * 5)} damage over 5 seconds. Poison stacks with other poisons.` },
+  fire_wall: { name: 'Wall of Flame', icon: 'firewall', school: 'Fire', cost: () => 22 + rank('fire_wall') * 2, cd: 3, anim: 'Spellcast_Long',
+    dmg: () => R('fire_wall', 5 + mag() * 0.6 + G.lvl * 0.9, 0.28) * spellPower() * syn('fire_wall'), dur: () => 4 + rank('fire_wall') * 0.2,
+    desc: (s) => `Raises a wall of fire at the cursor for ${s.dur().toFixed(1)}s, burning anything inside for ${Math.round(s.dmg())} damage 2.5 times a second.` },
+  toxic_cloud: { name: 'Toxic Cloud', icon: 'toxic', school: 'Poison', cost: () => 20 + rank('toxic_cloud') * 2, cd: 4, anim: 'Spellcast_Raise',
+    dmg: () => R('toxic_cloud', 4 + mag() * 0.5 + G.lvl * 0.8, 0.3) * spellPower() * syn('toxic_cloud'), dur: () => 6 + rank('toxic_cloud') * 0.3,
+    desc: (s) => `A choking cloud lingers at the cursor for ${s.dur().toFixed(1)}s. Foes inside are poisoned for ${Math.round(s.dmg())} damage per second and slowed.` },
+  glacial: { name: 'Glacial Spike', icon: 'glacial', school: 'Frost', cost: () => 26 + rank('glacial') * 2, cd: 5, anim: 'Spellcast_Long',
+    dmg: () => R('glacial', 18 + mag() * 1.8 + G.lvl * 2.6, 0.3) * spellPower() * syn('glacial'), freeze: () => 1.5 + rank('glacial') * 0.1,
+    desc: (s) => `A huge spike of ice erupts at the cursor for ${Math.round(s.dmg())} damage, freezing foes solid for ${s.freeze().toFixed(1)}s.` },
+  ball_lightning: { name: 'Ball Lightning', icon: 'ballzap', school: 'Storm', cost: () => 24 + rank('ball_lightning') * 2, cd: 2.5, anim: 'Spellcast_Shoot',
+    dmg: () => R('ball_lightning', 5 + mag() * 0.55 + G.lvl * 0.8, 0.26) * spellPower() * syn('ball_lightning'),
+    desc: (s) => `Releases a slow sphere of lightning that drifts forward for 3s, zapping up to 2 nearby foes 4 times a second for ${Math.round(s.dmg())} damage.` },
+  inferno: { name: 'Inferno', icon: 'inferno', school: 'Fire', cost: () => 30 + rank('inferno') * 2.5, cd: 4, anim: 'Spellcast_Shoot',
+    dmg: () => R('inferno', 16 + mag() * 1.6 + G.lvl * 2.2, 0.3) * spellPower() * syn('inferno'),
+    desc: (s) => `Breathes a cone of fire for ${Math.round(s.dmg())} damage and sets foes ablaze for another ${Math.round(s.dmg() * 0.6)} over 3s.` },
+  cataclysm: { name: 'Cataclysm', icon: 'cataclysm', school: 'Elements', cost: () => 60 + rank('cataclysm') * 4, cd: 22, anim: 'Spellcast_Raise',
+    dmg: () => R('cataclysm', 14 + mag() * 1.3 + G.lvl * 2, 0.28) * spellPower() * syn('cataclysm'), dur: () => 5 + rank('cataclysm') * 0.2,
+    desc: (s) => `For ${s.dur().toFixed(1)}s the elements rage around you: falling fire, lightning and ice strike nearby foes for ${Math.round(s.dmg())} damage each.` },
   warcry: { name: 'Battle Cry', icon: 'cry', school: 'Might', cost: () => 15, cd: 18, anim: 'Cheer',
     dur: () => 10 + rank('warcry') * 1.5,
     desc: (s) => `+30% damage and +40 armor for ${s.dur().toFixed(0)}s. Nearby foes are slowed.` },
@@ -78,12 +107,15 @@ export const PASSIVES = {
   pet_bond: { name: 'Pet Bond', icon: 'pet_bond', desc: (r) => `+${r * 15}% pet damage and life.`, per: '+15% pet damage and life' },
   lethality: { name: 'Lethality', icon: 'lethal', desc: (r) => `+${(r * 1.5).toFixed(1)}% critical hit chance.`, per: '+1.5% critical chance' },
   bloodthirst: { name: 'Bloodthirst', icon: 'blood', desc: (r) => `${(r * 0.5).toFixed(1)}% of weapon damage heals you.`, per: '+0.5% life steal' },
+  pyromancy: { name: 'Pyromancy', icon: 'pyro', desc: (r) => `+${r * 10}% fire damage. Fire sets foes ablaze for ${r * 5}% extra damage.`, per: '+10% fire damage, +5% burn' },
+  cryomancy: { name: 'Cryomancy', icon: 'cryo', desc: (r) => `+${r * 10}% frost damage. Chills last ${r * 10}% longer.`, per: '+10% frost damage, longer chills' },
+  conduit: { name: 'Conduit', icon: 'conduit', desc: (r) => `+${r * 10}% lightning and poison damage. Lightning has a ${r * 3}% chance to stun.`, per: '+10% storm/poison damage, +3% stun' },
   fortune: { name: "Fortune's Favor", icon: 'fortune', desc: (r) => `+${r * 8}% gold and magic find.`, per: '+8% gold and magic find' },
 };
 for (const k in PASSIVES) PASSIVES[k].id = k;
 
 // Three skill trees. tier = row (level gate), col = column, req = prerequisites (rank 1 needed)
-export const TIER_LEVEL = [1, 6, 12, 18];
+export const TIER_LEVEL = [1, 6, 12, 18, 30];
 export const MAX_ACTIVE = 15, MAX_PASSIVE = 10;
 export const TREES = [
   { id: 'might', name: 'Might', color: '#e0a050', nodes: [
@@ -101,7 +133,22 @@ export const TREES = [
     { id: 'lethality', tier: 1, col: 0, req: ['knives'] }, { id: 'blink', tier: 1, col: 1, req: ['swift_feet'] },
     { id: 'bloodthirst', tier: 2, col: 0, req: ['lethality'] }, { id: 'smoke', tier: 2, col: 1, req: ['blink'] }, { id: 'fortune', tier: 2, col: 2, req: ['pet_bond'] },
     { id: 'blades', tier: 3, col: 0, req: ['bloodthirst', 'smoke'] }] },
+  { id: 'elements', name: 'Elements', color: '#5fd8a8', nodes: [
+    { id: 'ice_lance', tier: 0, col: 0 }, { id: 'pyromancy', tier: 0, col: 1 }, { id: 'venom', tier: 0, col: 2 },
+    { id: 'cryomancy', tier: 1, col: 0, req: ['ice_lance'] }, { id: 'fire_wall', tier: 1, col: 1, req: ['pyromancy'] }, { id: 'toxic_cloud', tier: 1, col: 2, req: ['venom'] },
+    { id: 'glacial', tier: 2, col: 0, req: ['cryomancy'] }, { id: 'conduit', tier: 2, col: 2, req: ['toxic_cloud'] },
+    { id: 'inferno', tier: 3, col: 1, req: ['fire_wall'] }, { id: 'ball_lightning', tier: 3, col: 2, req: ['conduit'] },
+    { id: 'cataclysm', tier: 4, col: 1, req: ['inferno', 'glacial'] }] },
 ];
+// damage multiplier for elemental affinities (used when foes take damage)
+export function affinity(kind) {
+  if (kind === 'fire') return 1 + 0.1 * rank('pyromancy');
+  if (kind === 'frost') return 1 + 0.1 * rank('cryomancy');
+  if (kind === 'storm' || kind === 'poison') return 1 + 0.1 * rank('conduit');
+  return 1;
+}
+export const burnPct = () => 0.05 * rank('pyromancy');
+export const stunChance = () => 0.03 * rank('conduit');
 export const NODE = {};
 for (const t of TREES) for (const n of t.nodes) NODE[n.id] = { ...n, tree: t.id };
 export const isActive = (id) => !!SKILLS[id];
@@ -217,7 +264,7 @@ export function cast(id, at, targetEnt) {
       break;
     }
     case 'nova': {
-      for (const e of enemies()) if (flatDist(e.pos, pos) < 5.5) { e.takeDamage(s.dmg(), false, 'frost'); e.slowT = 4; }
+      for (const e of enemies()) if (flatDist(e.pos, pos) < 5.5) { e.takeDamage(s.dmg(), false, 'frost'); e.slowT = chill(4); }
       fx.ring(pos, 0x99ddff, 5.5, 0.5);
       fx.emit(pos.clone().setY(0.5), { count: 80, color: 0xbfe8ff, speed: 9, life: 0.6, size: 0.6, flat: true });
       fx.flash(pos, 0x99ddff, 30, 0.5);
@@ -340,7 +387,7 @@ export function cast(id, at, targetEnt) {
       const dmg = s.dmg();
       fx.ring(c, 0x9fe8ff, 4, 0.6);
       zones.push({ t: 0, acc: 0, every: 0.5, dur: s.dur(),
-        tick: () => { for (const e of enemies()) if (flatDist(e.pos, c) < 4) { e.takeDamage(dmg, false, 'frost'); e.slowT = Math.max(e.slowT || 0, 1.5); } fx.ring(c, 0x9fe8ff, 4, 0.5); fx.emit(c.clone().setY(0.2), { count: 24, color: 0xdff8ff, speed: 4, life: 0.5, size: 0.5, flat: true }); sfx('nova'); },
+        tick: () => { for (const e of enemies()) if (flatDist(e.pos, c) < 4) { e.takeDamage(dmg, false, 'frost'); e.slowT = Math.max(e.slowT || 0, chill(1.5)); } fx.ring(c, 0x9fe8ff, 4, 0.5); fx.emit(c.clone().setY(0.2), { count: 24, color: 0xdff8ff, speed: 4, life: 0.5, size: 0.5, flat: true }); sfx('nova'); },
         vis: () => { for (let k = 0; k < 6; k++) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * 4; fx.emit(new THREE.Vector3(c.x + Math.cos(a) * r, 7, c.z + Math.sin(a) * r), { count: 1, color: 0xcff4ff, speed: 0.2, up: 0, rise: -14, life: 0.5, size: 0.9, drag: 0 }); } } });
       sfx('nova');
       break;
@@ -352,6 +399,115 @@ export function cast(id, at, targetEnt) {
       fx.emit(pos.clone().setY(0.4), { count: 90, color: 0x6a6a7a, speed: 3, up: 0.6, life: 2.2, size: 1.4, spread: 1.5, drag: 2.5 });
       fx.ring(pos, 0x8a8a9a, 4.5, 0.5);
       sfx('blink');
+      break;
+    }
+    case 'ice_lance': {
+      const p = new Projectile(dir, s.dmg(), 'enemy', 0x9fe0ff, { trail: 0xcff4ff, kind: 'frost', pierce: true, size: 0.2, speed: 22, life: 0.9, onHit: (n) => { n.takeDamage(s.dmg(), false, 'frost'); n.slowT = Math.max(n.slowT || 0, chill(2)); } });
+      p.root.position.copy(pos).addScaledVector(dir, 0.7);
+      G.level.add(p);
+      sfx('nova');
+      break;
+    }
+    case 'venom': {
+      const p = new Projectile(dir, 0, 'enemy', 0x77ee33, { trail: 0x55cc22, kind: 'poison', size: 0.2, speed: 15, onHit: (n) => { n.takeDamage(s.dmg() * 0.3, false, 'poison'); n.applyDot(s.dmg(), 5, 'poison' + (Math.random() < 0.5 ? '' : '2')); } });
+      p.root.position.copy(pos).addScaledVector(dir, 0.7);
+      G.level.add(p);
+      sfx('fire');
+      break;
+    }
+    case 'fire_wall': {
+      const c = at.clone();
+      const side = new THREE.Vector3(-dir.z, 0, dir.x);
+      const a = c.clone().addScaledVector(side, -3), b = c.clone().addScaledVector(side, 3);
+      const dmg = s.dmg();
+      const near = (e) => { const t = Math.max(0, Math.min(1, e.pos.clone().sub(a).dot(side) / 6)); return flatDist(e.pos, a.clone().addScaledVector(side, t * 6)) < 1.0 + e.pickR * 0.4; };
+      zones.push({ t: 0, acc: 0, every: 0.4, dur: s.dur(),
+        tick: () => { for (const e of enemies()) if (near(e)) e.takeDamage(dmg, false, 'fire'); },
+        vis: () => { for (let k = 0; k < 7; k++) { const p = a.clone().lerp(b, Math.random()); fx.emit(p.setY(0.1), { count: 1, color: Math.random() < 0.5 ? 0xff6a1a : 0xffb030, speed: 0.4, up: 0.3, rise: 3 + Math.random() * 2, life: 0.6, size: 0.9 }); } } });
+      fx.flash(c, 0xff7a22, 20, 0.5);
+      sfx('fire');
+      break;
+    }
+    case 'toxic_cloud': {
+      const c = at.clone();
+      const dmg = s.dmg();
+      zones.push({ t: 0, acc: 0, every: 0.5, dur: s.dur(),
+        tick: () => { for (const e of enemies()) if (flatDist(e.pos, c) < 3.5) { e.applyDot(dmg, 2, 'poison3'); e.slowT = Math.max(e.slowT || 0, 0.8); } },
+        vis: () => { for (let k = 0; k < 3; k++) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * 3.3; fx.emit(new THREE.Vector3(c.x + Math.cos(a) * r, 0.3, c.z + Math.sin(a) * r), { count: 1, color: Math.random() < 0.5 ? 0x5fbf2a : 0x8ae05a, speed: 0.3, up: 0.2, rise: 0.6, life: 1.6, size: 1.6, drag: 2 }); } } });
+      fx.ring(c, 0x77dd33, 3.5, 0.6);
+      sfx('blink');
+      break;
+    }
+    case 'glacial': {
+      const c = at.clone();
+      fx.ring(c, 0x9fe8ff, 2.6, 0.5);
+      setTimeout(() => {
+        if (!G.level) return;
+        for (const e of enemies()) if (flatDist(e.pos, c) < 2.8) { e.takeDamage(s.dmg(), false, 'frost'); e.stunT = Math.max(e.stunT || 0, s.freeze()); e.slowT = Math.max(e.slowT || 0, chill(3)); }
+        fx.spike(c, 0xbfeeff);
+        fx.emit(c.clone().setY(0.4), { count: 50, color: 0xdff8ff, speed: 6, life: 0.6, size: 0.6, gravity: 6, up: 2 });
+        fx.flash(c, 0x9fe8ff, 30, 0.4);
+        G.main.shake(0.25);
+        sfx('boom');
+      }, 450);
+      sfx('nova');
+      break;
+    }
+    case 'ball_lightning': {
+      const c = pos.clone().addScaledVector(dir, 1).setY(0);
+      const dmg = s.dmg();
+      zones.push({ t: 0, acc: 0, every: 0.25, dur: 3,
+        tick: () => {
+          const list = enemies().filter((e) => flatDist(e.pos, c) < 4).sort((x, y) => flatDist(x.pos, c) - flatDist(y.pos, c)).slice(0, 2);
+          for (const e of list) { fx.beam(c.clone().setY(1.1), e.pos.clone().setY(1), 0xb8c8ff, 0.12); e.takeDamage(dmg, false, 'storm'); }
+          if (list.length) sfx('zap');
+        },
+        vis: (dt) => {
+          const nx = c.clone().addScaledVector(dir, 4 * dt);
+          if (G.level.walkable(nx)) c.copy(nx);
+          fx.emit(c.clone().setY(1.1), { count: 4, color: Math.random() < 0.5 ? 0xd8e0ff : 0x8aa0ff, speed: 1.2, life: 0.25, size: 0.6 });
+        } });
+      fx.flash(pos, 0x99aaff, 20, 0.3);
+      sfx('zap');
+      break;
+    }
+    case 'inferno': {
+      const dmg = s.dmg();
+      for (const e of enemies()) {
+        const v = e.pos.clone().sub(pos).setY(0);
+        const d = v.length();
+        if (d < 7 && d > 0.01 && v.normalize().dot(dir) > 0.8) { e.takeDamage(dmg, false, 'fire'); e.applyDot(dmg * 0.2, 3, 'fire'); }
+      }
+      for (let k = 0; k < 70; k++) {
+        const a = (Math.random() - 0.5) * 1.1, r = 0.8 + Math.random() * 6.2;
+        const d = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), a);
+        fx.emit(pos.clone().addScaledVector(d, r).setY(0.9), { count: 1, color: Math.random() < 0.4 ? 0xffd04a : 0xff5a1a, speed: 1, rise: 1.5, life: 0.5 + Math.random() * 0.3, size: 0.9 });
+      }
+      fx.flash(pos.clone().addScaledVector(dir, 3), 0xff6a1a, 35, 0.4);
+      sfx('fire');
+      break;
+    }
+    case 'cataclysm': {
+      const dmg = s.dmg();
+      zones.push({ t: 0, acc: 0, every: 0.35, dur: s.dur(),
+        tick: () => {
+          if (!G.player) return;
+          const c = G.player.pos;
+          const list = enemies().filter((e) => flatDist(e.pos, c) < 10);
+          const tgt = list.length ? pick(list) : null;
+          const a = Math.random() * 6.28, r = 2 + Math.random() * 7;
+          const p = tgt ? tgt.pos.clone() : new THREE.Vector3(c.x + Math.cos(a) * r, 0, c.z + Math.sin(a) * r);
+          const kind = pick(['fire', 'storm', 'frost']);
+          if (kind === 'fire') fx.explosion(p, 0xff6622, 1.6);
+          else if (kind === 'storm') { fx.beam(p.clone().setY(9), p.clone().setY(0.2), 0xc8d0ff, 0.2); fx.flash(p, 0x99aaff, 20, 0.2); }
+          else { fx.spike(p, 0xbfeeff, 0.7); }
+          for (const e of enemies()) if (flatDist(e.pos, p) < 2.2) { e.takeDamage(dmg, false, kind); if (kind === 'frost') e.slowT = Math.max(e.slowT || 0, chill(2)); }
+          sfx(kind === 'storm' ? 'zap' : kind === 'fire' ? 'boom' : 'nova');
+        },
+        vis: () => { if (G.player && Math.random() < 0.5) fx.emit(G.player.pos.clone().setY(2.5), { count: 2, color: pick([0xff6a1a, 0x99ccff, 0xb8c8ff]), speed: 3, life: 0.6, size: 0.5 }); } });
+      G.main.shake(0.3);
+      fx.ring(pos, 0xffffff, 9, 0.8);
+      sfx('buff');
       break;
     }
     case 'blades': {

@@ -3,7 +3,7 @@ import { G, msg, maxHp, maxMp, armor, rollDamage, attackSpeed, critChance, critM
 import { box, sphere, capsule, cyl, cone, humanoid, ring, rand, pick, flatDist, sfx, hex } from './util.js';
 import { itemColor, typeOf, lookOf, displayName, GEMS } from './items.js';
 import { CharModel, prop, findSource, tintMaterial } from './assets.js';
-import { CLASSES, PET_COATS } from './skills.js';
+import { CLASSES, PET_COATS, affinity, burnPct, stunChance } from './skills.js';
 import { Settings } from './settings.js';
 
 const tmp = new THREE.Vector3();
@@ -311,10 +311,10 @@ export class Enemy extends Entity {
       o.t -= dt; o.tick -= dt;
       if (o.tick <= 0) {
         o.tick = 0.5;
-        const dmg = o.dps * 0.5;
+        const dmg = o.dps * 0.5 * (k.startsWith('poison') ? affinity('poison') : 1);
         this.hp -= dmg;
-        if (Settings.damageNumbers) G.main.floatText(this.pos, Math.round(dmg), DMG_COLORS[k] || '#9dff7a', 15, this.pickH * 2);
-        G.main.fx.emit(this.pos.clone().setY(this.pickH), { count: 3, color: k === 'poison' ? 0x77ee33 : k === 'fire' ? 0xff6a1a : 0x9fdcff, speed: 0.8, life: 0.6, size: 0.35, rise: 1.2 });
+        if (Settings.damageNumbers) G.main.floatText(this.pos, Math.round(dmg), DMG_COLORS[k.replace(/\d/, '')] || '#9dff7a', 15, this.pickH * 2);
+        G.main.fx.emit(this.pos.clone().setY(this.pickH), { count: 3, color: k.startsWith('poison') ? 0x77ee33 : k === 'fire' ? 0xff6a1a : 0x9fdcff, speed: 0.8, life: 0.6, size: 0.35, rise: 1.2 });
         if (this.hp <= 0) { this.die(); return; }
       }
       if (o.t <= 0) delete this.dots[k];
@@ -323,6 +323,9 @@ export class Enemy extends Entity {
   takeDamage(d, crit = false, kind = 'phys') {
     if (this.dead) return;
     this.wake();
+    d *= affinity(kind);
+    if (kind === 'fire' && burnPct() > 0) this.applyDot(d * burnPct() / 3, 3, 'fire');
+    if (kind === 'storm' && Math.random() < stunChance()) this.stunT = Math.max(this.stunT || 0, 0.5);
     this.hp -= d;
     this.aggro = true;
     this.hitT = 0.15;
@@ -607,7 +610,7 @@ export class Projectile extends Entity {
     super('proj');
     this.dir = dir; this.dmg = dmg; this.targetType = targetType;
     this.speed = o.speed ?? 16; this.life = o.life ?? 1.4;
-    this.color = color; this.trail = o.trail; this.kind = o.kind || 'fire'; this.explode = o.explode; this.onHit = o.onHit;
+    this.color = color; this.trail = o.trail; this.kind = o.kind || 'fire'; this.explode = o.explode; this.onHit = o.onHit; this.pierce = o.pierce; this.hitSet = o.pierce ? new Set() : null;
     if (o.blade) {
       const b = box(0.08, 0.04, 0.45, 0xdde4ee, 0.4);
       b.lookAt(dir);
@@ -627,22 +630,30 @@ export class Projectile extends Entity {
       if (this.landAt <= 0) { this.onLand?.(); G.level.remove(this); }
       return;
     }
-    this.pos.addScaledVector(this.dir, this.speed * dt);
     this.life -= dt;
     if (this.trail && Math.random() < 0.9) fx.emit(this.pos.clone().setY(1), { count: 1, color: this.trail, speed: 0.4, life: 0.35, size: this.spinMesh ? 0.15 : 0.45 });
-    if (this.life <= 0 || !G.level.walkable(this.pos)) { this.impact(); return; }
     const targets = this.targetType === 'enemy'
       ? G.level.entities.filter((e) => e.type === 'enemy')
       : G.level.entities.filter((e) => e.type === 'player' || e.type === 'pet' || e.type === 'ally');
-    for (const n of targets) {
-      if (!n || n.dead || !n.root.visible) continue;
-      if (flatDist(n.pos, this.pos) < 0.45 + n.pickR * 0.6) {
-        if (this.onHit) this.onHit(n); else n.takeDamage(this.dmg, false, this.kind);
-        if (this.explode) for (const e of targets) if (e !== n && !e.dead && flatDist(e.pos, this.pos) < 2.5) e.takeDamage(this.dmg * 0.5, false, 'fire');
-        this.impact();
-        return;
+    // move in small sub-steps so fast bolts never skip over a target at low frame rates
+    const dist = this.speed * dt;
+    const steps = Math.max(1, Math.ceil(dist / 0.35));
+    for (let st = 0; st < steps; st++) {
+      this.pos.addScaledVector(this.dir, dist / steps);
+      if (!G.level.walkable(this.pos)) { this.impact(); return; }
+      for (const n of targets) {
+        if (!n || n.dead || !n.root.visible) continue;
+        if (flatDist(n.pos, this.pos) < 0.45 + n.pickR * 0.6) {
+          if (this.pierce) { if (this.hitSet.has(n)) continue; this.hitSet.add(n); }
+          if (this.onHit) this.onHit(n); else n.takeDamage(this.dmg, false, this.kind);
+          if (this.pierce) continue;
+          if (this.explode) for (const e of targets) if (e !== n && !e.dead && flatDist(e.pos, this.pos) < 2.5) e.takeDamage(this.dmg * 0.5, false, 'fire');
+          this.impact();
+          return;
+        }
       }
     }
+    if (this.life <= 0) this.impact();
   }
   impact() {
     const fx = G.main.fx;

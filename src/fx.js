@@ -44,6 +44,7 @@ export class FX {
     scene.add(this.points);
     this.rings = [];
     this.beams = [];
+    this.meshes = [];
     this.lights = [];
     for (let i = 0; i < 4; i++) {
       const l = new THREE.PointLight(0xffffff, 0, 10, 1.5);
@@ -105,7 +106,27 @@ export class FX {
     this.ring(pos, color, radius);
     this.flash(pos, color, 40, 0.5);
   }
+  // ice crystals bursting from the ground, then shattering
+  spike(pos, color = 0xbfeeff, scale = 1) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, metalness: 0.1, roughness: 0.15, transparent: true, opacity: 0.9, flatShading: true });
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const h = (i === 0 ? 2.6 : 1 + Math.random() * 1.2) * scale;
+      const m = new THREE.Mesh(new THREE.ConeGeometry(0.28 * scale * (i === 0 ? 1.4 : 1), h, 5), mat);
+      const a = (i / n) * Math.PI * 2, r = i === 0 ? 0 : 0.55 * scale;
+      m.position.set(Math.cos(a) * r, h / 2, Math.sin(a) * r);
+      m.rotation.set(Math.sin(a) * 0.35 * (i ? 1 : 0), 0, -Math.cos(a) * 0.35 * (i ? 1 : 0));
+      g.add(m);
+    }
+    g.position.set(pos.x, 0, pos.z);
+    g.scale.y = 0.01;
+    this.scene.add(g);
+    this.meshes.push({ m: g, t: 0, dur: 1.2, mat, upd: (k) => { g.scale.y = Math.min(1, k * 8); mat.opacity = k > 0.7 ? 0.9 * (1 - (k - 0.7) / 0.3) : 0.9; } });
+  }
   clear() {
+    for (const o of this.meshes) this.scene.remove(o.m);
+    this.meshes = [];
     this.p.length = 0;
     for (const r of this.rings) this.scene.remove(r.mesh);
     for (const b of this.beams) this.scene.remove(b.line);
@@ -146,6 +167,12 @@ export class FX {
       b.t += dt;
       b.line.material.opacity = 1 - b.t / b.dur;
       if (b.t >= b.dur) { this.scene.remove(b.line); b.line.geometry.dispose(); b.line.material.dispose(); this.beams.splice(i, 1); }
+    }
+    for (let i = this.meshes.length - 1; i >= 0; i--) {
+      const o = this.meshes[i];
+      o.t += dt;
+      o.upd(Math.min(1, o.t / o.dur), dt);
+      if (o.t >= o.dur) { this.scene.remove(o.m); o.m.traverse((c) => c.geometry?.dispose()); o.mat?.dispose(); this.meshes.splice(i, 1); }
     }
     for (const L of this.lights) {
       L.t += dt;

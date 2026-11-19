@@ -89,6 +89,7 @@ window.__CLASSES = CLASSES;
 window.__gem = (g, t) => makeGem(g, t);
 window.__Loot = Loot;
 window.__dmg = () => weaponDamage();
+window.__cast = (id, at, t) => cast(id, at, t);
 window.__socket = (i, it) => socketGem(i, it);
 const HOTKEYS = { q: 'q', w: 'w', e: 'e', r: 'r' };
 
@@ -490,6 +491,7 @@ class Main {
     msg(`A portal back to floor ${G.portalFloor} waits beside the well.`, '#99bbff');
   }
   drinkPotion(kind) {
+    this.ui.pressSlot(kind);
     if (!G.player || G.player.dead) return;
     if (kind === 'hp') {
       if (G.hpPotions <= 0) return this.flash('No health potions');
@@ -508,6 +510,7 @@ class Main {
     if (!id) { this.flash('No skill on this key (press K)'); return; }
     const hv = G.player.hover && G.player.hover.type === 'enemy' ? G.player.hover : null;
     const at = hv ? hv.pos.clone() : this.groundPoint();
+    this.ui.pressSlot(slot);
     if (cast(id, at, hv)) this.ui.refresh?.();
   }
 

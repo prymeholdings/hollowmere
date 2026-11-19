@@ -4,7 +4,8 @@ import { randi, pick, sfx } from './util.js';
 
 const SAVE_KEY = 'hollowmere_save_v2';
 export const SKILL_ZERO = { firebolt: 0, lightning: 0, nova: 0, meteor: 0, blizzard: 0, heal: 0, bones: 0, whirlwind: 0, slam: 0, earthquake: 0, knives: 0, blink: 0, smoke: 0, blades: 0, warcry: 0,
-  mastery: 0, toughness: 0, brutality: 0, second_wind: 0, arcane_flow: 0, elemental: 0, swift_feet: 0, pet_bond: 0, lethality: 0, bloodthirst: 0, fortune: 0 };
+  mastery: 0, toughness: 0, brutality: 0, second_wind: 0, arcane_flow: 0, elemental: 0, swift_feet: 0, pet_bond: 0, lethality: 0, bloodthirst: 0, fortune: 0,
+  ice_lance: 0, venom: 0, fire_wall: 0, toxic_cloud: 0, glacial: 0, ball_lightning: 0, inferno: 0, cataclysm: 0, pyromancy: 0, cryomancy: 0, conduit: 0 };
 export const BACKPACK_MAX = 40;
 
 export const G = {

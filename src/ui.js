@@ -6,6 +6,7 @@ import { hex, sfx, clamp } from './util.js';
 import { itemIcon, skillIcon } from './icons.js';
 import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, NODE, TIER_LEVEL, canCast, learnBlock, maxRank, isActive, skillName, skillIconKey, treePoints, synergyText } from './skills.js';
 import { Settings, saveSettings } from './settings.js';
+import { Orb3D } from './orbs.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -44,9 +45,9 @@ export class UI {
         </div>
         <div id="log"></div>
         <div id="hud-bottom">
-          <div class="orb hp"><div class="fill"></div><div class="shine"></div><div class="txt"></div></div>
+          <div class="orb hp"><div class="fill"></div><canvas class="orbgl"></canvas><div class="orbframe"></div><div class="txt"></div></div>
           <div id="barmid"><div id="xpbar"><div></div></div><div id="slots"></div></div>
-          <div class="orb mp"><div class="fill"></div><div class="shine"></div><div class="txt"></div></div>
+          <div class="orb mp"><div class="fill"></div><canvas class="orbgl"></canvas><div class="orbframe"></div><div class="txt"></div></div>
         </div>
         <div id="help">I Inventory · C Character · K Skills · J Quest · Tab Map · Alt Show items · Esc Menu</div>
       </div>
@@ -59,6 +60,10 @@ export class UI {
       <div id="create" class="hidden"></div>
       <div id="loading"><div class="title" style="font-size:64px">HOLLOWMERE</div><div class="muted" id="load-txt">Loading the Sunken Wells...</div><div class="lb"><div></div></div></div>`;
     this.hud = $('#hud');
+    this.orbHp = new Orb3D($('.orb.hp .orbgl'), [0xff5a40, 0x8a0a06, 0xffb08a]);
+    this.orbMp = new Orb3D($('.orb.mp .orbgl'), [0x5a9aff, 0x0a1a8a, 0xb8e0ff]);
+    if (this.orbHp.gl) $('.orb.hp').classList.add('gl');
+    if (this.orbMp.gl) $('.orb.mp').classList.add('gl');
     this.labelLayer = $('#world-labels');
     this.panels = $('#panels');
     this.tooltip = $('#tooltip');
@@ -93,6 +98,7 @@ export class UI {
     const sc = mk('scroll', 'T'); sc.querySelector('.ico').innerHTML = skillIcon('portal'); sc.onclick = () => this.main.usePortal();
     this.refreshSlotIcons();
   }
+  pressSlot(k) { const s = this.slotEls?.[k]; if (!s) return; s.classList.add('press'); clearTimeout(s._pt); s._pt = setTimeout(() => s.classList.remove('press'), 120); }
   refreshSlotIcons() {
     if (!this.slotEls || !G.hotbar) return;
     for (const k of SLOTKEYS) {
@@ -185,6 +191,9 @@ export class UI {
     const hpF = G.hp / maxHp(), mpF = G.mp / maxMp();
     $('.orb.hp .fill').style.height = clamp(hpF, 0, 1) * 100 + '%';
     $('.orb.mp .fill').style.height = clamp(mpF, 0, 1) * 100 + '%';
+    const now = performance.now();
+    this.orbHp.set(hpF); this.orbMp.set(mpF);
+    this.orbHp.draw(dt, now); this.orbMp.draw(dt, now);
     $('.orb.hp .txt').textContent = `${Math.ceil(G.hp)} / ${Math.round(maxHp())}`;
     $('.orb.mp .txt').textContent = `${Math.floor(G.mp)} / ${Math.round(maxMp())}`;
     $('#lowhp').style.opacity = hpF < 0.3 ? (0.3 - hpF) * 2.5 * (0.7 + Math.sin(performance.now() / 200) * 0.3) : 0;
@@ -219,9 +228,19 @@ export class UI {
       const s = this.slotEls[k];
       if (!id) continue;
       const err = canCast(id);
-      s.classList.toggle('off', !!err && err !== 'Not ready');
+      s.classList.toggle('off', !!err && err !== 'Not ready' && err !== 'Not enough mana');
+      s.classList.toggle('nomana', err === 'Not enough mana');
       const cdMax = SKILLS[id].cdv() || 1;
-      s.querySelector('.cd').style.height = Math.max(0, (G.cds[id] || 0) / cdMax) * 100 + '%';
+      const left = Math.max(0, G.cds[id] || 0);
+      const f = Math.min(1, left / cdMax);
+      // radial cooldown sweep + seconds left; flash when it comes off cooldown
+      const cd = s.querySelector('.cd');
+      cd.style.background = f > 0 ? `conic-gradient(transparent ${(1 - f) * 360}deg, #000c ${(1 - f) * 360}deg)` : 'none';
+      let t = s.querySelector('.cdt');
+      if (!t) { t = el('span', 'cdt'); s.appendChild(t); }
+      t.textContent = left > 0.05 && cdMax >= 1.5 ? (left >= 10 ? Math.ceil(left) : left.toFixed(1)) : '';
+      if (s._wasCd && left <= 0) { s.classList.remove('ready'); void s.offsetWidth; s.classList.add('ready'); }
+      s._wasCd = left > 0;
     }
     this.slotEls.hp.querySelector('.cnt').textContent = G.hpPotions;
     this.slotEls.mp.querySelector('.cnt').textContent = G.mpPotions;
@@ -455,12 +474,12 @@ export class UI {
   }
 
   renderSkills() {
-    const body = this.body('skills', 'Skill Trees', { left: '50%', top: '56px', width: '1010px', transform: 'translateX(-50%)', maxHeight: '88vh', overflowY: 'auto' });
+    const body = this.body('skills', 'Skill Trees', { left: '50%', top: '40px', width: '1180px', transform: 'translateX(-50%)', maxHeight: '92vh', overflowY: 'auto' });
     if (!this.skSel) this.skSel = G.hotbar.rmb || 'firebolt';
-    const NW = 64, CW = 96, RH = 92, PADX = 26, PADY = 14;
+    const NW = 56, CW = 80, RH = 74, PADX = 30, PADY = 10;
     let html = `<div class="sk-top"><span>Skill points: <b style="color:#ffd84d">${G.skillPoints}</b></span><span class="muted">Click a skill to learn a rank. Rows unlock at levels ${TIER_LEVEL.join(', ')}. Any class can learn any tree.</span></div><div class="sk-trees">`;
     for (const t of TREES) {
-      const W = PADX * 2 + CW * 2 + NW, H = PADY * 2 + RH * 3 + NW;
+      const W = PADX * 2 + CW * 2 + NW, H = PADY * 2 + RH * (TIER_LEVEL.length - 1) + NW;
       const xy = (n) => [PADX + n.col * CW + NW / 2, PADY + n.tier * RH + NW / 2];
       let lines = '';
       for (const n of t.nodes) for (const r of n.req || []) {
@@ -469,7 +488,7 @@ export class UI {
         lines += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${on ? t.color : '#3a3022'}" stroke-width="${on ? 4 : 3}" ${on ? '' : 'stroke-dasharray="6 5"'}/>`;
       }
       let rows = '';
-      for (let i = 0; i < 4; i++) rows += `<div class="sk-tier" style="top:${PADY + i * RH + NW / 2 - 8}px">Lv ${TIER_LEVEL[i]}</div>`;
+      for (let i = 0; i < TIER_LEVEL.length; i++) rows += `<div class="sk-tier" style="top:${PADY + i * RH + NW / 2 - 8}px">Lv ${TIER_LEVEL[i]}</div>`;
       let nodes = '';
       for (const n of t.nodes) {
         const r = G.skills[n.id] || 0, mx = maxRank(n.id);
