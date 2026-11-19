@@ -12,6 +12,9 @@ export const Settings = {
   autoAttack: false, // attack nearby foes on your own
   autoMode: 'basic', // 'basic' or a hotbar slot: rmb q w e r
   autoRange: 8,
+  // interface
+  uiScale: 1, hudOpacity: 1, theme: 'bronze', showMinimap: true, showLog: true,
+  touchSize: 1, touchOpacity: 0.9, leftHanded: false,
 };
 export function loadSettings() {
   let saved = null; try { saved = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }

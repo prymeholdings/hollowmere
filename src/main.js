@@ -36,6 +36,7 @@ import { setItemLook } from './assets.js';
 import { Vortex } from './vortex.js';
 import { Pad } from './gamepad.js';
 import { Touch } from './touch.js';
+import { applyUI } from './uiprefs.js';
 import { CLASS_DETAILS } from './details.js';
 import { Sky, clockText, daylight } from './daynight.js';
 import { petBonus, ensurePets, buildPetModel, PET_SPECIES, newPetRecord, petCoatColor } from './pets.js';
@@ -92,8 +93,9 @@ const dungeonTrack = (f) => (f >= 80 ? 'void' : f >= 50 ? 'ember' : f >= 25 ? 'a
 
 class Main {
   constructor() {
-    G.main = this;
+    G.main = this; this.G = G;
     loadSettings();
+    applyUI();
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -627,6 +629,7 @@ class Main {
       else if (k === 'c') this.ui.toggle('char');
       else if (k === 'k') this.ui.toggle('skills');
       else if (k === 'j') this.ui.toggle('quest');
+      else if (k === 'z') this.ui.toggle('zodiac');
       else if (k === 'p') this.ui.toggle('pet');
       else if (k === 'v') { Settings.autoAttack = !Settings.autoAttack; saveSettings(); this.flash(`Auto-attack ${Settings.autoAttack ? 'on' : 'off'}`); }
       else if (e.key === 'Tab') this.bigMap = !this.bigMap;

@@ -177,7 +177,7 @@ export class Player extends Entity {
         }
       }
     }
-    const speed = 6.2 * (G.buffs.speed > 0 ? 1.25 : 1) * (1 + (G.skills.swift_feet || 0) * 0.04 + petBonus('move'));
+    const speed = 6.2 * (G.buffs.speed > 0 ? 1.25 : 1) * (1 + (G.skills.swift_feet || 0) * 0.04 + petBonus('move') + itemBonus('move_pct') / 100);
     const moving = this.castLock <= 0 && this.followPath(this.path, speed, dt);
     if (moving && this.model.oneShot && !this.dead) { /* let attacks finish while moving */ }
     this.model.play(moving ? 'Running_A' : 'Idle', 0.15, moving ? 1.1 : 1);

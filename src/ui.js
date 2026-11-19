@@ -8,6 +8,10 @@ import { itemIcon, skillIcon } from './icons.js';
 import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, NODE, TIER_LEVEL, canCast, learnBlock, maxRank, isActive, skillName, skillIconKey, treePoints, synergyText } from './skills.js';
 import { Settings, saveSettings } from './settings.js';
 import { Orb3D } from './orbs.js';
+import { HeroView } from './heroview.js';
+import { SIGNS, STARS, starRank, starPoints, starPointsTotal, canLearn, learnStar, respecCost, signsCompleted } from './zodiac.js';
+import { exportSaveCode, parseSaveCode, storeImportedSave } from './state.js';
+import { applyUI, UI_THEMES } from './uiprefs.js';
 import { SKIN_TONES, DETAIL_OPTIONS, SCARF_COLORS, CLASS_DETAILS } from './details.js';
 import { clockText } from './daynight.js';
 import { PET_SPECIES, PET_SKILLS, PET_TREES, PET_TIER_LEVEL, PET_MAX_RANK, PET_MAX_LEVEL, STAGE_LEVELS, petStage, petXpToNext, learnPetSkill, ensurePets } from './pets.js';
@@ -61,7 +65,7 @@ export class UI {
         <div id="hud-top-left">
           <div id="hud-name"></div><div id="hud-sub"></div>
           <div id="pet-wrap"><div class="bar pet"><div></div><span></span></div></div>
-          <div id="hud-points" class="hidden">✦ Points to spend: ${isTouch() || /[?&]touch=1/.test(location.search) ? "tap Hero / Skills" : "C attributes · K skills"}</div>
+          <div id="hud-points" class="hidden">✦ Points to spend: ${isTouch() || /[?&]touch=1/.test(location.search) ? "tap Hero / Skills / Stars" : "C attributes · K skills · Z stars"}</div>
           <div id="hud-buffs"></div>
         </div>
         <div id="boss-bar" class="hidden"><div class="bn"></div><div class="bb"><div class="bf"></div><div class="bt"></div><i style="left:33%"></i><i style="left:66%"></i></div></div>
@@ -94,7 +98,7 @@ export class UI {
     this.labelLayer = $('#world-labels');
     this.panels = $('#panels');
     this.tooltip = $('#tooltip');
-    $('#hud-points').onclick = () => this.toggle(G.statPoints ? 'char' : 'skills');
+    $('#hud-points').onclick = () => this.toggle(G.statPoints ? 'char' : G.skillPoints ? 'skills' : 'zodiac');
     window.addEventListener('mousemove', (e) => { this.mouseX = e.clientX; this.mouseY = e.clientY; if (!this.tooltip.classList.contains('hidden')) this.placeTooltip(); });
     this.buildSlots();
   }
@@ -180,6 +184,7 @@ export class UI {
     return { x: (p.x * 0.5 + 0.5) * window.innerWidth, y: (-p.y * 0.5 + 0.5) * window.innerHeight, ok: p.z < 1 };
   }
   update(dt) {
+    this.heroView?.update(dt, !!this.open.inv);
     if (!G.level || !G.player) return;
     const seen = new Set();
     const pl = G.player;
@@ -231,7 +236,7 @@ export class UI {
     const petLbl = `${G.petName} · Lv ${G.pets?.[G.petSpecies]?.lvl || 1} ${PET_SPECIES[G.petSpecies]?.stages[petStage()] || ''}`;
     if (pet && !pet.dead && G.petAwayTime <= 0) { pb.firstElementChild.style.width = clamp(pet.hp / pet.maxHp, 0, 1) * 100 + '%'; pb.lastElementChild.textContent = formName ? `${G.petName} · ${formName} ${Math.ceil(G.petFormTime)}s` : petLbl; }
     else { pb.firstElementChild.style.width = '0%'; pb.lastElementChild.textContent = G.petAwayTime > 0 ? `${G.petName} is selling in town (${Math.ceil(G.petAwayTime)}s)` : `${G.petName} is resting in town`; }
-    $('#hud-points').classList.toggle('hidden', !(G.statPoints || G.skillPoints));
+    $('#hud-points').classList.toggle('hidden', !(G.statPoints || G.skillPoints || starPoints()));
     const buffs = [];
     if (G.buffs.power > 0) buffs.push(['fire', G.buffs.power, 'Shrine of Power']);
     if (G.buffs.speed > 0) buffs.push(['blink', G.buffs.speed, 'Shrine of Swiftness']);
@@ -390,7 +395,7 @@ export class UI {
   show(name, ...args) {
     sfx('ui');
     this.close(name);
-    const fn = { inv: this.renderInv, char: this.renderChar, skills: this.renderSkills, shop: this.renderShop, quest: this.renderQuest, pause: this.renderPause, settings: this.renderSettings, forge: this.renderForge, pet: this.renderPet, wardrobe: this.renderWardrobe }[name];
+    const fn = { inv: this.renderInv, char: this.renderChar, skills: this.renderSkills, shop: this.renderShop, quest: this.renderQuest, pause: this.renderPause, settings: this.renderSettings, forge: this.renderForge, pet: this.renderPet, wardrobe: this.renderWardrobe, zodiac: this.renderZodiac }[name];
     if (fn) fn.call(this, ...args);
   }
   panel(name, title, style, closable = true) {
@@ -414,6 +419,7 @@ export class UI {
     if (this.open.forge) this.renderForge();
     if (this.open.pet) this.renderPet();
     if (this.open.wardrobe) this.renderWardrobe();
+    if (this.open.zodiac) this.renderZodiac();
   }
 
   itemCell(it, onClick, onRight, selected, cls = 'cell') {
@@ -433,7 +439,7 @@ export class UI {
   }
 
   renderInv() {
-    const body = this.body('inv', 'Inventory', { right: '18px', top: '90px', width: '470px' });
+    const body = this.body('inv', 'Inventory', { right: '18px', top: '90px', width: '600px' });
     body.innerHTML = '';
     const eq = el('div', 'eqgrid');
     const layout = { helm: [2, 1], amulet: [3, 1], weapon: [1, 2], armor: [2, 2], offhand: [3, 2], ring: [3, 3] };
@@ -455,7 +461,11 @@ export class UI {
     petInfo.style.gridColumn = 2; petInfo.style.gridRow = 3;
     eq.appendChild(petInfo);
     const ipb = petInfo.querySelector('#inv-pet'); if (ipb) ipb.onclick = () => this.show('pet');
-    body.appendChild(eq);
+    const top = el('div', 'invtop');
+    if (!this.heroView) this.heroView = new HeroView();
+    this.heroView.mount(top);
+    top.appendChild(eq);
+    body.appendChild(top);
     body.appendChild(el('div', 'muted', `Backpack ${G.backpack.length}/${BACKPACK_MAX} · Right-click to ${this.open.shop ? 'sell' : 'equip or feed your pet'}`));
     const grid = el('div', 'grid');
     grid.style.margin = '6px 0 10px';
@@ -796,7 +806,7 @@ export class UI {
   }
 
   renderSettings(fromMenu = false) {
-    const body = this.panel('settings', 'Settings', { left: '50%', top: '14%', width: '480px', transform: 'translateX(-50%)', zIndex: 20 });
+    const body = this.panel('settings', 'Settings', { left: '50%', top: '6%', width: '500px', maxHeight: '88vh', overflowY: 'auto', transform: 'translateX(-50%)', zIndex: 20 });
     const slider = (key, label) => `<div class="setrow"><span>${label}</span><span><input type="range" min="0" max="100" value="${Math.round(Settings[key] * 100)}" data-k="${key}"> <span id="sv-${key}">${Math.round(Settings[key] * 100)}%</span></span></div>`;
     const check = (key, label) => `<div class="setrow"><span>${label}</span><input type="checkbox" data-c="${key}" ${Settings[key] ? 'checked' : ''}></div>`;
     body.innerHTML = `<h3><span>Audio</span></h3>${slider('master', 'Master volume')}${slider('music', 'Music')}${slider('sfx', 'Sound effects')}
@@ -810,19 +820,144 @@ export class UI {
       <div class="setrow"><span>Auto-attack with</span><select id="set-am"><option value="basic">Basic attack</option>${['rmb', 'q', 'w', 'e', 'r'].map((k) => `<option value="${k}">${k.toUpperCase()} slot${G.hotbar?.[k] ? ': ' + skillName(G.hotbar[k]) : ''}</option>`).join('')}</select></div>
       <div class="setrow"><span>Auto-attack range</span><span><input type="range" min="3" max="14" value="${Settings.autoRange}" id="set-ar"> <span id="sv-ar">${Settings.autoRange}m</span></span></div>
       <div class="muted" style="font-size:12px">With a skill chosen, it is cast whenever it is ready and you have the mana; otherwise you use your basic attack. Moving by clicking always wins.</div>
-      <h3><span>Controls</span></h3><div class="muted" style="line-height:1.6">Xbox and PlayStation controllers work everywhere: left stick moves, A/✕ attacks and talks, X/□ Y/△ B/○ LB/L1 RB/R1 cast your skills, LT/RT (L2/R2) drink potions, and in menus the d-pad moves the highlight, A/✕ selects, B/○ goes back, LB/RB switch tabs.<br>Left-click: move, attack, pick up, talk · Right-click / Q W E R: skills · 1 / 2: potions · T: town portal · V: auto-attack on/off · P: companion · I: inventory · C: character · K: skills · J: quest · Tab: big map · Alt: show item names · Mouse wheel: zoom · F5: save · Esc: menu</div>
+      <h3><span>Interface</span></h3>
+      <div class="setrow"><span>Interface size</span><span><input type="range" min="60" max="140" step="5" value="${Math.round((Settings.uiScale ?? 1) * 100)}" data-u="uiScale"> <span id="sv-uiScale">${Math.round((Settings.uiScale ?? 1) * 100)}%</span></span></div>
+      <div class="setrow"><span>HUD opacity</span><span><input type="range" min="30" max="100" step="5" value="${Math.round((Settings.hudOpacity ?? 1) * 100)}" data-u="hudOpacity"> <span id="sv-hudOpacity">${Math.round((Settings.hudOpacity ?? 1) * 100)}%</span></span></div>
+      <div class="setrow"><span>Colour theme</span><select id="set-theme">${Object.entries(UI_THEMES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join('')}</select></div>
+      ${check('showMinimap', 'Show minimap')}${check('showLog', 'Show message log')}
+      <h3><span>Touch controls</span></h3>
+      <div class="setrow"><span>Button size</span><span><input type="range" min="70" max="140" step="5" value="${Math.round((Settings.touchSize ?? 1) * 100)}" data-u="touchSize"> <span id="sv-touchSize">${Math.round((Settings.touchSize ?? 1) * 100)}%</span></span></div>
+      <div class="setrow"><span>Button opacity</span><span><input type="range" min="30" max="100" step="5" value="${Math.round((Settings.touchOpacity ?? 0.9) * 100)}" data-u="touchOpacity"> <span id="sv-touchOpacity">${Math.round((Settings.touchOpacity ?? 0.9) * 100)}%</span></span></div>
+      ${check('leftHanded', 'Left-handed (stick on the right)')}
+      <h3><span>Save transfer (phone ⇄ PC)</span></h3>
+      <div class="muted" style="font-size:12px">Move your hero between the PC game and the phone version. Copy a code (or save a file) here, then load it on the other device.</div>
+      <div style="text-align:center"><button id="set-exp">Copy save code</button><button id="set-file">Save as file</button><button id="set-imp">Load from code or file</button></div>
+      <h3><span>Controls</span></h3><div class="muted" style="line-height:1.6">Xbox and PlayStation controllers work everywhere: left stick moves, A/✕ attacks and talks, X/□ Y/△ B/○ LB/L1 RB/R1 cast your skills, LT/RT (L2/R2) drink potions, and in menus the d-pad moves the highlight, A/✕ selects, B/○ goes back, LB/RB switch tabs.<br>Left-click: move, attack, pick up, talk · Right-click / Q W E R: skills · 1 / 2: potions · T: town portal · V: auto-attack on/off · P: companion · I: inventory · C: character · K: skills · J: quest · Z: zodiac stars · Tab: big map · Alt: show item names · Mouse wheel: zoom · F5: save · Esc: menu</div>
       <div style="text-align:center;margin-top:12px"><button class="primary" id="set-done">Done</button></div>`;
     $('#set-q', body).value = Settings.quality;
     $('#set-am', body).value = Settings.autoMode;
     $('#set-am', body).onchange = (e) => { Settings.autoMode = e.target.value; saveSettings(); };
     $('#set-ar', body).oninput = (e) => { Settings.autoRange = +e.target.value; $('#sv-ar').textContent = e.target.value + 'm'; saveSettings(); };
     body.querySelectorAll('[data-k]').forEach((r) => (r.oninput = () => { Settings[r.dataset.k] = r.value / 100; $('#sv-' + r.dataset.k).textContent = r.value + '%'; saveSettings(); }));
-    body.querySelectorAll('[data-c]').forEach((c) => (c.onchange = () => { Settings[c.dataset.c] = c.checked; saveSettings(); }));
+    body.querySelectorAll('[data-c]').forEach((c) => (c.onchange = () => { Settings[c.dataset.c] = c.checked; saveSettings(); applyUI(); }));
     $('#set-q', body).onchange = (e) => { Settings.quality = e.target.value; saveSettings(); this.main.applyQuality(); };
     $('#set-rs', body).onchange = (e) => { Settings.renderScale = e.target.value / 100; $('#sv-rs').textContent = e.target.value + '%'; saveSettings(); this.main.applyQuality(); };
     $('#set-sh', body).oninput = (e) => { Settings.sharpen = e.target.value / 100; $('#sv-sh').textContent = e.target.value + '%'; saveSettings(); this.main.resize(); };
     $('#set-fs', body).onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); };
+    body.querySelectorAll('[data-u]').forEach((r) => (r.oninput = () => { Settings[r.dataset.u] = r.value / 100; $('#sv-' + r.dataset.u).textContent = r.value + '%'; saveSettings(); applyUI(); }));
+    $('#set-theme', body).value = Settings.theme || 'bronze';
+    $('#set-theme', body).onchange = (e) => { Settings.theme = e.target.value; saveSettings(); applyUI(); };
+    $('#set-exp', body).onclick = () => this.copySaveCode();
+    $('#set-file', body).onclick = async () => { let c = null; try { c = await exportSaveCode(); } catch (e) { /* none */ } if (c) this.downloadSave(c); else msg('There is no saved hero yet.', '#ff8866'); };
+    $('#set-imp', body).onclick = () => this.importSaveDialog();
     $('#set-done', body).onclick = () => { this.close('settings'); if (fromMenu) this.showMenu(); };
+  }
+
+  // ---------------- the Zodiac: star sign perk constellations ----------------
+  renderZodiac() {
+    const body = this.body('zodiac', 'The Zodiac', { left: '50%', top: isTouch() ? '46px' : '50px', width: '980px', transform: 'translateX(-50%)' });
+    const W = 300, H = 230;
+    if (!this.zsky) {
+      let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      this.zsky = Array.from({ length: 260 }, () => `<circle cx="${(rnd() * 1200).toFixed(1)}" cy="${(rnd() * 690).toFixed(1)}" r="${(rnd() * 1.3 + 0.2).toFixed(2)}" fill="#fff" opacity="${(rnd() * 0.5 + 0.1).toFixed(2)}"/>`).join('');
+    }
+    const pos = (si, st) => { const c = si % 4, r = Math.floor(si / 4); return [c * W + 30 + st.x * 240, r * H + 34 + st.y * 160]; };
+    let lines = '', stars = '', labels = '';
+    SIGNS.forEach((sg, si) => {
+      const c = si % 4, r = Math.floor(si / 4);
+      const done = sg.stars.every((st) => starRank(st.id) >= st.ranks);
+      labels += `<text x="${c * W + W / 2}" y="${r * H + H - 12}" text-anchor="middle" class="zl${done ? ' done' : ''}">${sg.glyph}︎ ${sg.name}</text>`;
+      for (const st of sg.stars) {
+        if (!st.from) continue;
+        const [x1, y1] = pos(si, STARS[st.from]), [x2, y2] = pos(si, st);
+        lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="zline${starRank(st.id) ? ' on' : ''}"/>`;
+      }
+      for (const st of sg.stars) {
+        const [x, y] = pos(si, st), rk = starRank(st.id);
+        const state = rk >= st.ranks ? 'max' : rk ? 'part' : canLearn(st.id) ? 'open' : (!st.from || starRank(st.from)) ? 'wait' : 'lock';
+        const big = st.ranks === 1 ? 4 : 0;
+        stars += `<g class="zstar ${state}${this.zsel === st.id ? ' sel' : ''}" data-id="${st.id}"><circle cx="${x}" cy="${y}" r="26" class="hit"/><circle cx="${x}" cy="${y}" r="${13 + big}" class="glow"/><circle cx="${x}" cy="${y}" r="${6 + big / 2}" class="core"/>${st.ranks > 1 ? `<text x="${x}" y="${y + 27}" text-anchor="middle" class="zr">${rk}/${st.ranks}</text>` : ''}</g>`;
+      }
+    });
+    const pts = starPoints();
+    const sel = this.zsel && STARS[this.zsel];
+    const sign = sel && SIGNS.find((g) => g.id === sel.sign);
+    const rk = sel ? starRank(sel.id) : 0;
+    const info = sel
+      ? `<div class="zname">${sign.glyph}︎ ${sel.name} <span class="muted">· ${sign.name}, ${sign.theme}</span></div>
+         <div>${sel.text}${sel.ranks > 1 ? ` <span class="muted">(rank ${rk} / ${sel.ranks}, now ${rk ? sel.text.replace(/\+([\d.]+)/g, (m, n) => '+' + +(n * rk).toFixed(1)).replace(/ per rank/g, '') : 'nothing'})</span>` : rk ? ' <span style="color:#9fd8a0">(learned)</span>' : ''}</div>
+         ${sel.from && !starRank(sel.from) ? `<div class="tt-bad">Learn ${STARS[sel.from].name} first.</div>` : ''}`
+      : `<div class="muted">Tap a star to see what it does. You earn one star point every second level (${starPointsTotal()} so far). A star needs the star it is linked from.</div>`;
+    body.innerHTML = `<div class="zhead"><span>Star points: <b style="color:#fff">${pts}</b></span><span class="muted">${signsCompleted()} of 12 signs complete</span></div>
+      <svg class="zsky" viewBox="0 0 1200 690" preserveAspectRatio="xMidYMid meet"><defs><radialGradient id="zbg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#1c1838"/><stop offset="1" stop-color="#05040c"/></radialGradient></defs>
+      <rect width="1200" height="690" fill="url(#zbg)"/>${this.zsky}${lines}${labels}${stars}</svg>
+      <div class="zinfo"><div class="ztext">${info}</div><div class="zbtns"><button class="primary" id="z-learn" ${sel && canLearn(sel.id) ? '' : 'disabled'}>Learn star</button><button class="small" id="z-reset" ${Object.keys(G.stars || {}).length ? '' : 'disabled'}>Reset (${respecCost().toLocaleString()} gold)</button></div></div>`;
+    body.querySelectorAll('.zstar').forEach((g) => {
+      g.onclick = () => { this.zsel = g.dataset.id; sfx('ui'); this.renderZodiac(); };
+      g.ondblclick = () => { if (learnStar(g.dataset.id)) this.afterStar(); };
+    });
+    $('#z-learn', body).onclick = () => { if (sel && learnStar(sel.id)) this.afterStar(); };
+    $('#z-reset', body).onclick = () => {
+      const cost = respecCost();
+      if (G.gold < cost) { msg(`Resetting the stars costs ${cost.toLocaleString()} gold.`, '#ff8866'); return; }
+      this.choice('Reset the stars?', `All star points come back to you for ${cost.toLocaleString()} gold.`, [['Reset', () => { G.gold -= cost; G.stars = {}; invalidateBonus(); G.hp = Math.min(G.hp, maxHp()); G.mp = Math.min(G.mp, maxMp()); sfx('gold'); this.refresh(); }], ['Cancel', null]]);
+    };
+  }
+  afterStar() {
+    invalidateBonus(); sfx('level');
+    G.hp = Math.min(G.hp, maxHp()); G.mp = Math.min(G.mp, maxMp());
+    this.renderZodiac();
+  }
+
+  // ---------------- moving saves between phone and PC ----------------
+  async copySaveCode() {
+    let code;
+    try { code = await exportSaveCode(); } catch (e) { code = null; }
+    if (!code) { msg('There is no saved hero to copy yet.', '#ff8866'); return; }
+    this.lastCode = code;
+    let copied = false;
+    try { await navigator.clipboard.writeText(code); copied = true; } catch (e) { /* not allowed here */ }
+    this.saveCodeDialog(code, copied);
+  }
+  saveCodeDialog(code, copied) {
+    this.close('savecode');
+    const body = this.panel('savecode', 'Save code', { left: '50%', top: '16%', width: '520px', transform: 'translateX(-50%)', zIndex: 30 });
+    body.innerHTML = `<p>${copied ? 'Copied! ' : ''}Paste this code into <b>Settings → Load from code</b> on your other device (phone or PC). It holds your whole hero.</p>
+      <textarea class="savecode" readonly>${code}</textarea>
+      <div style="text-align:center"><button id="sc-copy">Copy again</button><button id="sc-file">Save as file</button><button class="primary" id="sc-done">Done</button></div>`;
+    const ta = $('textarea', body); ta.onclick = () => ta.select();
+    $('#sc-copy', body).onclick = async () => { ta.select(); try { await navigator.clipboard.writeText(code); msg('Save code copied.', '#9fd8a0'); } catch (e) { try { document.execCommand('copy'); msg('Save code copied.', '#9fd8a0'); } catch (e2) { msg('Select the text and copy it by hand.', '#ff8866'); } } };
+    $('#sc-file', body).onclick = () => this.downloadSave(code);
+    $('#sc-done', body).onclick = () => this.close('savecode');
+  }
+  downloadSave(code) {
+    const name = `${(G.heroName || 'hero').replace(/[^\w-]+/g, '_')}.hmsave`;
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' }));
+      a.download = name; document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+      msg(`Saved ${name} to your downloads.`, '#9fd8a0');
+    } catch (e) { msg('This browser blocked the download. Use Copy save code instead.', '#ff8866'); }
+  }
+  importSaveDialog() {
+    this.close('saveimport');
+    const body = this.panel('saveimport', 'Load a save', { left: '50%', top: '16%', width: '520px', transform: 'translateX(-50%)', zIndex: 30 });
+    body.innerHTML = `<p>Paste a save code from your other device, or pick a <b>.hmsave</b> file. <span class="tt-bad">This replaces the hero on this device.</span></p>
+      <textarea class="savecode" placeholder="HM1:..."></textarea>
+      <div style="text-align:center"><button class="primary" id="si-go">Load code</button><label class="filebtn">Pick file<input type="file" accept=".hmsave,.txt,.json,text/plain,application/json" hidden></label><button id="si-cancel">Cancel</button></div>`;
+    const ta = $('textarea', body);
+    const go = async (text) => {
+      let d;
+      try { d = await parseSaveCode(text); } catch (e) { msg(e.message && e.message.length < 80 ? e.message : 'That save code could not be read.', '#ff5555'); return; }
+      if (!storeImportedSave(d)) { msg('Could not store the save on this device.', '#ff5555'); return; }
+      msg(`Loaded ${d.heroName}, level ${d.lvl} ${d.cls}.`, '#9fd8a0');
+      this.close('saveimport'); this.close('settings'); this.close('pause');
+      this.main.continueGame();
+    };
+    $('#si-go', body).onclick = () => go(ta.value);
+    $('input[type=file]', body).onchange = async (e) => { const f = e.target.files[0]; if (f) go(await f.text()); };
+    $('#si-cancel', body).onclick = () => this.close('saveimport');
   }
 
   choice(title, text, options, grid = false) {
@@ -1056,7 +1191,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.4 · 3D models by Kay Lousberg (KayKit, CC0) · Music and sound made in code</div>`;
+      <div class="foot">An original action RPG · v0.5 · 3D models by Kay Lousberg (KayKit, CC0) · Music and sound made in code</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };

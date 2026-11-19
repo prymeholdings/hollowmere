@@ -2,6 +2,7 @@ import { generate, itemColor, sellPrice, starterItem, gemEffect, upgradeItem, is
 import { ENEMIES, QUEST_GIVER, FAME_STEPS, FAME_RANKS } from './data.js';
 import { randi, pick, sfx } from './util.js';
 import { petRec, petBonus, ensurePets } from './pets.js';
+import { zodiacBonus } from './zodiac.js';
 
 const SAVE_KEY = 'hollowmere_save_v2';
 export const SKILL_ZERO = { firebolt: 0, lightning: 0, nova: 0, meteor: 0, blizzard: 0, heal: 0, bones: 0, whirlwind: 0, slam: 0, earthquake: 0, knives: 0, blink: 0, smoke: 0, blades: 0, warcry: 0,
@@ -32,7 +33,7 @@ export function reset() {
     },
     backpack: [], deepest: 0, portalFloor: 0, quest: null, questOffer: null,
     petName: 'Pip', petSpecies: 'fox', pets: null, petForm: '', petFormTime: 0, petAwayTime: 0, petPendingGold: 0,
-    shopStock: [], currentFloor: 0, kills: 0, fishCaught: 0, fishLuck: 0, wellsCleared: 0, buffs: {}, timeOfDay: 0.34,
+    stars: {}, shopStock: [], currentFloor: 0, kills: 0, fishCaught: 0, fishLuck: 0, wellsCleared: 0, buffs: {}, timeOfDay: 0.34,
   });
   G.hp = maxHp(); G.mp = maxMp();
 }
@@ -50,6 +51,7 @@ function bonusTable() {
     for (const k in it.affixes) add(k, it.affixes[k]);
     if (it.gems) for (const g of it.gems) if (g) { const [k, v] = gemEffect(g, slot); add(k, v); }
   }
+  zodiacBonus(add);
   if (t.all) for (const k of ['str', 'dex', 'vit', 'mag']) add(k, t.all);
   bonusCache = t; bonusRefs = refs;
   return t;
@@ -58,12 +60,12 @@ export const invalidateBonus = () => { bonusCache = null; };
 export function itemBonus(s) { return bonusTable()[s] || 0; }
 export const stat = (s) => G.base[s] + itemBonus(s);
 export const elementalDamage = () => ({ fire: itemBonus('fire'), cold: itemBonus('cold'), light: itemBonus('light'), poison: itemBonus('poison') });
-export const maxHp = () => (40 + stat('vit') * 5 + G.lvl * 6 + itemBonus('life')) * (1 + 0.08 * (G.skills.toughness || 0));
-export const maxMp = () => (14 + stat('mag') * 3 + G.lvl * 2 + itemBonus('mana')) * (1 + 0.06 * (G.skills.arcane_flow || 0));
+export const maxHp = () => (40 + stat('vit') * 5 + G.lvl * 6 + itemBonus('life')) * (1 + 0.08 * (G.skills.toughness || 0)) * (1 + itemBonus('life_pct') / 100);
+export const maxMp = () => (14 + stat('mag') * 3 + G.lvl * 2 + itemBonus('mana')) * (1 + 0.06 * (G.skills.arcane_flow || 0)) * (1 + itemBonus('mana_pct') / 100);
 export function armor() {
   let a = itemBonus('armor');
   for (const k in G.equipment) { const it = G.equipment[k]; if (it && it.armor) a += it.armor; }
-  return a + stat('dex') * 0.3 + (G.skills.toughness || 0) * 5 + (G.buffs.warcry > 0 ? 40 : 0) + petBonus('armor');
+  return (a + stat('dex') * 0.3 + (G.skills.toughness || 0) * 5 + (G.buffs.warcry > 0 ? 40 : 0) + petBonus('armor')) * (1 + itemBonus('armor_pct') / 100);
 }
 export function weaponDamage() {
   const w = G.equipment.weapon;
@@ -77,9 +79,9 @@ export function weaponDamage() {
 export const rollDamage = () => { const d = weaponDamage(); return d[0] + Math.random() * (d[1] - d[0]); };
 export const attackSpeed = () => 1.15 * (1 + stat('dex') * 0.008 + itemBonus('aspd') / 100 + G.skills.mastery * 0.03) * (G.buffs.speed > 0 ? 1.3 : 1);
 export const critChance = () => Math.min(0.75, 0.05 + stat('dex') * 0.002 + (G.skills.lethality || 0) * 0.015 + itemBonus('crit') / 100);
-export const critMult = () => 2 + (G.skills.brutality || 0) * 0.15;
-export const petDamage = () => (3 + petRec().lvl * 1.5 + G.lvl * 0.9) * (1 + 0.15 * G.skills.pet_bond);
-export const petMaxHp = () => (35 + petRec().lvl * 9 + G.lvl * 6) * (1 + 0.15 * G.skills.pet_bond);
+export const critMult = () => 2 + (G.skills.brutality || 0) * 0.15 + itemBonus('crit_dmg') / 100;
+export const petDamage = () => (3 + petRec().lvl * 1.5 + G.lvl * 0.9) * (1 + 0.15 * G.skills.pet_bond) * (1 + itemBonus('pet_pct') / 100);
+export const petMaxHp = () => (35 + petRec().lvl * 9 + G.lvl * 6) * (1 + 0.15 * G.skills.pet_bond) * (1 + itemBonus('pet_pct') / 100);
 export const xpToNext = () => Math.floor(50 * Math.pow(G.lvl, 1.55));
 export const fameTitle = () => FAME_RANKS[G.fameRank];
 
@@ -87,7 +89,7 @@ export const MAX_LEVEL = 200;
 export const MAX_FLOOR = 100;
 export function addXp(n) {
   if (G.lvl >= MAX_LEVEL) { G.xp = 0; return; }
-  G.xp += n;
+  G.xp += Math.round(n * (1 + itemBonus('xp_pct') / 100));
   while (G.lvl < MAX_LEVEL && G.xp >= xpToNext()) {
     G.xp -= xpToNext();
     G.lvl++; G.statPoints += 5; G.skillPoints += 1;
@@ -266,7 +268,7 @@ export function restockShop() {
 }
 
 // saving
-const SAVE_FIELDS = ['heroName', 'cls', 'look', 'hotbar', 'lvl', 'xp', 'statPoints', 'skillPoints', 'base', 'skills', 'gold', 'fame', 'fameRank', 'hp', 'mp', 'hpPotions', 'mpPotions', 'scrolls', 'equipment', 'backpack', 'deepest', 'portalFloor', 'quest', 'questOffer', 'petName', 'petForm', 'petFormTime', 'shopStock', 'kills', 'fishCaught', 'fishLuck', 'wellsCleared', 'timeOfDay', 'petSpecies', 'pets'];
+const SAVE_FIELDS = ['heroName', 'cls', 'look', 'hotbar', 'lvl', 'xp', 'statPoints', 'skillPoints', 'base', 'skills', 'gold', 'fame', 'fameRank', 'hp', 'mp', 'hpPotions', 'mpPotions', 'scrolls', 'equipment', 'backpack', 'deepest', 'portalFloor', 'quest', 'questOffer', 'petName', 'petForm', 'petFormTime', 'shopStock', 'kills', 'fishCaught', 'fishLuck', 'wellsCleared', 'timeOfDay', 'petSpecies', 'pets', 'stars'];
 export let lastSaved = 0;
 function readSaves() {
   const out = [];
@@ -294,6 +296,37 @@ export function saveGame() {
   return true;
 }
 export const hasSave = () => readSaves().length > 0;
+// ---- moving a save between devices: a short text code ("HM1:" + gzipped JSON in base64url) or a file holding it
+const b64u = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = (t) => { const s = atob(t.replace(/-/g, '+').replace(/_/g, '/')); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; };
+const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+export async function exportSaveCode() {
+  if (G.player) saveGame();
+  const d = readSaves()[0];
+  if (!d) return null;
+  const json = new TextEncoder().encode(JSON.stringify(d));
+  if (typeof CompressionStream === 'undefined') return 'HM0:' + b64u(json);
+  return 'HM1:' + b64u(await pipe(json, new CompressionStream('gzip')));
+}
+export async function parseSaveCode(text) {
+  const t = String(text || '').trim().replace(/\s+/g, '');
+  let d;
+  if (t.startsWith('{')) d = JSON.parse(t);
+  else if (t.startsWith('HM1:')) d = JSON.parse(new TextDecoder().decode(await pipe(unb64u(t.slice(4)), new DecompressionStream('gzip'))));
+  else if (t.startsWith('HM0:')) d = JSON.parse(new TextDecoder().decode(unb64u(t.slice(4))));
+  else throw new Error('This is not a Hollowmere save code.');
+  if (!d || typeof d !== 'object' || !d.heroName || !d.cls || !d.base || !d.equipment) throw new Error('The save code is incomplete.');
+  return d;
+}
+// write an imported save as the newest save on this device (it wins over older local copies)
+export function storeImportedSave(d) {
+  d = { ...d, savedAt: Date.now() };
+  const json = JSON.stringify(d);
+  let ok = false;
+  try { localStorage.setItem(SAVE_KEY, json); ok = localStorage.getItem(SAVE_KEY) === json; } catch (e) { /* quota */ }
+  try { if (window.hm && window.hm.saveFile) ok = window.hm.saveFile(json) === true || ok; } catch (e) { /* ipc */ }
+  return ok;
+}
 export function savedLoc() { const d = readSaves()[0]; return d && d.loc; }
 export function loadGame() {
   const d = readSaves()[0];
@@ -304,6 +337,7 @@ export function loadGame() {
   G.look = { ...look0, ...(d.look || {}) };
   G.base = { str: 10, dex: 10, vit: 10, mag: 10, ...d.base };
   G.skills = { ...SKILL_ZERO, ...d.skills };
+  G.stars = { ...(d.stars || {}) };
   for (const k in G.equipment) if (G.equipment[k]) upgradeItem(G.equipment[k]);
   G.backpack.forEach(upgradeItem); (G.shopStock || []).forEach(upgradeItem);
   if (!d.pets) { G.pets = null; G.petSpecies = 'fox'; ensurePets(); G.pets.fox.coat = (G.look && G.look.pet) || 'fox'; const l = Math.min(60, 1 + Math.floor(G.lvl / 2)); G.pets.fox.lvl = l; G.pets.fox.points = l - 1; }

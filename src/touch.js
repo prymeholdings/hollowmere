@@ -8,6 +8,21 @@ import { skillIconKey } from './skills.js';
 
 export const isTouch = () => (typeof window !== 'undefined') && (('ontouchstart' in window) || navigator.maxTouchPoints > 0) && matchMedia('(pointer: coarse)').matches;
 
+// full screen plus a landscape lock where the browser allows it (Android Chrome does after a tap)
+export function toggleFullscreen(force) {
+  const d = document, el = d.documentElement;
+  const on = !!(d.fullscreenElement || d.webkitFullscreenElement);
+  if (on && force !== true) { (d.exitFullscreen || d.webkitExitFullscreen)?.call(d); return; }
+  if (on) return;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;
+  try {
+    const p = req.call(el, { navigationUI: 'hide' });
+    if (p && p.then) p.then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {});
+  } catch (e) { /* not allowed here */ }
+}
+export const isStandalone = () => matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true;
+
 export class Touch {
   constructor(main) {
     this.main = main;
@@ -22,6 +37,8 @@ export class Touch {
     // stop the page from scrolling or zooming while playing
     document.addEventListener('touchmove', (e) => { if (!e.target.closest('.panel, #create, #menu')) e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturestart', (e) => e.preventDefault());
+    const first = () => { if (!isStandalone()) toggleFullscreen(true); };
+    document.addEventListener('click', first, { once: true, capture: true });
   }
   build() {
     const el = (tag, cls, html = '') => { const d = document.createElement(tag); d.className = cls; d.innerHTML = html; return d; };
@@ -34,7 +51,7 @@ export class Touch {
         <button class="tb pot hp" data-act="hp">♥</button><button class="tb pot mp" data-act="mp">✦</button><button class="tb pot" data-act="portal">◎</button>
       </div>
       <div id="t-top">
-        <button data-p="inv">Bag</button><button data-p="skills">Skills</button><button data-p="char">Hero</button><button data-p="pet">Pet</button><button data-p="quest">Quest</button><button data-p="map">Map</button><button data-p="auto">Auto</button><button data-p="pause">☰</button>
+        <button data-p="inv">Bag</button><button data-p="skills">Skills</button><button data-p="zodiac">Stars</button><button data-p="char">Hero</button><button data-p="pet">Pet</button><button data-p="quest">Quest</button><button data-p="map">Map</button><button data-p="auto">Auto</button><button data-p="fs" class="fsbtn">⛶</button><button data-p="pause">☰</button>
       </div>
       <div id="t-rotate">Turn your phone sideways for the best view</div>`;
     document.body.appendChild(root);
@@ -76,6 +93,7 @@ export class Touch {
   panel(p) {
     const m = this.main, ui = m.ui;
     if (m.menuMode && p !== 'pause') return;
+    if (p === 'fs') { toggleFullscreen(); return; }
     if (p === 'map') { m.bigMap = !m.bigMap; return; }
     if (p === 'auto') { Settings.autoAttack = !Settings.autoAttack; saveSettings(); m.flash(`Auto-attack ${Settings.autoAttack ? 'on' : 'off'}`); return; }
     if (p === 'pause') { if (ui.anyPanel()) ui.closeAll(); else if (!m.menuMode) ui.show('pause'); return; }
