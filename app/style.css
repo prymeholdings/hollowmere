@@ -51,7 +51,7 @@ select { font-family: inherit; background: #0d0a07; color: #f3e2bd; border: 1px 
 #hud-target .bar { height: 18px; border-color: #8a6a3a; } #hud-target .bar > div { background: linear-gradient(#d03a2a, #6a120a); } #hud-target .bar > span { font-size: 12px; line-height: 17px; }
 /* bottom bar */
 #hud-bottom { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 10px; padding-bottom: 10px; }
-.orb { width: 136px; height: 136px; border-radius: 50%; position: relative; overflow: visible; background: radial-gradient(#050304, #000); box-shadow: 0 8px 26px #000e; }
+.orb { width: 84px; height: 84px; border-radius: 50%; position: relative; overflow: visible; background: radial-gradient(#050304, #000); box-shadow: 0 8px 26px #000e; }
 .orb .fill { position: absolute; left: 6px; right: 6px; bottom: 6px; transition: height 0.15s; border-radius: 0 0 999px 999px; }
 .orb.gl .fill { display: none; }
 .orb.hp .fill { background: radial-gradient(circle at 40% 30%, #ff6a5a, #b3150f 55%, #4a0505); }
@@ -63,9 +63,9 @@ select { font-family: inherit; background: #0d0a07; color: #f3e2bd; border: 1px 
   mask: radial-gradient(circle closest-side, transparent 0 calc(100% - 12px), #000 calc(100% - 11px));
   box-shadow: 0 0 0 2px #000, inset 0 0 0 2px #000; filter: drop-shadow(0 2px 3px #000); }
 .orb .orbframe::after { content: ''; position: absolute; inset: 5px; border-radius: 50%; box-shadow: inset 0 3px 3px #fff6, inset 0 -3px 4px #0009; }
-.orb.hp .orbframe::before, .orb.mp .orbframe::before { content: ''; position: absolute; left: 50%; top: -10px; width: 26px; height: 18px; transform: translateX(-50%); background: linear-gradient(#f0d27a, #6a4a1a); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.orb.hp .orbframe::before, .orb.mp .orbframe::before { content: ''; position: absolute; left: 50%; top: -7px; width: 18px; height: 12px; transform: translateX(-50%); background: linear-gradient(#f0d27a, #6a4a1a); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .orb .txt { z-index: 2; font-weight: bold; letter-spacing: 0.5px; }
-.orb .txt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; text-shadow: 1px 1px 2px #000, 0 0 4px #000; color: #fff; }
+.orb .txt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; text-shadow: 1px 1px 2px #000, 0 0 4px #000; color: #fff; }
 #barmid { display: flex; flex-direction: column; align-items: center; margin-bottom: 6px; }
 #xpbar { width: 100%; height: 8px; background: #0d0a08; border: 1px solid #6a5535; margin-bottom: 5px; border-radius: 2px; overflow: hidden; }
 #xpbar div { height: 100%; background: linear-gradient(#e0bfff, #7a3fbf); transition: width 0.2s; }
@@ -367,3 +367,11 @@ body.touch #t-zoom { display: flex; flex-direction: column; gap: 8px; position: 
 body.touch.panel-open #t-zoom, #touch.hidden #t-zoom { display: none; }
 #t-zoom .tz { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #8a6a3a; background: rgba(20,14,10,.75); color: #f2d89a; font-size: 26px; line-height: 1; padding: 0; touch-action: manipulation; }
 #t-zoom .tz:active { background: rgba(80,56,30,.9); }
+
+/* small on-screen joystick for mouse users */
+body.pcstick #touch { display: block; }
+body.pcstick #touch.hidden, body.pcstick.panel-open #touch { display: none; }
+body.pcstick #t-stick { left: 22px; bottom: 96px; width: 104px; height: 104px; opacity: .75; cursor: pointer; }
+body.pcstick #t-stick:hover { opacity: 1; }
+body.pcstick #t-stick .knob { left: 31px; top: 31px; width: 42px; height: 42px; }
+body.pcstick.lefty #t-stick { left: auto; right: 22px; }

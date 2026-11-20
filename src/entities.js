@@ -8,6 +8,7 @@ import { Vortex } from './vortex.js';
 import { buildPetModel, petStage, petCoatColor, PET_SPECIES, PET_SKILLS, petRank, ensurePets, addPetXp, petBonus } from './pets.js';
 import { Settings } from './settings.js';
 import { Barks } from './barks.js';
+import { buildEnemyReal } from './realchar.js';
 import { REAL_OK, buildReal, RealChar, ARMOR_KIND, armorKey, fullLook, realFor, NPC_SPECS } from './realchar.js';
 import { goreKind } from './gore.js';
 import { ENEMIES } from './data.js';
@@ -49,12 +50,15 @@ class Entity {
   face(p, dt = 0) {
     const dx = p.x - this.pos.x, dz = p.z - this.pos.z;
     if (dx * dx + dz * dz < 0.0001) return;
-    const target = Math.atan2(dx, dz);
-    if (!dt) { this.root.rotation.y = target; return; }
-    let d = target - this.root.rotation.y;
+    // entities with a separate `body` turn only that part
+    const rot = this.body || this.root;
+    const base = this.body ? this.root.rotation.y : 0;
+    const target = Math.atan2(dx, dz) - base;
+    if (!dt) { rot.rotation.y = target; return; }
+    let d = target - rot.rotation.y;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
-    this.root.rotation.y += d * Math.min(1, dt * 14);
+    rot.rotation.y += d * Math.min(1, dt * 14);
   }
   followPath(path, speed, dt) {
     if (!path.length) return false;
@@ -244,24 +248,39 @@ function buildEnemyModel(shape, color, s) {
   switch (shape) {
     case 'blob': {
       g = new THREE.Group();
-      const b = sphere(0.55, color); b.scale.set(1, 0.7, 1); b.position.y = 0.4; g.add(b);
-      for (const x of [-0.18, 0.18]) { const e = sphere(0.07, 0xffff66, 3); e.position.set(x, 0.6, 0.45); g.add(e); }
+      const col = new THREE.Color(color);
+      const b = sphere(0.7, color); b.scale.set(1, 0.72, 1); b.position.y = 0.5; b.material.transparent = true; b.material.opacity = 0.82; b.material.roughness = 0.15; g.add(b);
+      const core = sphere(0.28, col.clone().multiplyScalar(1.6).getHex(), 1.4); core.position.set(0, 0.5, 0); core.castShadow = false; g.add(core);
+      for (let i = 0; i < 7; i++) { const a2 = i / 7 * Math.PI * 2; const bub = sphere(0.1 + (i % 3) * 0.04, col.clone().multiplyScalar(1.2).getHex(), 0.3); bub.position.set(Math.cos(a2) * 0.45, 0.4 + (i % 3) * 0.15, Math.sin(a2) * 0.45); bub.material.transparent = true; bub.material.opacity = 0.7; bub.castShadow = false; g.add(bub); }
+      for (const x of [-0.22, 0.22]) { const w = sphere(0.1, 0xffffff, 0.3); w.position.set(x, 0.72, 0.56); g.add(w); const e = sphere(0.05, 0x110000, 0); e.position.set(x, 0.72, 0.65); g.add(e); }
+      const mouth = box(0.3, 0.05, 0.05, 0x220808); mouth.position.set(0, 0.52, 0.66); g.add(mouth);
       break;
     }
     case 'beast': {
       g = new THREE.Group();
-      const b = box(0.55, 0.45, 1.0, color); b.position.y = 0.45; g.add(b);
-      const hd = sphere(0.26, color); hd.position.set(0, 0.6, 0.6); g.add(hd);
-      for (const x of [-0.1, 0.1]) { const e = sphere(0.05, 0xff3322, 3); e.position.set(x, 0.68, 0.82); g.add(e); }
-      for (const [x, z] of [[-0.2, -0.35], [0.2, -0.35], [-0.2, 0.35], [0.2, 0.35]]) { const l = box(0.12, 0.3, 0.12, new THREE.Color(color).multiplyScalar(0.6)); l.position.set(x, 0.15, z); g.add(l); }
-      const tail = box(0.06, 0.06, 0.6, color); tail.position.set(0, 0.55, -0.75); tail.rotation.x = 0.4; g.add(tail);
+      const fur = new THREE.Color(color), dark = fur.clone().multiplyScalar(0.55).getHex();
+      const torso = sphere(0.42, color); torso.scale.set(0.8, 0.85, 1.55); torso.position.set(0, 0.8, 0); g.add(torso);
+      const chest = sphere(0.4, color); chest.scale.set(0.95, 1, 1); chest.position.set(0, 0.85, 0.5); g.add(chest);
+      const neck = cyl(0.17, 0.24, 0.5, color); neck.position.set(0, 1.0, 0.85); neck.rotation.x = -0.9; g.add(neck);
+      const hd = sphere(0.27, color); hd.scale.set(0.95, 0.85, 1.15); hd.position.set(0, 1.12, 1.15); g.add(hd);
+      const snout = box(0.2, 0.17, 0.4, dark); snout.position.set(0, 1.03, 1.45); g.add(snout);
+      for (const x of [-0.07, 0.07]) { const fang = cone(0.03, 0.14, 0xf0ead8); fang.rotation.x = Math.PI; fang.position.set(x, 0.9, 1.55); g.add(fang); }
+      for (const x of [-0.14, 0.14]) { const ear = cone(0.08, 0.22, dark); ear.position.set(x, 1.38, 1.05); g.add(ear); const e = sphere(0.045, 0xff3a14, 4); e.position.set(x * 0.85, 1.2, 1.37); g.add(e); }
+      for (let i = 0; i < 6; i++) { const sp = cone(0.07, 0.26, dark); sp.position.set(0, 1.28 - i * 0.03, 0.7 - i * 0.28); sp.rotation.x = -0.25; g.add(sp); }
+      for (const [x, z, f] of [[-0.24, -0.55, 1], [0.24, -0.55, 1], [-0.24, 0.55, 0], [0.24, 0.55, 0]]) {
+        const up = cyl(0.09, 0.12, 0.45, color); up.position.set(x, 0.55, z); up.rotation.x = f ? 0.35 : -0.25; g.add(up);
+        const lo = cyl(0.06, 0.08, 0.42, dark); lo.position.set(x, 0.22, z + (f ? -0.1 : 0.06)); lo.rotation.x = f ? -0.3 : 0.2; g.add(lo);
+        const paw = box(0.14, 0.07, 0.22, dark); paw.position.set(x, 0.03, z + 0.04); g.add(paw);
+      }
+      const tail = cone(0.1, 0.9, color); tail.position.set(0, 0.95, -1.15); tail.rotation.x = -1.2; g.add(tail);
       break;
     }
     case 'wisp': {
       g = new THREE.Group();
-      const core = sphere(0.35, color, 2.5); core.position.y = 1.1; core.castShadow = false; g.add(core);
-      const halo = sphere(0.55, color, 0.6); halo.material.transparent = true; halo.material.opacity = 0.3; halo.position.y = 1.1; halo.castShadow = false; g.add(halo);
-      const tail = cone(0.3, 0.8, color, 1.5); tail.rotation.x = Math.PI; tail.position.y = 0.55; g.add(tail);
+      const core = sphere(0.3, color, 3); core.position.y = 1.2; core.castShadow = false; g.add(core);
+      for (let i = 0; i < 3; i++) { const halo = sphere(0.5 + i * 0.18, color, 0.5); halo.material.transparent = true; halo.material.opacity = 0.22 - i * 0.05; halo.position.y = 1.2; halo.castShadow = false; g.add(halo); }
+      for (let i = 0; i < 5; i++) { const w = cone(0.16 - i * 0.02, 0.7, color, 1.2); w.material.transparent = true; w.material.opacity = 0.55; w.rotation.x = Math.PI; w.position.set(Math.sin(i * 1.7) * 0.2, 0.7 - i * 0.12, Math.cos(i * 1.7) * 0.2); w.castShadow = false; g.add(w); }
+      for (const x of [-0.1, 0.1]) { const e = sphere(0.05, 0xffffff, 5); e.position.set(x, 1.25, 0.26); e.castShadow = false; g.add(e); }
       g.userData.float = true;
       break;
     }
@@ -294,6 +313,22 @@ const SKEL = {
   brute: { model: 'Barbarian', hero: true },
 };
 
+// Swap the stylised skeleton for the realistic human model once it is built; show the old one if it fails.
+function upgradeEnemy(e, d, boss, elite) {
+  const fallback = () => { if (!e.dead && e.model) e.model.visible = true; };
+  const timer = setTimeout(fallback, 6000);
+  buildEnemyReal(d.shape, { scale: e.realScale / 1.15, tint: d.tint, emissive: boss ? (d.final ? 0x3a0a7a : 0x551100) : elite ? 0x332200 : d.emissive, emissiveIntensity: 0.5 }).then((rc) => {
+    clearTimeout(timer);
+    if (!rc || !e.root.parent && e.removed) return fallback();
+    const old = e.char, oldModel = e.model;
+    e.root.remove(oldModel);
+    e.char = rc; e.model = rc.root; e.root.add(rc.root);
+    if (e.dormant) rc.once('Skeletons_Inactive_Floor_Pose', { hold: true });
+    else rc.play('Idle');
+    old?.dispose?.();
+  }).catch(fallback);
+}
+
 export class Enemy extends Entity {
   constructor(d, floor, elite, boss) {
     super('enemy');
@@ -310,7 +345,7 @@ export class Enemy extends Entity {
     this.speed = d.speed;
     this.xp = Math.floor(d.xp * (1 + 0.35 * f1 + 0.012 * f1 * f1) * (elite ? 3 : 1));
     this.ranged = !!d.ranged;
-    const s = boss ? 1.9 : elite ? 1.2 : 1;
+    const s = boss ? 2.4 : elite ? 1.4 : 1.15;
     const sk = SKEL[d.shape];
     if (sk) {
       this.char = new CharModel(sk.model, { scale: 0.72 * s * (d.shape === 'brute' ? 1.25 : 1), tint: d.tint, emissive: boss || elite ? (boss ? (d.final ? 0x3a0a7a : 0x551100) : 0x332200) : d.emissive, emissiveIntensity: 0.5 });
@@ -319,6 +354,8 @@ export class Enemy extends Entity {
       if (sk.shield) this.char.attach(sk.shield, true);
       this.model = this.char.root;
       this.isSkel = !sk.hero;
+      this.realScale = s;
+      if (REAL_OK && Settings.realistic !== false) { this.model.visible = false; this.wantReal = true; }
     } else {
       this.model = buildEnemyModel(d.shape, d.color, s);
     }
@@ -330,6 +367,7 @@ export class Enemy extends Entity {
       ring(this.root, 0.9 * s, boss ? 0xff3322 : 0xffcc33);
       this.label = { text: boss ? d.name : `Champion ${d.name}`, color: boss ? '#ff6644' : '#ffcc33', y: 2.4 * s, always: true };
     }
+    if (this.wantReal) upgradeEnemy(this, d, boss, elite);
     this.aggro = false;
     this.atkCd = rand(0.5, 1.5);
     this.repath = 0;
@@ -543,6 +581,14 @@ export class Ally extends Entity {
     this.pickR = 0.6; this.life = 30; this.atkCd = 0; this.path = []; this.repath = 0; this.target = null;
     this.char.once('Spawn_Ground_Skeletons', { timeScale: 1.5 });
     this.spawnT = 0.8;
+    if (REAL_OK && Settings.realistic !== false) {
+      this.char.root.visible = false;
+      buildEnemyReal('skel_minion', { scale: 1.1, tint: 0x99ffbb, emissive: 0x2a7a4a, emissiveIntensity: 0.8 }).then((rc) => {
+        if (!rc) { this.char.root.visible = true; return; }
+        this.root.remove(this.char.root); this.char = rc; this.root.add(rc.root);
+        if (this.dead) rc.once('Death_C_Skeletons', { hold: true }); else rc.play('Idle');
+      }).catch(() => { this.char.root.visible = true; });
+    }
   }
   takeDamage(d) {
     if (this.dead) return;
@@ -1166,7 +1212,10 @@ export class Interact extends Entity {
         this.char = new CharModel(L.model, { scale: 0.75 });
         this.char.setGear(L.gear, L.gear);
         this.char.setCapeColor(L.cape);
-        add(this.char.root);
+        // only the person turns to face you; the crates, racks and pens beside them stay where they are
+        this.body = new THREE.Group(); this.root.add(this.body);
+        this.body.add(this.char.root);
+        if (REAL_OK && Settings.realistic !== false) this.char.root.visible = false; // no old-style model while the realistic one builds
         if (kind === 'merchant') {
           const t = add(prop('crates_stacked')); t.scale.setScalar(0.4); t.position.set(1.5, 0, -0.6);
           const b = add(prop('barrel_small')); b.scale.setScalar(0.6); b.position.set(-1.4, 0, -0.5);
@@ -1301,29 +1350,24 @@ export class Interact extends Entity {
 }
 
 // swap a townsperson's stylised model for a realistic one (desktop only; phones keep the light models)
-let realNpcs = 0;
-export function resetRealNpcBudget() { realNpcs = 0; }
+export function resetRealNpcBudget() {}
 async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false, d = null) {
   const spec = NPC_SPECS[specKey];
   if (!REAL_OK || Settings.realistic === false || !spec) return;
   const phone = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   const key = ['merchant', 'quest', 'healer', 'blacksmith', 'beastmaster'].includes(specKey);
-  // keep the number of realistic townsfolk within what a laptop iGPU or phone can draw comfortably
-  const budget = phone ? 6 : Settings.quality === 'low' ? 10 : Settings.quality === 'ultra' ? 40 : 24;
-  if (!key && !(d && d.indoor) && realNpcs >= budget) return;
-  if (phone && !key && !(d && d.indoor)) return;
-  realNpcs++;
-  if (phone) {
-    await new Promise((r) => setTimeout(r, 6000));
-    if (ent.gone) return;
-  }
+  // let the hero build first on phones; the shopkeepers go next, then everyone else
+  await new Promise((r) => setTimeout(r, phone ? (key ? 4000 : 9000) : key ? 300 : 1500));
+  if (ent.gone) return;
   const rc = await realFor(spec.look, 'Knight', null, lookOf, { kind: spec.kind, cloth: spec.cloth, scale, detail: 'low' });
-  if (!rc || ent.gone || !ent.root.parent && !ent.root) return;
+  if (!rc) { if (ent.char?.root) ent.char.root.visible = true; return; } // build failed: fall back to the simple model
+  if (ent.gone) return;
   if (spec.armor) { rc.wearPlates({ tint: 0xdfe8f4, glow: 0, rarity: 0 }, 'plate'); if (helm) rc.wearHelm({ vis: 'Knight_Helmet', tint: 0xdfe8f4 }); }
   for (const g of (gear && gear.weapon) || []) rc.holdItem({ vis: g, tint: 0xdfe8f4 }, 'right');
   for (const g of (gear && gear.offhand) || []) rc.holdItem({ vis: g, tint: 0xdfe8f4 }, 'left');
-  ent.root.remove(ent.char.root);
-  ent.root.add(rc.root);
+  const host = ent.body || ent.root;
+  host.remove(ent.char.root);
+  host.add(rc.root);
   ent.char = rc;
   rc.play(ent.idleAnim || 'Idle', 0);
 }
@@ -1344,6 +1388,7 @@ export class Villager extends Entity {
     this.char = new CharModel(d.model, { scale: 0.72 * (d.scale || 1), tint: d.tint });
     this.char.applyLook({ gear: d.gear ? [d.gear] : [{ weapon: [], offhand: [] }], headgear: d.headgear, cape: d.cape || '#6a4a2a' }, { helm: !!d.helm, capeOn: d.capeOn !== false, cape: d.cape, gear: 0 });
     this.root.add(this.char.root);
+    if (REAL_OK && Settings.realistic !== false && NPC_SPECS[d.spec || VILLAGER_SPEC[d.name] || 'v_m1']) this.char.root.visible = false;
     this.label = { text: d.name, color: '#e8dcc0', y: 2.2 * (d.scale || 1), always: false };
     this.idleAnim = { sit: 'Sit_Floor_Idle', fish: 'Sit_Floor_Idle', chair: 'Sit_Chair_Idle', guard: '2H_Melee_Idle', perform: 'Spellcasting' }[this.mode] || 'Idle';
     this.char.play(this.idleAnim, 0);

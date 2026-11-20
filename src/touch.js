@@ -27,9 +27,9 @@ export class Touch {
   constructor(main) {
     this.main = main;
     this.on = isTouch() || /[?&]touch=1/.test(location.search);
-    if (!this.on) return;
+    this.stick = { id: null, x: 0, y: 0, ox: 0, oy: 0, rad: 55 };
+    if (!this.on) { this.pcStick(); return; }
     document.body.classList.add('touch');
-    this.stick = { id: null, x: 0, y: 0, ox: 0, oy: 0 };
     this.attackHeld = false; this.holdT = 0;
     this.build();
     this.scale();
@@ -60,11 +60,11 @@ export class Touch {
     this.root = root;
     const stick = root.querySelector('#t-stick'), knob = stick.querySelector('.knob');
     const S = this.stick;
-    const setKnob = () => { knob.style.transform = `translate(${S.x * 42}px, ${S.y * 42}px)`; };
+    const setKnob = () => { knob.style.transform = `translate(${S.x * S.rad * 0.76}px, ${S.y * S.rad * 0.76}px)`; };
     stick.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const t = e.changedTouches[0]; S.id = t.identifier;
-      const r = stick.getBoundingClientRect(); S.ox = r.left + r.width / 2; S.oy = r.top + r.height / 2;
+      const r = stick.getBoundingClientRect(); S.ox = r.left + r.width / 2; S.oy = r.top + r.height / 2; S.rad = r.width * 0.4;
       this.moveStick(t); setKnob();
     }, { passive: false });
     stick.addEventListener('touchmove', (e) => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === S.id) this.moveStick(t); setKnob(); }, { passive: false });
@@ -76,6 +76,25 @@ export class Touch {
       b.addEventListener('touchend', up, { passive: false }); b.addEventListener('touchcancel', up, { passive: false });
     }
     for (const b of root.querySelectorAll('#t-top button')) b.addEventListener('click', () => this.panel(b.dataset.p));
+  }
+  // a small joystick for mouse users on PC (hold it with the mouse to walk; clicking the world still works)
+  pcStick() {
+    const root = document.createElement('div'); root.id = 'touch';
+    root.innerHTML = '<div id="t-stick" title="Hold to walk"><div class="knob"></div></div>';
+    document.body.appendChild(root); document.body.classList.add('pcstick');
+    this.root = root;
+    const stick = root.querySelector('#t-stick'), knob = stick.querySelector('.knob'), S = this.stick;
+    const setKnob = () => { knob.style.transform = `translate(${S.x * S.rad * 0.76}px, ${S.y * S.rad * 0.76}px)`; };
+    const stop = (e) => { e.stopPropagation(); };
+    stick.addEventListener('mousedown', (e) => {
+      stop(e); e.preventDefault();
+      const r = stick.getBoundingClientRect(); S.ox = r.left + r.width / 2; S.oy = r.top + r.height / 2; S.rad = r.width * 0.4; S.id = 'mouse';
+      this.moveStick(e); setKnob();
+    });
+    window.addEventListener('mousemove', (e) => { if (S.id === 'mouse') { this.moveStick(e); setKnob(); } });
+    window.addEventListener('mouseup', () => { if (S.id === 'mouse') { S.id = null; S.x = S.y = 0; setKnob(); } });
+    stick.addEventListener('mouseup', stop); stick.addEventListener('click', stop);
+    this.applyPrefs = () => document.body.classList.toggle('pcstick-off', Settings.pcStick === false);
   }
   // two-finger pinch on the game view zooms the camera (also +/- buttons); remembered between sessions
   pinch() {
@@ -103,7 +122,7 @@ export class Touch {
   }
   moveStick(t) {
     const S = this.stick;
-    let dx = (t.clientX - S.ox) / 55, dy = (t.clientY - S.oy) / 55;
+    let dx = (t.clientX - S.ox) / S.rad, dy = (t.clientY - S.oy) / S.rad;
     const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; }
     S.x = dx; S.y = dy;
   }
@@ -133,12 +152,16 @@ export class Touch {
     document.body.classList.toggle('portrait', h > w);
   }
   update(dt) {
-    if (!this.on) return;
     const m = this.main, p = G.player;
-    this.root.classList.toggle('hidden', !!(m.menuMode || !p));
-    document.body.classList.toggle('panel-open', m.ui.anyPanel());
+    if (!this.on) {
+      this.root.classList.toggle('hidden', !!(m.menuMode || !p) || Settings.pcStick === false);
+      document.body.classList.toggle('panel-open', m.ui.anyPanel());
+    } else {
+      this.root.classList.toggle('hidden', !!(m.menuMode || !p));
+      document.body.classList.toggle('panel-open', m.ui.anyPanel());
+    }
     // skill icons follow the hotbar
-    for (const b of this.root.querySelectorAll('.sk')) {
+    if (this.on) for (const b of this.root.querySelectorAll('.sk')) {
       const id = G.hotbar?.[b.dataset.slot];
       const key = id && (G.skills[id] || 0) > 0 ? id : '';
       if (b.dataset.id !== key) { b.dataset.id = key; b.innerHTML = key ? skillIcon(skillIconKey(key)) : ''; b.classList.toggle('empty', !key); }
@@ -159,7 +182,7 @@ export class Touch {
       }
       this.moving = true;
     } else if (this.moving) { this.moving = false; if (!p.target) p.path = []; }
-    if (this.attackHeld) {
+    if (this.on && this.attackHeld) {
       this.holdT -= dt;
       if (this.holdT <= 0) { this.holdT = 0.25; const t = m.pad.pickNear(true); if (t) p.setTarget(t); }
     }

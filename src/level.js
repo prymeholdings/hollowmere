@@ -8,7 +8,7 @@ import { generate, randomGem } from './items.js';
 import { Enemy, Interact, Loot, Villager, resetRealNpcBudget } from './entities.js';
 import { prop, propMesh } from './assets.js';
 import { genInterior, buildInteriorEnv, buildInterior, interiorPeople, interiorStation, buildingTitle } from './interior.js';
-import { groundDetail, addDetail, grassField, flowers, grimeTexture } from './textures.js';
+import { weatherize, groundDetail, addDetail, grassField, flowers, grimeTexture } from './textures.js';
 
 export const CELL = 2;
 
@@ -425,6 +425,7 @@ export class Level {
     o.position.copy(p);
     o.scale.setScalar(scale);
     o.rotation.y = ry;
+    if (this.kind !== 'dungeon' || /^(pillar|wall|floor)/.test(name)) { if (/^(building_|fence|tent|tree|crate|barrel|wall|floor|pillar|weaponrack|resource_|pallet|well)/.test(name)) weatherize(o, /^building_/.test(name) ? 1 : 0.7); }
     this.root.add(o);
     return o;
   }
@@ -777,9 +778,14 @@ export class Level {
       ['barrel', [10, 68.2], 6], ['sack', [20, 66], 8], ['crate_open', [56, 68.2], 6], ['resource_stone', [62, 66], 6], ['barrel', [76, 68.2], 6], ['bucket_water', [28.5, 60], 7], ['pallet', [16, 60], 6]);
     const doorCells = new Set();
     for (const b of this.doors) { const [cx, cy] = this.cellOf(b.door); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) doorCells.add((cx + dx) + ',' + (cy + dy)); }
+    this.decoObjs = [];
     for (const [n, [x, y], sc] of deco) {
-      if (doorCells.has(Math.round(x) + ',' + Math.round(y))) continue;
-      this.placeProp(n, this.toWorld(x, y), sc, rand(0, 6)); this.cells[this.idx(Math.round(x), Math.round(y))] = 2;
+      const cx = Math.round(x), cy = Math.round(y);
+      if (doorCells.has(cx + ',' + cy)) continue;
+      if (this.cells[this.idx(cx, cy)] === 0) continue; // inside a wall, building or pond
+      if (this.decoObjs.some((o) => Math.hypot(o.x - x, o.y - y) < 0.85)) continue; // too close to another prop
+      const o = this.placeProp(n, this.toWorld(x, y), sc, rand(0, 6)); this.cells[this.idx(cx, cy)] = 2;
+      this.decoObjs.push({ x, y, o });
     }
     // farm fence
     for (let x = 2.5; x < 10; x += 1.5) { this.placeProp('fence_wood_straight', this.toWorld(x, 33.2), 3.2, 0); this.placeProp('fence_wood_straight', this.toWorld(x, 37.8), 3.2, 0); }
@@ -790,6 +796,7 @@ export class Level {
     for (const [x, y] of [[15, 13], [19, 13], [15, 21.5], [19, 21.5], [9, 21], [25, 21], [33, 10], [39, 18], [39, 29], [16, 36.5], [26, 37.5], [36, 37.5], [8, 37.5],
       [48.5, 13], [48.5, 25], [48.5, 37], [10, 48], [24, 48], [36, 48], [47, 48.5],
       [69.5, 9], [72.5, 16], [69.5, 23], [72.5, 29], [69.5, 36], [72.5, 43], [69.5, 49], [72.5, 55], [60, 13.5], [8, 66.4], [20, 67.6], [30, 66.4], [37, 66], [46.5, 66], [55, 67.6], [64, 66.4], [74, 67.6], [37, 76.2], [46.5, 76.2]]) {
+      if (this.cells[this.idx(Math.round(x), Math.round(y))] === 0 || this.decoObjs.some((o) => Math.hypot(o.x - x, o.y - y) < 0.9)) continue;
       const p = this.toWorld(x, y);
       const post = cyl(0.07, 0.09, 2.6, 0x262626); post.position.copy(p).setY(1.3); this.root.add(post);
       const cap = cone(0.3, 0.25, 0x262626, 0, 4); cap.position.copy(p).setY(2.95); this.root.add(cap);
@@ -822,6 +829,11 @@ export class Level {
       e.root.position.copy(this.toWorld(...v.at));
       if (v.ry !== undefined) e.root.rotation.y = v.ry;
       this.add(e);
+    }
+    // props must not sit on top of people or stations
+    for (const d of this.decoObjs || []) {
+      const w = this.toWorld(d.x, d.y);
+      if (this.entities.some((e) => e.kind && e.kind !== 'well' && e.kind !== 'portal' && Math.hypot(e.pos.x - w.x, e.pos.z - w.z) < 1.6)) { d.o.visible = false; d.o.parent && d.o.parent.remove(d.o); this.cells[this.idx(Math.round(d.x), Math.round(d.y))] = 1; }
     }
     for (const e of this.entities) if (e.kind && e.kind !== 'well' && e.kind !== 'portal' && e.kind !== 'door') { const [x, y] = this.cellOf(e.pos); if (this.cells[this.idx(x, y)] !== 1) e.pos.copy(this.toWorld(...this.nearestFloor(x, y))); }
   }

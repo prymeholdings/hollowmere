@@ -203,3 +203,42 @@ export function grimeTexture(wPx, cellPx, isFloor, w, h, mossTint) {
   t.anisotropy = 8;
   return t;
 }
+
+// World-space weathering for buildings and props: layered stone/plaster noise, damp grime near the ground,
+// streaks under the eaves. Palette-atlas models have flat UVs, so this works from world position instead.
+const WEATHER = new WeakMap();
+export function weatherMaterial(src, strength = 1) {
+  let m = WEATHER.get(src);
+  if (m) return m;
+  m = src.clone();
+  m.roughness = Math.min(1, (src.roughness ?? 0.8) * 0.2 + 0.82);
+  m.metalness = 0;
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.wStr = { value: strength };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp; varying vec3 vWn;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvec4 wp4 = modelMatrix * vec4(position, 1.0); vWp = wp4.xyz; vWn = normalize(mat3(modelMatrix) * normal);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+uniform float wStr; varying vec3 vWp; varying vec3 vWn;
+float wh(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(wh(i), wh(i + vec3(1,0,0)), f.x), mix(wh(i + vec3(0,1,0)), wh(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(wh(i + vec3(0,0,1)), wh(i + vec3(1,0,1)), f.x), mix(wh(i + vec3(0,1,1)), wh(i + vec3(1,1,1)), f.x), f.y), f.z); }`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+{ vec3 q = vWp; float n1 = wn(q * 2.2), n2 = wn(q * 7.0), n3 = wn(q * 19.0);
+  float stone = n1 * 0.5 + n2 * 0.33 + n3 * 0.17;
+  float ground = 1.0 - smoothstep(0.0, 1.6, vWp.y);
+  float side = 1.0 - abs(vWn.y);
+  float streak = wn(vec3(q.x * 5.0 + q.z * 5.0, q.y * 0.6, 0.0)) * smoothstep(0.0, 3.0, vWp.y) * side;
+  float tone = 0.72 + stone * 0.62;
+  tone *= 1.0 - ground * side * 0.38 * (0.6 + n2);
+  tone *= 1.0 - streak * 0.18;
+  diffuseColor.rgb *= mix(1.0, tone, 0.9 * wStr);
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.86, 0.7), ground * side * 0.35 * n1); }`);
+  };
+  m.customProgramCacheKey = () => 'weather';
+  WEATHER.set(src, m);
+  return m;
+}
+export function weatherize(root, strength = 1) {
+  root.traverse((o) => { if (o.isMesh && o.material && !o.material.isShaderMaterial && !o.material.transparent) o.material = Array.isArray(o.material) ? o.material.map((x) => weatherMaterial(x, strength)) : weatherMaterial(o.material, strength); });
+}

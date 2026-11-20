@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Barks } from './barks.js';
-import { setRealItemLook, defaultLook, realFor, fullLook, buildReal, NPC_SPECS } from './realchar.js';
+import { setRealItemLook, defaultLook, realFor, fullLook, buildReal, NPC_SPECS, prewarmEnemies } from './realchar.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
@@ -135,6 +135,7 @@ class Main {
     this.ui = new UI(this);
     this.pad = new Pad(this);
     this.touch = new Touch(this);
+    setTimeout(() => { try { prewarmEnemies(); } catch (e) {} }, 2500);
     this.clock = new THREE.Clock();
     this.applyQuality();
     this.resize();

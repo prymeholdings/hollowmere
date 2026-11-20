@@ -25,7 +25,7 @@ const CLIP_MAP = {
   Hit_A: 'hit_front', Hit_B: 'hit_back', Death_A: 'death_forward', Death_B: 'death_backward', Cheer: 'cheer', Interact: 'use_press', Throw: 'throw_grenade',
   Sit_Floor_Idle: 'sit_idle', Sit_Chair_Idle: 'sit_idle', '2H_Melee_Idle': 'sword_idle', '1H_Melee_Idle': 'sword_idle',
   Block: 'sword_block', Blocking: 'sword_block', Jump_Full_Short: 'jump', Dodge_Forward: 'roll_forward', Dodge_Left: 'dodge_left', Dodge_Right: 'dodge_right',
-  PickUp: 'pick_up', Lie_Idle: 'sleep', Wave: 'wave', Talk: 'talk_gestures', Laugh: 'laugh',
+  Running_C: 'run', Death_C_Skeletons: 'death_backward', Skeletons_Inactive_Floor_Pose: 'sleep', Spawn_Ground_Skeletons: 'cheer', PickUp: 'pick_up', Lie_Idle: 'sleep', Wave: 'wave', Talk: 'talk_gestures', Laugh: 'laugh',
 };
 const CLIPS = [...new Set(Object.values(CLIP_MAP))];
 const FALLBACK = (name) => (/Death/.test(name) ? 'death_forward' : /Hit/.test(name) ? 'hit_front' : /Run/.test(name) ? 'run' : /Walk/.test(name) ? 'walk' : /Attack/.test(name) ? 'sword_slash' : /Spell|Cast|Shoot|Throw/.test(name) ? 'throw_grenade' : 'idle');
@@ -280,6 +280,15 @@ export class RealChar {
       for (const f of this.anims) f(this.gt, dt);
     }
   }
+  // colour the whole body (undead pallor, ogre green) and give it an inner glow
+  tint(color, emissive = 0, emi = 0) {
+    const c = new THREE.Color(color);
+    this.scene.traverse((o) => {
+      if (!o.isMesh || !o.material || !o.material.color) return;
+      o.material.color.multiply(c);
+      if (emissive && o.material.emissive) { o.material.emissive.set(emissive); o.material.emissiveIntensity = emi || 0.4; }
+    });
+  }
   applyLook() {}
   setGear() {}
   setCapeColor() {}
@@ -460,3 +469,30 @@ export async function realFor(look, cls, equipment, lookOf, opts = {}) {
   const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || 'medium', garmentStyles: opts.cloth, armor: al });
   return res ? new RealChar(res, { scale: opts.scale ?? ((look && look.height) || 1), look }) : null;
 }
+
+// ---------------------------------------------------------------- dungeon creatures (undead and ogres built from the same human models)
+const EL = (o) => ({ sex: 'm', weight: 0.15, muscle: 0.2, skinTone: 1, hairStyle: 'short01', hairColor: '#1a1410', beard: 'none', eyes: 'brown', hairHi: '', ...o });
+const ENEMY_BUILDS = {
+  skel_minion: { look: EL({ weight: 0.05, muscle: 0.1 }), kind: 'none', cloth: { tattered_shirt: { pattern: 'tattered', color: '#5a5448' }, tattered_pants: { pattern: 'tattered', color: '#3e382e' } }, params: { hair: 'none', skinTint: '#8f9a86', age: 0.9, facialHair: 'none' }, scale: 1.12, weapon: 'Skeleton_Blade' },
+  skel_rogue: { look: EL({ weight: 0.1, muscle: 0.3 }), kind: 'leathers', cloth: {}, params: { hair: 'none', skinTint: '#98a090', age: 0.8, facialHair: 'none' }, scale: 1.1, weapon: 'Skeleton_Crossbow', hood: true },
+  skel_warrior: { look: EL({ weight: 0.35, muscle: 0.8 }), kind: 'plate', cloth: {}, params: { hair: 'none', skinTint: '#8a9488', age: 0.8, facialHair: 'none' }, scale: 1.22, weapon: 'Skeleton_Axe', shield: 'Skeleton_Shield_Small_A', plate: 0x555a64, helm: 'Skeleton_Warrior_Helmet' },
+  skel_mage: { look: EL({ weight: 0.1, muscle: 0.15 }), kind: 'robe', cloth: {}, params: { hair: 'none', skinTint: '#a0a498', age: 0.85, facialHair: 'none' }, scale: 1.12, weapon: 'Skeleton_Staff', helm: 'Skeleton_Mage_Hat' },
+  brute: { look: EL({ weight: 0.9, muscle: 1 }), kind: 'furs', cloth: {}, params: { hair: 'none', skinTint: '#7e9a6c', age: 0.55, facialHair: 'none' }, scale: 1.62, weapon: 'Skeleton_Axe' },
+};
+export async function buildEnemyReal(shape, o = {}) {
+  const spec = ENEMY_BUILDS[shape];
+  if (!REAL_OK || !spec) return null;
+  const res = await buildReal(spec.look, 'Knight', spec.kind, { detail: 'low', garmentStyles: spec.cloth, params: spec.params });
+  if (!res) return null;
+  const rc = new RealChar(res, { scale: (o.scale || 1) * spec.scale, look: spec.look });
+  if (spec.plate) rc.wearPlates({ tint: spec.plate, glow: 0, rarity: 0 }, 'plate');
+  else if (spec.kind === 'robe') rc.wearRobeTrim({ tint: 0x6a4aa0, glow: 0x220044 }, 'robe');
+  if (spec.helm) rc.wearHelm({ vis: spec.helm, tint: 0xffffff });
+  if (spec.kind === 'furs') rc.wearPlates({ tint: 0x7a6a50, glow: 0, rarity: 0 }, 'furs');
+  if (spec.kind === 'leathers') rc.wearPlates({ tint: 0x6a5a48, glow: 0, rarity: 0 }, 'leathers');
+  if (spec.weapon) rc.holdItem({ vis: spec.weapon, tint: o.weaponTint || 0xffffff }, 'right');
+  if (spec.shield) rc.holdItem({ vis: spec.shield, tint: 0xffffff }, 'left');
+  if (o.tint) rc.tint(o.tint, o.emissive || 0, o.emissiveIntensity || 0.5);
+  return rc;
+}
+export const prewarmEnemies = () => Promise.all(Object.keys(ENEMY_BUILDS).map((k) => buildReal(ENEMY_BUILDS[k].look, 'Knight', ENEMY_BUILDS[k].kind, { detail: 'low', garmentStyles: ENEMY_BUILDS[k].cloth, params: ENEMY_BUILDS[k].params })));

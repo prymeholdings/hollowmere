@@ -899,6 +899,7 @@ export class UI {
       <h3><span>Auto-attack</span></h3>${check('autoAttack', 'Attack nearby foes automatically (V)')}
       <div class="setrow"><span>Auto-attack with</span><select id="set-am"><option value="basic">Basic attack</option>${['rmb', 'q', 'w', 'e', 'r'].map((k) => `<option value="${k}">${k.toUpperCase()} slot${G.hotbar?.[k] ? ': ' + skillName(G.hotbar[k]) : ''}</option>`).join('')}</select></div>
       <div class="setrow"><span>Auto-attack range</span><span><input type="range" min="3" max="14" value="${Settings.autoRange}" id="set-ar"> <span id="sv-ar">${Settings.autoRange}m</span></span></div>
+      <h3><span>Controls</span></h3>${check('pcStick', 'Show the on-screen walking joystick (mouse)')}
       <div class="muted" style="font-size:12px">With a skill chosen, it is cast whenever it is ready and you have the mana; otherwise you use your basic attack. Moving by clicking always wins.</div>
       <h3><span>Interface</span></h3>
       <div class="setrow"><span>Interface size</span><span><input type="range" min="60" max="140" step="5" value="${Math.round((Settings.uiScale ?? 1) * 100)}" data-u="uiScale"> <span id="sv-uiScale">${Math.round((Settings.uiScale ?? 1) * 100)}%</span></span></div>
@@ -1299,7 +1300,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.7.0 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG · v0.7.1 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };

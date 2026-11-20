@@ -20,7 +20,7 @@ export const Settings = {
   realistic: true, // realistic human models (off = the stylised heroes)
   // interface
   uiScale: 1, hudOpacity: 1, theme: 'bronze', showMinimap: true, showLog: true,
-  touchSize: 1, touchOpacity: 0.9, leftHanded: false,
+  pcStick: true, touchSize: 1, touchOpacity: 0.9, leftHanded: false,
 };
 export function loadSettings() {
   let saved = null; try { saved = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
