@@ -1,6 +1,6 @@
 import { isTouch } from "./touch.js";
 import * as THREE from 'three';
-import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg, MAX_LEVEL, socketGem, socketTargets, invalidateBonus } from './state.js';
+import { G, BACKPACK_MAX, maxHp, maxMp, xpToNext, stat, armor, weaponDamage, attackSpeed, critChance, fameTitle, equipFromPack, unequip, feedPet, petSellCommons, petSellMagic, packAdd, packTake, packRoom, packCount, restack, ensureQuestOffer, acceptQuest, turnInQuest, saveGame, hasSave, lastSaved, petDamage, petMaxHp, msg, MAX_LEVEL, socketGem, socketTargets, invalidateBonus } from './state.js';
 import { describe, itemColor, sellPrice, buyPrice, SLOT_NAMES, makeFish, generate, displayName, GEMS, makeGem, GEM_TIERS, maxSockets, upgradeItem, TYPES, typeOf, MATS, classItem } from './items.js';
 import { FAME_STEPS, QUEST_GIVER } from './data.js';
 import { hex, sfx, clamp, flatDist } from './util.js';
@@ -489,6 +489,7 @@ export class UI {
       c.style.borderColor = it.rarity ? col : '#3a3022';
       if (it.rarity >= 2) c.style.boxShadow = `inset 0 0 12px ${col}55`;
       if (it.req > G.lvl) c.appendChild(el('div', 'req'));
+      if (packCount(it) > 1) c.appendChild(el('div', 'stackn', 'x' + packCount(it)));
       c.onmouseenter = () => this.showTooltip(it);
       c.onmouseleave = () => this.hideTooltip();
       c.onclick = onClick;
@@ -498,6 +499,7 @@ export class UI {
   }
 
   renderInv() {
+    restack();
     const body = this.body('inv', 'Inventory', { right: '18px', top: '90px', width: '600px' });
     body.innerHTML = '';
     const eq = el('div', 'eqgrid');
@@ -540,9 +542,10 @@ export class UI {
     if (this.open.shop) btn('Sell', () => this.sell(this.sel.key), !selIt);
     const magic = G.backpack.filter((it) => it.rarity === 1 && it.slot !== 'gem' && it.slot !== 'fish');
     if (this.open.shop) btn(`Sell all magic (${magic.length})`, () => this.sellAllMagic(), !magic.length);
-    btn('Drop', () => { const it = G.backpack.splice(this.sel.key, 1)[0]; this.main.dropItem(it); this.sel = null; }, !selIt);
+    btn('Drop', () => { const it = packTake(this.sel.key); this.main.dropItem(it); this.sel = null; }, !selIt);
     btn('Wardrobe', () => this.show('wardrobe'), false);
     btn(`Send ${G.petName} to sell commons`, () => petSellCommons(), G.level.safe && !this.open.shop);
+    btn(`Send ${G.petName} to sell magic (${magic.length})`, () => petSellMagic(), (G.level.safe && !this.open.shop) || !magic.length);
     body.appendChild(bar);
   }
   quickUse(i, viaButton = false) {
@@ -579,9 +582,9 @@ export class UI {
     const it = G.backpack[i];
     if (!it) return;
     G.backpack.splice(i, 1);
-    const p = sellPrice(it);
+    const p = sellPrice(it) * packCount(it);
     G.gold += p;
-    msg(`Sold ${displayName(it)} for ${p} gold`, '#ffd84d');
+    msg(`Sold ${packCount(it) > 1 ? packCount(it) + ' x ' : ''}${displayName(it)} for ${p} gold`, '#ffd84d');
     sfx('gold');
     this.sel = null; this.hideTooltip(); this.refresh();
   }
@@ -732,14 +735,15 @@ export class UI {
       body.appendChild(el('h3', '', '<span>Combine gems</span>'));
       const groups = {};
       G.backpack.forEach((it) => { if (it.slot === 'gem' && it.tier < 4) { const k = it.gem + ':' + it.tier; (groups[k] ||= []).push(it); } });
-      const keys = Object.keys(groups).filter((k) => groups[k].length >= 3);
+      const cnt = (k) => groups[k].reduce((a, x) => a + packCount(x), 0);
+      const keys = Object.keys(groups).filter((k) => cnt(k) >= 3);
       if (!keys.length) body.appendChild(el('p', 'muted', 'Bring three gems of the same kind and quality to combine them into a finer one.'));
       for (const k of keys) {
         const g = groups[k][0];
         const next = makeGem(g.gem, g.tier + 1);
-        row({ it: next }, `3 × ${g.name} → ${next.name} (you have ${groups[k].length})`, [['Combine', 80 * (g.tier + 1) * (g.tier + 1), () => {
-          for (const x of groups[k].slice(0, 3)) G.backpack.splice(G.backpack.indexOf(x), 1);
-          G.backpack.push(next); sfx('legend'); msg(`Hobb fuses three gems into a ${next.name}.`, '#99ddff');
+        row({ it: next }, `3 × ${g.name} → ${next.name} (you have ${cnt(k)})`, [['Combine', 80 * (g.tier + 1) * (g.tier + 1), () => {
+          for (let r = 0; r < 3; r++) packTake(G.backpack.indexOf(groups[k].find((x) => G.backpack.includes(x))));
+          packAdd(next); sfx('legend'); msg(`Hobb fuses three gems into a ${next.name}.`, '#99ddff');
         }]]);
       }
       body.appendChild(el('h3', '', '<span>Sockets</span>'));
@@ -752,7 +756,7 @@ export class UI {
           ['Add socket', it.sockets < ms ? add : 0, () => { it.sockets++; sfx('gold'); msg(`Hobb punches a new socket into ${displayName(it)}.`, '#99ddff'); }, it.sockets >= ms],
           ['Remove gems', used ? rem : 0, () => {
             if (G.backpack.length + used > BACKPACK_MAX) { this.toast('Not enough room in your backpack', true); return false; }
-            for (const g of it.gems) if (g) G.backpack.push(makeGem(g.gem, g.tier));
+            for (const g of it.gems) if (g) packAdd(makeGem(g.gem, g.tier));
             it.gems = []; sfx('pick'); msg('Hobb pries the gems loose. They are safe in your backpack.', '#99ddff');
           }, !used],
         ]);
@@ -823,7 +827,7 @@ export class UI {
     btn('Health Potion 20g', () => this.buyThing('hpPotions', 20, 'Health Potion'));
     btn('Mana Potion 20g', () => this.buyThing('mpPotions', 20, 'Mana Potion'));
     btn('Portal Scroll 35g', () => this.buyThing('scrolls', 35, 'Town Portal Scroll'));
-    btn('Sell all Commons', () => { let t = 0, n = 0; for (let i = G.backpack.length - 1; i >= 0; i--) if (G.backpack[i].rarity === 0) { t += sellPrice(G.backpack[i]); n++; G.backpack.splice(i, 1); } G.gold += t; msg(n ? `Sold ${n} items for ${t} gold` : 'Nothing common to sell.', '#ffd84d'); if (n) sfx('gold'); });
+    btn('Sell all Commons', () => { let t = 0, n = 0; for (let i = G.backpack.length - 1; i >= 0; i--) if (G.backpack[i].rarity === 0) { t += sellPrice(G.backpack[i]) * packCount(G.backpack[i]); n += packCount(G.backpack[i]); G.backpack.splice(i, 1); } G.gold += t; msg(n ? `Sold ${n} items for ${t} gold` : 'Nothing common to sell.', '#ffd84d'); if (n) sfx('gold'); });
     body.appendChild(bar);
   }
   buy(i) {
@@ -1281,7 +1285,7 @@ export class UI {
     if (ok) {
       G.fishCaught++;
       G.player?.model.once('Cheer', { timeScale: 1.5 });
-      if (G.backpack.length < BACKPACK_MAX) { G.backpack.push(item); sfx('pick'); }
+      if (packRoom(item)) { packAdd(item); sfx('pick'); }
       else { this.main.dropItem(item); msg('Backpack full, the catch flops onto the ground.'); }
       if (item.form) msg(`Feed the ${item.name} to ${G.petName} from your inventory to transform it.`, '#99e6ff');
       this.refresh();
@@ -1300,7 +1304,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.7.1 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG · v0.7.2 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };

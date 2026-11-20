@@ -145,7 +145,7 @@ export function socketGem(gemIdx, item) {
   for (let i = 0; i < item.sockets; i++) if (!item.gems[i]) { at = i; break; }
   if (at < 0) { msg('That item has no empty socket.', '#ff6666'); return false; }
   item.gems[at] = { gem: gem.gem, tier: gem.tier };
-  G.backpack.splice(gemIdx, 1);
+  packTake(gemIdx);
   invalidateBonus(); clampVitals(); sfx('gold');
   msg(`${gem.name} socketed into ${displayName(item)}.`, '#99ddff');
   G.player?.refreshVisuals();
@@ -164,9 +164,31 @@ export function unequip(slot) {
   G.equipment[slot] = null; G.backpack.push(it);
   invalidateBonus(); clampVitals(); G.player?.refreshVisuals();
 }
+// ---- stacking: identical gems and fish share one backpack slot (item.n = how many)
+export const stackable = (it) => it && (it.slot === 'gem' || it.slot === 'fish');
+const sameStack = (a, b) => a.slot === b.slot && a.name === b.name && a.tier === b.tier && a.form === b.form;
+export const packCount = (it) => it.n || 1;
+export function packRoom(it) { return G.backpack.length < BACKPACK_MAX || (stackable(it) && G.backpack.some((x) => stackable(x) && sameStack(x, it))); }
+export function packAdd(it) {
+  if (stackable(it)) { const ex = G.backpack.find((x) => stackable(x) && sameStack(x, it)); if (ex) { ex.n = packCount(ex) + packCount(it); return true; } }
+  G.backpack.push(it); return true;
+}
+// remove one unit from slot i and return it
+export function packTake(i) {
+  const it = G.backpack[i];
+  if (!it) return null;
+  if (packCount(it) > 1) { it.n = packCount(it) - 1; return { ...it, n: 1 }; }
+  G.backpack.splice(i, 1); return it;
+}
+// merge duplicates in older saves
+export function restack() {
+  const out = [];
+  for (const it of G.backpack) { const ex = stackable(it) && out.find((x) => stackable(x) && sameStack(x, it)); if (ex) ex.n = packCount(ex) + packCount(it); else out.push(it); }
+  G.backpack = out;
+}
 export function pickupItem(it) {
-  if (G.backpack.length >= BACKPACK_MAX) { msg('Your backpack is full!', '#ff6666'); return false; }
-  G.backpack.push(it);
+  if (!packRoom(it)) { msg('Your backpack is full!', '#ff6666'); return false; }
+  packAdd(it);
   msg(`Picked up ${displayName(it)}`, '#' + itemColor(it).toString(16).padStart(6, '0'));
   sfx('pick');
   if ((it.rarity || 0) >= 2) G.main?.barkLoot?.();
@@ -176,7 +198,7 @@ export function feedPet(i) {
   const it = G.backpack[i];
   if (!it || it.slot !== 'fish') return;
   if (G.petAwayTime > 0 || !G.pet || G.pet.dead) { msg(`${G.petName} isn't here right now.`); return; }
-  G.backpack.splice(i, 1);
+  packTake(i);
   if (!it.form) {
     msg(`${G.petName} sniffs the ${it.name} and eats it anyway.`);
     G.pet.hp = Math.min(G.pet.maxHp, G.pet.hp + G.pet.maxHp * 0.3);
@@ -187,18 +209,20 @@ export function feedPet(i) {
   sfx('heal');
   G.pet.applyForm();
 }
-export function petSellCommons() {
+function petSell(pred, label) {
   if (G.petAwayTime > 0 || !G.pet || G.pet.dead) { msg(`${G.petName} isn't here right now.`); return; }
   let total = 0, count = 0;
   for (let i = G.backpack.length - 1; i >= 0; i--) {
     const it = G.backpack[i];
-    if (it.rarity === 0) { total += sellPrice(it); count++; G.backpack.splice(i, 1); }
+    if (pred(it)) { total += sellPrice(it) * packCount(it); count += packCount(it); G.backpack.splice(i, 1); }
   }
-  if (!count) { msg('You have nothing common to send to town.'); return; }
+  if (!count) { msg(`You have nothing ${label} to send to town.`); return; }
   G.petPendingGold += total; G.petAwayTime = 25;
   msg(`${G.petName} trots off to town to sell ${count} items. Back in 25 seconds.`, '#99e6ff');
   G.pet.goAway();
 }
+export function petSellCommons() { petSell((it) => it.rarity === 0, 'common'); }
+export function petSellMagic() { petSell((it) => it.rarity === 1 && it.slot !== 'gem' && it.slot !== 'fish', 'magic'); }
 export function tick(dt) {
   for (const k in G.buffs) if (G.buffs[k] > 0) G.buffs[k] -= dt;
   for (const k in G.cds) if (G.cds[k] > 0) G.cds[k] -= dt;
