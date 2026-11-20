@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Assets, findSource, tintMaterial, skinSafeTint, jewelMesh } from './assets.js';
-import { lookOf, GEMS, RARITY_COLORS } from './items.js';
+import { lookOf, GEMS, RARITY_COLORS, EXTRA_SLOTS } from './items.js';
+import { gearIcon } from './gearvis.js';
 
 const SIZE = 128;
 let R = null, scene, cam, cache = new Map();
@@ -76,6 +77,7 @@ function build(it) {
   if (it.slot === 'gem') return gemMesh(GEMS[it.gem].color, it.tier);
   const l = lookOf(it);
   if (l.slot === 'ring' || l.slot === 'amulet') return orient(jewelMesh(l, l.slot), 'jewel');
+  if (EXTRA_SLOTS.includes(l.slot)) return orient(gearIcon(l, l.slot), 'armor');
   if (l.slot === 'armor') {
     const src = Assets.models[l.vis];
     if (!src) return null;

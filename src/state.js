@@ -30,7 +30,7 @@ export function reset() {
       weapon: starterItem('Knife'),
       offhand: null, helm: null,
       armor: { base: 'Rusted Leathers', name: 'Rusted Leathers', type: 'leathers', mat: 'rusted', slot: 'armor', rarity: 0, ilvl: 1, req: 1, armor: 4, affixes: { dex: 1 }, sockets: 0, gems: [], value: 6 },
-      ring: null, amulet: null,
+      ring: null, amulet: null, shoulders: null, gloves: null, shirt: null, belt: null, pants: null, boots: null,
     },
     backpack: [], deepest: 0, portalFloor: 0, quest: null, questOffer: null,
     petName: 'Pip', petSpecies: 'fox', pets: null, petForm: '', petFormTime: 0, petAwayTime: 0, petPendingGold: 0,
@@ -341,6 +341,7 @@ export function loadGame() {
   G.base = { str: 10, dex: 10, vit: 10, mag: 10, ...d.base };
   G.skills = { ...SKILL_ZERO, ...d.skills };
   G.stars = { ...(d.stars || {}) };
+  for (const k of ['shoulders', 'gloves', 'shirt', 'belt', 'pants', 'boots']) if (!(k in G.equipment)) G.equipment[k] = null; // saves from before the extra slots
   for (const k in G.equipment) if (G.equipment[k]) upgradeItem(G.equipment[k]);
   G.backpack.forEach(upgradeItem); (G.shopStock || []).forEach(upgradeItem);
   if (!d.pets) { G.pets = null; G.petSpecies = 'fox'; ensurePets(); G.pets.fox.coat = (G.look && G.look.pet) || 'fox'; const l = Math.min(60, 1 + Math.floor(G.lvl / 2)); G.pets.fox.lvl = l; G.pets.fox.points = l - 1; }

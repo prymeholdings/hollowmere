@@ -51,7 +51,7 @@ export class HeroView {
   mount(parent) { parent.appendChild(this.wrap); }
   signature() {
     const e = G.equipment || {};
-    return [G.cls, JSON.stringify(G.look || {}), Settings.realistic, ...['weapon', 'offhand', 'helm', 'armor', 'ring', 'amulet'].map((k) => (e[k] ? (e[k].name || '') + (e[k].mat || '') + (e[k].rarity || 0) : '-'))].join('|');
+    return [G.cls, JSON.stringify(G.look || {}), Settings.realistic, ...['weapon', 'offhand', 'helm', 'armor', 'ring', 'amulet', 'shoulders', 'gloves', 'shirt', 'belt', 'pants', 'boots'].map((k) => (e[k] ? (e[k].name || '') + (e[k].mat || '') + (e[k].dye || '') + (e[k].rarity || 0) : '-'))].join('|');
   }
   rebuild() {
     const cls = CLASSES[G.cls] || CLASSES.Knight;

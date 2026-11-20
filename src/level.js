@@ -5,11 +5,90 @@ import { G, MAX_FLOOR } from './state.js';
 import { ENEMIES, BOSSES, QUEST_GIVER, FINAL_BOSS } from './data.js';
 import { rand, randi, pick, box, cyl, cone, sphere } from './util.js';
 import { generate, randomGem } from './items.js';
-import { Enemy, Interact, Loot, Villager } from './entities.js';
+import { Enemy, Interact, Loot, Villager, resetRealNpcBudget } from './entities.js';
 import { prop, propMesh } from './assets.js';
+import { genInterior, buildInteriorEnv, buildInterior, interiorPeople, interiorStation, buildingTitle } from './interior.js';
 import { groundDetail, addDetail, grassField, flowers, grimeTexture } from './textures.js';
 
 export const CELL = 2;
+
+export const TOWN_W = 84, TOWN_H = 80;
+// rows of buildings packed along a street: names cycle, widths come from the footprint (homes ~2.4 cells, big buildings ~4)
+const HOMES = ['building_home_A_red', 'building_home_B_green', 'building_home_A_yellow', 'building_home_B_blue', 'building_home_A_green', 'building_home_B_red', 'building_home_A_blue', 'building_home_B_yellow'];
+const BIG = { tavern: 3.9, market: 4.9, church: 3.4, blacksmith: 3.6, lumbermill: 3.9, tower: 2.6, barracks: 4.6, mine: 5.4 };
+function row(axis, fixed, from, to, ry, specials, skip = [], seed = 0) {
+  const out = []; let cur = from, k = seed, si = 0;
+  while (cur < to) {
+    const special = specials[si] && specials[si][1] <= cur ? specials[si++][0] : null;
+    const name = special || HOMES[k++ % HOMES.length];
+    const kind = Object.keys(BIG).find((n) => name.includes(n));
+    const w = kind ? BIG[kind] : 2.6;
+    if (cur + w > to) break;
+    const c = cur + w / 2;
+    const hit = skip.find(([a, b2]) => c + w / 2 > a && c - w / 2 < b2);
+    if (hit) { if (special) si--; else k--; cur = hit[1] + 0.3; continue; }
+    out.push({ name, c: axis === 'y' ? [fixed, c] : [c, fixed], s: kind ? 5.6 : 5.3, ry });
+    cur += w + 0.75;
+  }
+  return out;
+}
+const LANTERN_ROW = [
+  ...row('y', 67, 3, 59, Math.PI / 2, [['building_tavern_green', 14], ['building_market_green', 24], ['building_tower_B_green', 40], ['building_blacksmith_blue', 44]], [[10.5, 13.5], [29.5, 32.5], [50.5, 53.5]], 0),
+  ...row('y', 75, 3, 59, -Math.PI / 2, [['building_church_red', 14], ['building_market_red', 30], ['building_lumbermill_red', 44]], [], 3),
+  ...row('y', 62.6, 3, 59, -Math.PI / 2, [['building_tower_A_green', 20], ['building_barracks_blue', 36]], [[10.5, 13.5], [29, 33], [50.5, 53.5]], 5),
+];
+const LOW_MARKET = [
+  ...row('x', 72.6, 2.5, 82, Math.PI, [['building_tavern_yellow', 8], ['building_market_blue', 20], ['building_blacksmith_yellow', 52], ['building_church_green', 64], ['building_tower_A_red', 74]], [[33.5, 50]], 1),
+  ...row('x', 63.2, 2.5, 82, 0, [['building_market_green', 22], ['building_tavern_blue', 56]], [[32.5, 35.5], [33.5, 50.5], [69, 73]], 6),
+  { name: 'building_well_red', c: [41.5, 70.5], s: 4, ry: 0 },
+];
+// interiors exist for every proper building (not stages, scaffolds, ranges, catapult towers or wells)
+export const enterable = (b) => !/stage|scaffolding|archery|catapult|well|bridge/.test(b.name);
+export function townBuildings() {
+  return [
+      { name: 'building_market_red', c: [8, 6.5], s: 6, ry: 0, npc: 'merchant' },
+      { name: 'building_tavern_blue', c: [26, 6.5], s: 6.5, ry: 0 },
+      { name: 'building_church_blue', c: [27, 25], s: 6, ry: 0 },
+      { name: 'building_blacksmith_green', c: [6, 15.5], s: 5.5, ry: Math.PI / 2 },
+      { name: 'building_home_A_yellow', c: [15, 5], s: 6, ry: 0 },
+      { name: 'building_home_B_red', c: [19.5, 26.5], s: 5.5, ry: Math.PI },
+      { name: 'building_home_A_blue', c: [28.5, 15.5], s: 6, ry: -Math.PI / 2 },
+      { name: 'building_tower_A_blue', c: [13, 27], s: 4.5, ry: 0 },
+      // east lane
+      { name: 'building_home_B_blue', c: [37.5, 5], s: 5.5, ry: 0 },
+      { name: 'building_home_A_red', c: [44, 5], s: 5.5, ry: 0 },
+      { name: 'building_lumbermill_yellow', c: [43.5, 15], s: 5.5, ry: -Math.PI / 2 },
+      { name: 'building_home_A_green', c: [37, 22], s: 5.5, ry: Math.PI / 2 },
+      { name: 'building_home_B_green', c: [44, 26], s: 5.5, ry: -Math.PI / 2 },
+      { name: 'building_archeryrange_green', c: [43.5, 35.5], s: 5, ry: -Math.PI / 2 },
+      // south lane
+      { name: 'building_grain', c: [4.5, 43], s: 5.5, ry: 0 },
+      { name: 'building_home_B_yellow', c: [12, 44], s: 5.5, ry: 0 },
+      { name: 'building_home_A_blue', c: [19, 44], s: 5.5, ry: 0 },
+      { name: 'building_stage_A', c: [28, 43.5], s: 5, ry: 0 },
+      { name: 'building_market_yellow', c: [35.5, 44], s: 5.5, ry: 0 },
+      { name: 'building_tower_B_red', c: [44, 44.5], s: 4.5, ry: 0 },
+      // the keep district (east)
+      { name: 'building_castle_blue', c: [54, 7.5], s: 7, ry: 0 },
+      { name: 'building_barracks_red', c: [54.5, 18], s: 6, ry: -Math.PI / 2 },
+      { name: 'building_tower_catapult_red', c: [57, 25.5], s: 4.2, ry: -Math.PI / 2 },
+      { name: 'building_tavern_red', c: [54.5, 31], s: 6, ry: -Math.PI / 2 },
+      { name: 'building_home_A_red', c: [53, 38], s: 5.5, ry: -Math.PI / 2 },
+      { name: 'building_mine_yellow', c: [55, 47.5], s: 6, ry: -Math.PI / 2 },
+      // the mill road (south)
+      { name: 'building_watermill_green', c: [6, 54], s: 6, ry: 0 },
+      { name: 'building_windmill_red', c: [14, 54.5], s: 6, ry: 0 },
+      { name: 'building_market_blue', c: [22, 54], s: 5.5, ry: 0 },
+      { name: 'building_blacksmith_red', c: [30, 54], s: 5.5, ry: 0 },
+      { name: 'building_church_yellow', c: [38, 54], s: 5.5, ry: 0 },
+      { name: 'building_scaffolding', c: [45.5, 54.5], s: 5, ry: 0 },
+      { name: 'building_tower_A_yellow', c: [52, 55], s: 4.5, ry: 0 },
+      // Lantern Row (new east quarter): homes and shops either side of a long street
+      ...LANTERN_ROW,
+      // Low Market (new south quarter)
+      ...LOW_MARKET,
+    ].map((b) => ({ ...b }));
+}
 
 // Ambient townsfolk (original characters and lines)
 const VILLAGERS = [
@@ -37,6 +116,31 @@ const VILLAGERS = [
   { name: 'Ivy', model: 'Rogue', tint: 0xffe0a0, scale: 0.62, speed: 2.4, roam: 10, at: [40, 9], lines: ['Tag, you are it!', 'I can climb the windmill. Almost.', 'Is your sword heavy?'] },
 ];
 
+
+// townsfolk with a daily round (original names and lines)
+const CROWD_NAMES = ['Abel Thatcher', 'Bryn Cobb', 'Cora Reed', 'Dell Millward', 'Effie Stokes', 'Fitz Oakes', 'Gwen Kettle', 'Hal Underhill', 'Isla Fallow', 'Jem Nettle', 'Kara Ashby', 'Lew Bramble',
+  'Maud Hearth', 'Ned Quarry', 'Opal Wicke', 'Pim Larkspur', 'Rhea Dunmore', 'Sam Gristle', 'Tess Ivywood', 'Ugo Pennywhistle', 'Vin Cobb', 'Wynn Reed', 'Ada Stokes', 'Bert Oakes', 'Clem Fallow', 'Dot Kettle'];
+const CROWD_LINES = ['Busy day at the Low Market.', 'Have you seen the new houses on Lantern Row?', 'Morning! Or is it afternoon already?', 'My feet ache. Too many errands.', 'The well-water tastes of iron lately.',
+  'I am off to the tavern. Purely for medicinal reasons.', 'The Keep doubled the night watch.', 'They say you can hear singing from the Old Well.', 'Prices at the stalls keep going up.', 'Lovely weather for not being in a dungeon.',
+  'Mind the cart!', 'If you see my cat, she is called Biscuit.', 'Back home before dark, that is my rule.', 'Hollowmere grows every year.'];
+const HUBS = [[17, 19], [41.5, 68], [71, 30], [71, 12], [30, 39.5], [50, 31], [26, 12], [71, 60], [20, 67], [60, 67], [40, 20], [48, 49.5], [8, 22]];
+const CROWD_SPECS = ['v_m1', 'v_f1', 'v_m2', 'v_f2', 'v_m3', 'v_f3', 'v_m4', 'v_m5', 'v_f4', 'v_m6', 'v_f5'];
+function crowd(L) {
+  const homes = L.doors.filter((b) => /home/.test(b.name));
+  const work = L.doors.filter((b) => /tavern|market|church|blacksmith/.test(b.name));
+  const W = (c) => L.toWorld(...L.nearestFloor(Math.round(c[0]), Math.round(c[1])));
+  const n = Settings.quality === 'low' ? 16 : 26;
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const home = homes[(k * 7) % homes.length];
+    const stops = [W(HUBS[k % HUBS.length]), W(HUBS[(k * 5 + 3) % HUBS.length]), W(HUBS[(k * 3 + 7) % HUBS.length]), work[(k * 3) % work.length].door.clone(), home.door.clone()];
+    const kid = k % 9 === 4;
+    out.push({ name: CROWD_NAMES[k % CROWD_NAMES.length], model: ['Knight', 'Mage', 'Rogue', 'Barbarian', 'Rogue_Hooded'][k % 5], tint: [0xffe0c0, 0xd0d8ff, 0xffd0d0, 0xd0ffd0, 0xfff0b0][k % 5],
+      mode: 'routine', at: HUBS[k % HUBS.length], stops, homeDoor: home.door.clone(), speed: kid ? 2.6 : rand(1.6, 2.2), scale: kid ? 0.62 : 1, spec: CROWD_SPECS[k % CROWD_SPECS.length], lines: CROWD_LINES });
+  }
+  return out;
+}
+
 export class Level {
   constructor(scene, kind, floor) {
     this.scene = scene;
@@ -47,12 +151,17 @@ export class Level {
     this.rooms = [];
     this.entities = [];
     this.blocked = [];
-    if (kind === 'town') this.genTown(); else this.genDungeon();
+    this.safe = kind !== 'dungeon';
+    resetRealNpcBudget();
+    if (kind === 'town') this.genTown();
+    else if (kind === 'interior') { const all = townBuildings(); const b = all[floor] || all[4]; b.index = all.indexOf(b); genInterior(this, b); }
+    else this.genDungeon();
     this.explored = new Uint8Array(this.w * this.h);
     this.timeU = { value: 0 };
     this.noAO = [];
     this.buildEnv();
     if (kind === 'town') { this.buildTownVisuals(); this.populateTown(); }
+    else if (kind === 'interior') { buildInterior(this); this.populateInterior(); }
     else { this.buildDungeonVisuals(); this.addDungeonDetail(); this.populateDungeon(); }
   }
 
@@ -111,50 +220,13 @@ export class Level {
   }
 
   genTown() {
-    this.alloc(60, 60);
-    this.carve(1, 1, 58, 58);
-    this.buildings = [
-      { name: 'building_market_red', c: [8, 6.5], s: 6, ry: 0, npc: 'merchant' },
-      { name: 'building_tavern_blue', c: [26, 6.5], s: 6.5, ry: 0 },
-      { name: 'building_church_blue', c: [27, 25], s: 6, ry: 0 },
-      { name: 'building_blacksmith_green', c: [6, 15.5], s: 5.5, ry: Math.PI / 2 },
-      { name: 'building_home_A_yellow', c: [15, 5], s: 6, ry: 0 },
-      { name: 'building_home_B_red', c: [19.5, 26.5], s: 5.5, ry: Math.PI },
-      { name: 'building_home_A_blue', c: [28.5, 15.5], s: 6, ry: -Math.PI / 2 },
-      { name: 'building_tower_A_blue', c: [13, 27], s: 4.5, ry: 0 },
-      // east lane
-      { name: 'building_home_B_blue', c: [37.5, 5], s: 5.5, ry: 0 },
-      { name: 'building_home_A_red', c: [44, 5], s: 5.5, ry: 0 },
-      { name: 'building_lumbermill_yellow', c: [43.5, 15], s: 5.5, ry: -Math.PI / 2 },
-      { name: 'building_home_A_green', c: [37, 22], s: 5.5, ry: Math.PI / 2 },
-      { name: 'building_home_B_green', c: [44, 26], s: 5.5, ry: -Math.PI / 2 },
-      { name: 'building_archeryrange_green', c: [43.5, 35.5], s: 5, ry: -Math.PI / 2 },
-      // south lane
-      { name: 'building_grain', c: [4.5, 43], s: 5.5, ry: 0 },
-      { name: 'building_home_B_yellow', c: [12, 44], s: 5.5, ry: 0 },
-      { name: 'building_home_A_blue', c: [19, 44], s: 5.5, ry: 0 },
-      { name: 'building_stage_A', c: [28, 43.5], s: 5, ry: 0 },
-      { name: 'building_market_yellow', c: [35.5, 44], s: 5.5, ry: 0 },
-      { name: 'building_tower_B_red', c: [44, 44.5], s: 4.5, ry: 0 },
-      // the keep district (east)
-      { name: 'building_castle_blue', c: [54, 7.5], s: 7, ry: 0 },
-      { name: 'building_barracks_red', c: [54.5, 18], s: 6, ry: -Math.PI / 2 },
-      { name: 'building_tower_catapult_red', c: [57, 25.5], s: 4.2, ry: -Math.PI / 2 },
-      { name: 'building_tavern_red', c: [54.5, 31], s: 6, ry: -Math.PI / 2 },
-      { name: 'building_home_A_red', c: [53, 38], s: 5.5, ry: -Math.PI / 2 },
-      { name: 'building_mine_yellow', c: [55, 47.5], s: 6, ry: -Math.PI / 2 },
-      // the mill road (south)
-      { name: 'building_watermill_green', c: [6, 54], s: 6, ry: 0 },
-      { name: 'building_windmill_red', c: [14, 54.5], s: 6, ry: 0 },
-      { name: 'building_market_blue', c: [22, 54], s: 5.5, ry: 0 },
-      { name: 'building_blacksmith_red', c: [30, 54], s: 5.5, ry: 0 },
-      { name: 'building_church_yellow', c: [38, 54], s: 5.5, ry: 0 },
-      { name: 'building_scaffolding', c: [45.5, 54.5], s: 5, ry: 0 },
-      { name: 'building_tower_A_yellow', c: [52, 55], s: 4.5, ry: 0 },
-    ];
-    this.blocked = [{ x: 4, y: 23, w: 7, h: 5, type: 'pond' }, { x: 8, y: 54, w: 5, h: 4, type: 'pond', deep: true }, { x: 16, y: 16, w: 2, h: 2, type: 'well' }];
+    this.alloc(TOWN_W, TOWN_H);
+    this.carve(1, 1, TOWN_W - 2, TOWN_H - 2);
+    this.buildings = townBuildings();
+    this.blocked = [{ x: 4, y: 23, w: 7, h: 5, type: 'pond' }, { x: 8, y: 54, w: 5, h: 4, type: 'pond', deep: true }, { x: 16, y: 16, w: 2, h: 2, type: 'well' }, { x: 41, y: 70, w: 2, h: 2, type: 'well' }];
     this.buildingObjs = [];
-    for (const b of this.buildings) {
+    this.doors = [];
+    this.buildings.forEach((b, i) => {
       const o = prop(b.name);
       o.scale.setScalar(b.s);
       o.rotation.y = b.ry;
@@ -165,12 +237,22 @@ export class Level {
       const y0 = Math.floor(bb.min.z / CELL + 0.5 + 0.25), y1 = Math.floor(bb.max.z / CELL + 0.5 - 0.25);
       this.carve(x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0);
       b.front = Math.round(bb.max.z / CELL) + 1;
+      // the door is on the building's local +z side
+      const dx = Math.round(Math.sin(b.ry)), dz = Math.round(Math.cos(b.ry));
+      const ext = Math.abs(dx) * (bb.max.x - bb.min.x) / 2 + Math.abs(dz) * (bb.max.z - bb.min.z) / 2;
+      b.dir = [dx, dz];
+      b.door = new THREE.Vector3(b.c[0] * CELL + dx * (ext + 0.9), 0, b.c[1] * CELL + dz * (ext + 0.9));
+      b.index = i;
+      if (enterable(b)) this.doors.push(b);
       this.buildingObjs.push(o);
-    }
+    });
     for (const b of this.blocked) this.carve(b.x, b.y, b.w, b.h, 0);
+    // door steps stay walkable
+    for (const b of this.doors) { const [cx, cy] = this.cellOf(b.door); this.carve(cx, cy, 1, 1, 1); }
     this.trees = [[3, 9], [30, 10], [11, 31], [22, 31], [31, 21], [3, 31], [20, 11], [13, 11], [31, 30], [9, 20], [34, 12], [46, 20], [34, 30], [24, 36], [8, 36], [46, 40], [31, 46], [39, 33], [2, 37], [15, 38],
-      [47, 4], [47, 28], [58, 13], [58, 36], [51, 44], [47, 47], [2, 47], [10, 47], [26, 47], [36, 47], [58, 52], [19, 58], [34, 58], [2, 57]];
-    for (const [x, y] of this.trees) this.cells[this.idx(x, y)] = 0;
+      [47, 4], [47, 28], [58, 13], [58, 36], [51, 44], [47, 47], [2, 47], [10, 47], [26, 47], [36, 47], [19, 58], [34, 58], [2, 57],
+      [82, 3], [82, 58], [2, 77], [82, 77], [34, 77], [50, 77]];
+    for (const [x, y] of this.trees) if (this.isFloor(x, y)) this.cells[this.idx(x, y)] = 0;
     this.startPos = this.toWorld(17, 21);
     this.portalPos = this.toWorld(20, 19);
   }
@@ -298,7 +380,8 @@ export class Level {
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.03;
     this.root.add(this.sun, this.sun.target);
-    if (this.kind === 'town') {
+    if (this.kind === 'interior') buildInteriorEnv(this);
+    else if (this.kind === 'town') {
       this.scene.background = new THREE.Color(0x9fb8d8);
       this.scene.fog = new THREE.Fog(0x9fb8d8, 55, 120);
       this.ambient = new THREE.HemisphereLight(0xd8e4ff, 0x5a6a40, Settings.grit === 'classic' ? 1.4 : 1.1);
@@ -516,6 +599,14 @@ export class Level {
     path([[40, 38.5], [44, 41], [46, 46], [48, 49.5]], pw * 0.8);
     path([[4, 49.5], [14, 49.5], [26, 50], [38, 49.5], [48, 49.5], [54, 50]], pw);
     path([[17, 38.5], [17, 49.5]], pw * 0.8);
+    // Lantern Row and the Low Market
+    path([[54, 12], [61, 12], [71, 12]], pw);
+    path([[71, 2], [71, 30], [71, 50], [71, 67]], pw * 1.1);
+    path([[50, 31], [60, 31], [71, 31]], pw * 0.8);
+    path([[2, 67], [20, 67], [41.5, 67], [60, 67], [82, 67]], pw * 1.1);
+    path([[34, 49.5], [34, 58], [34, 67]], pw * 0.8);
+    path([[49, 49.5], [49, 58], [49, 67]], pw * 0.8);
+    path([[54, 50], [60, 52], [71, 52]], pw * 0.8);
     // farm field
     g.fillStyle = '#6a4e2e'; g.fillRect(toPx(2 * CELL), toPx(33.5 * CELL), toPx(10 * CELL) - toPx(2 * CELL), toPx(37.5 * CELL) - toPx(33.5 * CELL));
     for (let r = 0; r < 9; r++) { g.fillStyle = r % 2 ? '#5a4024' : '#7a9a3a'; g.fillRect(toPx(2.2 * CELL), toPx((33.8 + r * 0.42) * CELL), toPx(9.8 * CELL) - toPx(2.2 * CELL), 5); }
@@ -539,6 +630,16 @@ export class Level {
       }
     }
     g.strokeStyle = 'rgba(60,55,50,0.8)'; g.lineWidth = 4; g.beginPath(); g.arc(cx, cz, pr, 0, 7); g.stroke();
+    // the Low Market square: flagstones around the second well
+    {
+      const x0 = toPx(35 * CELL), z0 = toPx(66 * CELL), x1 = toPx(48.5 * CELL), z1 = toPx(76 * CELL), st = 10 * S / 1024;
+      g.fillStyle = '#5e574e'; g.fillRect(x0, z0, x1 - x0, z1 - z0);
+      for (let zz = z0; zz < z1; zz += st) for (let xx = x0 + ((zz / st) % 2) * st * 0.5; xx < x1; xx += st * 1.3) {
+        const l = 100 + Math.random() * 40; g.fillStyle = `rgb(${l + 8},${l + 2},${l - 8})`;
+        g.beginPath(); g.roundRect(xx + 1, zz + 1, st * 1.2, st * 0.9, 2); g.fill();
+      }
+      g.strokeStyle = 'rgba(60,55,50,0.8)'; g.lineWidth = 4; g.strokeRect(x0, z0, x1 - x0, z1 - z0);
+    }
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 8;
@@ -558,7 +659,7 @@ export class Level {
     ground.receiveShadow = true;
     this.root.add(ground);
     const outer = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), addDetail(new THREE.MeshStandardMaterial({ color: 0x4a7232, roughness: 1 }), det.albedo, 120, 0.45));
-    outer.rotation.x = -Math.PI / 2; outer.position.set(47, -0.05, 47); outer.receiveShadow = true;
+    outer.rotation.x = -Math.PI / 2; outer.position.set(this.w, -0.05, this.h); outer.receiveShadow = true;
     this.root.add(outer);
     for (const o of this.buildingObjs) this.root.add(o);
     // warm light spilling from doors and windows after dark
@@ -588,15 +689,18 @@ export class Level {
       return !(cx >= 0 && cy >= 0 && cx < this.w && cy < this.h) || this.cells[this.idx(cx, cy)] !== 0;
     };
     const area = { x0: -12, z0: -12, x1: (this.w + 5) * CELL, z1: (this.h + 5) * CELL };
-    const gf = grassField(9000, area, isGrass, this.timeU), fl = flowers(500, area, isGrass);
+    const gf = grassField(Settings.quality === 'low' ? 7000 : 12000, area, isGrass, this.timeU), fl = flowers(800, area, isGrass);
     this.root.add(gf, fl);
     this.noAO.push(gf, fl);
     // town wall
-    const W = (this.w - 1) * CELL;
+    const W = (this.w - 1) * CELL, H = (this.h - 1) * CELL;
     for (let i = 0; i < Math.ceil(W / 4); i++) {
       const a = i * 4 + 2;
       this.placeProp('wall_straight', new THREE.Vector3(a, 0, -0.6), 2, 0);
-      this.placeProp('wall_straight', new THREE.Vector3(a, 0, W + 0.6), 2, 0);
+      this.placeProp('wall_straight', new THREE.Vector3(a, 0, H + 0.6), 2, 0);
+    }
+    for (let i = 0; i < Math.ceil(H / 4); i++) {
+      const a = i * 4 + 2;
       this.placeProp('wall_straight', new THREE.Vector3(-0.6, 0, a), 2, Math.PI / 2);
       this.placeProp('wall_straight', new THREE.Vector3(W + 0.6, 0, a), 2, Math.PI / 2);
     }
@@ -635,12 +739,14 @@ export class Level {
     // trees inside
     for (const [x, y] of this.trees) this.placeProp(pick(['tree_single_A', 'tree_single_B']), this.toWorld(x, y), rand(4.5, 6), rand(0, 6));
     // countryside ring
-    for (let i = 0; i < 70; i++) {
-      const a = rand(0, Math.PI * 2), r = rand(42, 75);
-      const C = (this.w - 1) * CELL / 2; const p = new THREE.Vector3(C + Math.cos(a) * (r + 14), 0, C + Math.sin(a) * (r + 14));
-      this.placeProp(pick(['trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B', 'hills_A_trees']), p, rand(6, 9), rand(0, 6));
+    const CX = W / 2, CZ = H / 2, outside = (p, m) => p.x < -m || p.z < -m || p.x > W + m || p.z > H + m;
+    for (let i = 0, n = 0; i < 400 && n < 80; i++) {
+      const a = rand(0, Math.PI * 2), r = rand(0.75, 1.25) * Math.hypot(CX, CZ);
+      const p = new THREE.Vector3(CX + Math.cos(a) * r, 0, CZ + Math.sin(a) * r);
+      if (!outside(p, 8)) continue;
+      n++; this.placeProp(pick(['trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B', 'hills_A_trees']), p, rand(6, 9), rand(0, 6));
     }
-    for (let i = 0; i < 10; i++) { const a = rand(0, Math.PI * 2); const C = (this.w - 1) * CELL / 2; this.placeProp(pick(['mountain_A_grass_trees', 'hills_B_trees']), new THREE.Vector3(C + Math.cos(a) * 105, 0, C + Math.sin(a) * 105), rand(18, 26), rand(0, 6)); }
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2 + rand(-0.2, 0.2); const r = Math.hypot(CX, CZ) + 40; this.placeProp(pick(['mountain_A_grass_trees', 'hills_B_trees']), new THREE.Vector3(CX + Math.cos(a) * r, 0, CZ + Math.sin(a) * r), rand(18, 26), rand(0, 6)); }
     this.placeProp('building_windmill_yellow', new THREE.Vector3(-14, 3, 40), 7, 1);
     // market dressing
     const deco = [['tent', [12, 10], 5], ['crate_A_big', [11, 9], 6], ['sack', [10.5, 10.2], 8], ['barrel', [4, 10], 6], ['wheelbarrow', [3.5, 12], 6], ['resource_lumber', [9, 18.5], 5], ['barrel', [22, 10], 6], ['flag_red', [21, 9.5], 7], ['bucket_water', [14.5, 17], 7], ['crate_A_big', [30, 11], 6], ['sack', [24, 28.5], 8],
@@ -650,7 +756,31 @@ export class Level {
     deco.push(['weaponrack', [51, 16], 5], ['weaponrack', [51, 20], 5], ['barrel', [51.5, 27], 6], ['crate_B_big', [52, 28.5], 6], ['flag_red', [51, 5], 7], ['flag_red', [57, 5], 7],
       ['resource_stone', [52, 45], 6], ['crate_long_A', [52, 50.5], 6], ['resource_lumber', [43.5, 51], 5], ['pallet', [47.5, 51], 6], ['sack', [12, 51.5], 8], ['sack', [13, 51.2], 8], ['wheelbarrow', [19, 51.5], 6],
       ['barrel', [28, 51.5], 6], ['crate_A_big', [33, 51.5], 6], ['bucket_water', [8.5, 51], 7], ['tent', [26, 46], 5]);
-    for (const [n, [x, y], sc] of deco) { this.placeProp(n, this.toWorld(x, y), sc, rand(0, 6)); this.cells[this.idx(Math.round(x), Math.round(y))] = 2; }
+    // Lantern Row clutter: barrels, crates and sacks by the doors, carts in the street
+    for (let y = 5; y < 58; y += 4.3) {
+      deco.push([pick(['barrel', 'crate_A_small', 'sack', 'crate_B_small', 'bucket_empty']), [69.6, y], 6], [pick(['barrel', 'crate_A_big', 'sack', 'crate_long_B', 'pallet']), [72.4, y + 2.1], 6]);
+      if (Math.round(y) % 3 === 0) deco.push(['wheelbarrow', [70.2, y + 1.2], 6]);
+    }
+    deco.push(['flag_green', [69, 3], 7], ['flag_red', [73, 3], 7], ['resource_lumber', [74, 56], 5], ['crate_long_C', [67.5, 57], 6], ['tree_single_B_cut', [62, 57], 5]);
+    // Low Market: a ring of stalls round the well
+    const stalls = [[36.5, 67.8, 0], [39.5, 67.8, 0], [44, 67.8, 0], [47, 67.8, 0], [36.5, 74.5, Math.PI], [47, 74.5, Math.PI], [36, 71.2, Math.PI / 2], [47.6, 71.2, -Math.PI / 2]];
+    const goods = ['plate_food_A', 'plate_food_B', 'bottle_A_green', 'bottle_B_brown', 'coin_stack_large', 'box_small_decorated', 'plate_stack'];
+    stalls.forEach(([x, y, ry], i) => {
+      const p = this.toWorld(x, y);
+      this.placeProp('tent', p, 4.2, ry);
+      const t = this.placeProp(i % 2 ? 'table_medium_tablecloth' : 'table_medium', p.clone().add(new THREE.Vector3(Math.sin(ry) * 0.9, 0, Math.cos(ry) * 0.9)), 0.55, ry + Math.PI / 2);
+      for (let k = 0; k < 3; k++) this.placeProp(pick(goods), t.position.clone().add(new THREE.Vector3(rand(-0.5, 0.5), 0.52, rand(-0.25, 0.25))), 0.5, rand(0, 6));
+      this.placeProp(pick(['sack', 'crate_A_small', 'barrel']), p.clone().add(new THREE.Vector3(Math.cos(ry) * 1.4, 0, -Math.sin(ry) * 1.4)), 6, rand(0, 6));
+      this.cells[this.idx(Math.round(x), Math.round(y))] = 2;
+    });
+    deco.push(['flag_yellow', [35, 66.2], 7], ['flag_blue', [48.5, 66.2], 7], ['flag_green', [35, 75.8], 7], ['flag_red', [48.5, 75.8], 7], ['wheelbarrow', [50, 68.5], 6], ['crate_long_A', [33, 69], 6],
+      ['barrel', [10, 68.2], 6], ['sack', [20, 66], 8], ['crate_open', [56, 68.2], 6], ['resource_stone', [62, 66], 6], ['barrel', [76, 68.2], 6], ['bucket_water', [28.5, 60], 7], ['pallet', [16, 60], 6]);
+    const doorCells = new Set();
+    for (const b of this.doors) { const [cx, cy] = this.cellOf(b.door); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) doorCells.add((cx + dx) + ',' + (cy + dy)); }
+    for (const [n, [x, y], sc] of deco) {
+      if (doorCells.has(Math.round(x) + ',' + Math.round(y))) continue;
+      this.placeProp(n, this.toWorld(x, y), sc, rand(0, 6)); this.cells[this.idx(Math.round(x), Math.round(y))] = 2;
+    }
     // farm fence
     for (let x = 2.5; x < 10; x += 1.5) { this.placeProp('fence_wood_straight', this.toWorld(x, 33.2), 3.2, 0); this.placeProp('fence_wood_straight', this.toWorld(x, 37.8), 3.2, 0); }
     for (let x = 2.4; x < 10; x += 0.9) for (let z = 34; z < 37.6; z += 0.85) { const c = this.placeProp('tree_single_A', this.toWorld(x + rand(-0.1, 0.1), z), rand(0.9, 1.3), rand(0, 6)); c.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.setHex(0xd8c050); } }); }
@@ -658,7 +788,8 @@ export class Level {
     // lamps
     this.lamps = []; this.lampBulbs = [];
     for (const [x, y] of [[15, 13], [19, 13], [15, 21.5], [19, 21.5], [9, 21], [25, 21], [33, 10], [39, 18], [39, 29], [16, 36.5], [26, 37.5], [36, 37.5], [8, 37.5],
-      [48.5, 13], [48.5, 25], [48.5, 37], [10, 48], [24, 48], [36, 48], [47, 48.5]]) {
+      [48.5, 13], [48.5, 25], [48.5, 37], [10, 48], [24, 48], [36, 48], [47, 48.5],
+      [69.5, 9], [72.5, 16], [69.5, 23], [72.5, 29], [69.5, 36], [72.5, 43], [69.5, 49], [72.5, 55], [60, 13.5], [8, 66.4], [20, 67.6], [30, 66.4], [37, 66], [46.5, 66], [55, 67.6], [64, 66.4], [74, 67.6], [37, 76.2], [46.5, 76.2]]) {
       const p = this.toWorld(x, y);
       const post = cyl(0.07, 0.09, 2.6, 0x262626); post.position.copy(p).setY(1.3); this.root.add(post);
       const cap = cone(0.3, 0.25, 0x262626, 0, 4); cap.position.copy(p).setY(2.95); this.root.add(cap);
@@ -682,13 +813,30 @@ export class Level {
     this.interact('well', this.toWorld(16.5, 16.5), { name: 'The Old Well - Enter the Sunken Wells' });
     if (G.portalFloor > 0) this.interact('portal', this.portalPos, { name: `Portal to Floor ${G.portalFloor}` });
     this.interact('blacksmith', this.toWorld(9.6, 15.5), { name: 'Hobb Ironhand, Blacksmith' }).root.rotation.y = Math.PI / 2;
-    for (const v of VILLAGERS) {
+    for (const b of this.doors) {
+      const d = this.interact('door', b.door.clone(), { name: `Enter ${buildingTitle(b)}`, bi: b.index });
+      d.root.rotation.y = Math.atan2(b.dir[0], b.dir[1]);
+    }
+    for (const v of [...VILLAGERS, ...crowd(this)]) {
       const e = new Villager(v);
       e.root.position.copy(this.toWorld(...v.at));
       if (v.ry !== undefined) e.root.rotation.y = v.ry;
       this.add(e);
     }
-    for (const e of this.entities) if (e.kind && e.kind !== 'well' && e.kind !== 'portal') { const [x, y] = this.cellOf(e.pos); if (this.cells[this.idx(x, y)] !== 1) e.pos.copy(this.toWorld(...this.nearestFloor(x, y))); }
+    for (const e of this.entities) if (e.kind && e.kind !== 'well' && e.kind !== 'portal' && e.kind !== 'door') { const [x, y] = this.cellOf(e.pos); if (this.cells[this.idx(x, y)] !== 1) e.pos.copy(this.toWorld(...this.nearestFloor(x, y))); }
+  }
+
+  populateInterior() {
+    this.exitPos = this.toWorld(...this.doorCell);
+    this.interact('exit', this.exitPos.clone(), { name: `Leave ${this.title}`, bi: this.building.index });
+    const st = interiorStation(this);
+    if (st) this.interact(st.kind, this.toWorld(...st.at), { name: st.name });
+    for (const d of interiorPeople(this)) {
+      const e = new Villager(d);
+      e.root.position.copy(this.toWorld(...d.at));
+      e.root.rotation.y = Math.PI;
+      this.add(e);
+    }
   }
 
   populateDungeon() {

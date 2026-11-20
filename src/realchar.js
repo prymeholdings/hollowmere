@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { createCharacter } from './vendor/ara3d.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { findSource, tintMaterial, modelFlash, modelFlashTick } from './assets.js';
+import { wearGear, GEAR_SLOTS } from './gearvis.js';
 
 export const REAL_OK = typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined' && !new URLSearchParams(location.search).has('stylised');
 const ASSET_URL = new URL('assets/ara/', document.baseURI).href;
@@ -49,8 +50,8 @@ export const defaultLook = (cls, sex) => ({ sex, weight: 0.5, muscle: cls === 'M
 // garments by armour kind (this is the body the plates go on)
 const OUTFIT = {
   none: { top: 'tattered_shirt', bottom: 'tattered_pants', shoes: 'sandals', accessories: ['belt'] },
-  robe: { top: 'long_tunic', bottom: 'trousers', shoes: 'loafers', accessories: ['belt', 'shoulder_drape', 'waist_sash'] },
-  leathers: { top: 'tunic', bottom: 'trousers', shoes: 'combat_boots', accessories: ['leather_armor', 'arm_wraps', 'belt', 'gloves', 'crossed_straps'] },
+  robe: { top: 'thobe', bottom: 'trousers', shoes: 'loafers', accessories: ['shoulder_drape', 'waist_sash'] },
+  leathers: { top: 'tunic', bottom: 'tattered_pants', shoes: 'combat_boots', accessories: ['leather_armor', 'arm_wraps', 'belt', 'gloves', 'crossed_straps'] },
   furs: { top: 'tattered_shirt', bottom: 'hide_aprons', shoes: 'combat_boots', accessories: ['fur_bands', 'arm_wraps', 'belt', 'gloves'] },
   plate: { top: 'tunic', bottom: 'trousers', shoes: 'combat_boots', accessories: ['belt', 'gloves'] },
   merchant: { top: 'tunic', bottom: 'trousers', shoes: 'loafers', accessories: ['waist_sash', 'shoulder_drape', 'gold_necklace'] },
@@ -61,18 +62,36 @@ const OUTFIT = {
   bard: { top: 'tunic', bottom: 'trousers', shoes: 'loafers', accessories: ['crossed_straps', 'waist_sash', 'beret'] },
   noble: { top: 'long_tunic', bottom: 'trousers', shoes: 'oxfords', accessories: ['gold_chains', 'waist_sash'] },
 };
-const ARMOR_KIND = (it, cls) => {
-  if (!it) return cls === 'Mage' ? 'robe' : 'none';
+const ARMOR_KIND = (it) => {
+  if (!it) return 'none';
   const v = it.vis || '';
   return v === 'Mage' ? 'robe' : v === 'Rogue' ? 'leathers' : v === 'Barbarian' ? 'furs' : v === 'Knight' ? 'plate' : 'leathers';
 };
 const CLOTH_COLORS = { Knight: '#3a3a44', Barbarian: '#4a3828', Mage: '#3a2a5a', Rogue: '#26303a' };
 
-function paramsFor(look, cls, kind, sub) {
+// the equipped armour colours the clothes: base colour of the armour kind x the item's material / dye tint
+const KIND_BASE = { robe: 0x6a46a8, leathers: 0x8a5a34, furs: 0x8a6a48, plate: 0x4a4a58 };
+const RARITY_TRIM = ['#5a4a3a', '#3a6ad0', '#d8b040', '#e07020', '#c03030'];
+const hexOf = (c) => '#' + c.getHexString();
+export function armorStyles(al, kind) {
+  if (!al || !KIND_BASE[kind]) return null;
+  const tint = new THREE.Color(typeof al.tint === 'number' ? al.tint : (al.tint || 0xffffff));
+  const main = new THREE.Color(KIND_BASE[kind]).multiply(tint);
+  const dark = main.clone().multiplyScalar(0.55);
+  const trim = RARITY_TRIM[Math.min(al.rarity || 0, 4)];
+  if (kind === 'robe') return { thobe: { pattern: 'solid', color: hexOf(main), color2: hexOf(dark) }, shoulder_drape: { pattern: 'solid', color: hexOf(dark) }, waist_sash: { pattern: 'solid', color: trim }, trousers: { pattern: 'solid', color: hexOf(dark) } };
+  if (kind === 'leathers') return { tunic: { pattern: 'leather', color: hexOf(main) }, leather_armor: { pattern: 'leather', color: hexOf(dark) }, tattered_pants: { pattern: 'solid', color: hexOf(dark) } };
+  if (kind === 'furs') return { tattered_shirt: { pattern: 'solid', color: hexOf(dark) }, hide_aprons: { pattern: 'leather', color: hexOf(main) } };
+  return { tunic: { pattern: 'solid', color: hexOf(dark) } };
+}
+export const armorKey = (al) => (al ? [al.vis, al.tint, al.rarity].join(':') : '-');
+
+function paramsFor(look, cls, kind, sub, al) {
   const sex = look.sex === 'f' ? 'f' : 'm';
   const sk = SKIN_PRESETS[look.skinTone ?? 1] || SKIN_PRESETS[1];
   const o = OUTFIT[kind];
   const cloth = CLOTH_COLORS[cls] || '#3a3a44';
+  sub = { ...(armorStyles(al, kind) || {}), ...(sub || {}) };
   return {
     name: 'Hero', seed: 7, gender: sex === 'm' ? 1 : 0, age: 0.5, muscle: look.muscle ?? 0.6, weight: look.weight ?? 0.5, height: 0.5 + (look.height ? (look.height - 1) * 1.5 : 0), proportions: 0.5,
     african: sk.c[0], asian: sk.c[1], caucasian: sk.c[2], skinTint: sk.tint,
@@ -100,6 +119,10 @@ export const NPC_SPECS = {
   v_f1: { look: L('f', 'long01', '#2a1c12', 2, 0.5, 0.3), kind: 'peasant', cloth: { tunic: { pattern: 'solid', color: '#8a3a3a' } } },
   v_f2: { look: L('f', 'bob01', '#a87a3e', 1, 0.6, 0.25), kind: 'noble', cloth: { long_tunic: { pattern: 'solid', color: '#4a3a6a' } } },
   v_f3: { look: L('f', 'cornrows', '#15110e', 5, 0.45, 0.4), kind: 'healer', cloth: { long_tunic: { pattern: 'solid', color: '#3a6a5a' } } },
+  v_m5: { look: L('m', 'short03', '#a87a3e', 0, 0.75, 0.4, { beard: 'goatee' }), kind: 'noble', cloth: { long_tunic: { pattern: 'solid', color: '#5a2a2a' } } },
+  v_m6: { look: L('m', 'buzz', '#15110e', 4, 0.45, 0.7, { beard: 'stubble' }), kind: 'farmer', cloth: { tattered_shirt: { pattern: 'solid', color: '#4a5a6a' } } },
+  v_f4: { look: L('f', 'ponytail01', '#2a1c12', 3, 0.55, 0.35), kind: 'peasant', cloth: { tunic: { pattern: 'solid', color: '#6a6a3a' } } },
+  v_f5: { look: L('f', 'braid01', '#e8d8a8', 0, 0.5, 0.3, { eyes: 'bluegreen' }), kind: 'bard', cloth: { tunic: { pattern: 'solid', color: '#7a3a5a' } } },
   guard: { look: L('m', 'short01', '#2a1c12', 2, 0.65, 0.8), kind: 'plate', cloth: {}, armor: true },
   guardf: { look: L('f', 'ponytail01', '#7a5230', 1, 0.5, 0.7), kind: 'plate', cloth: {}, armor: true },
 };
@@ -109,7 +132,7 @@ const CLEAN = new Map();
 const cache = new Map();
 let queue = Promise.resolve();
 export function buildReal(look, cls, kind, extra = {}) {
-  const p = paramsFor(look, cls, kind, extra.garmentStyles);
+  const p = paramsFor(look, cls, kind, extra.garmentStyles, extra.armor);
   Object.assign(p, extra.params || {});
   const key = JSON.stringify([p.gender, p.muscle, p.weight, p.height, p.african, p.asian, p.caucasian, p.skinTint, p.eyes, p.hair, p.hairTint, p.facialHair, p.top, p.bottom, p.shoes, p.accessories, p.garmentStyles, p.seed, p.age, p.breastSize, extra.detail]);
   if (cache.has(key)) return cache.get(key);
@@ -143,7 +166,7 @@ export class RealChar {
     this.root.scale.setScalar(this.scale * (opts.fit ?? 1.0));
     this.mixer = new THREE.AnimationMixer(this.scene);
     this.actions = {}; this.current = null; this.oneShot = null; this.parts = {};
-    this.bones = {};
+    this.bones = {}; this.anims = [];
     this.scene.traverse((o) => {
       if (o.isBone) this.bones[o.name] = o;
       if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; if (o.material && o.material.map) o.material.map.anisotropy = 4; this.parts[o.name] = o; }
@@ -241,14 +264,29 @@ export class RealChar {
     return a.getClip().duration / timeScale;
   }
   flash(s = 1, c = null) { modelFlash(this, s, c); }
-  update(dt) { this.mixer.update(dt); modelFlashTick(this, dt); }
+  update(dt) {
+    this.mixer.update(dt); modelFlashTick(this, dt);
+    if (this.anims && this.anims.length && dt > 0) {
+      // how fast the hero is moving drives cloth sway and footstep dust
+      const hb = this.bones.Hips;
+      if (hb) {
+        this._p = this._p || new THREE.Vector3(); this._q = this._q || new THREE.Vector3();
+        this.root.updateWorldMatrix(true, false);
+        const y = this._q.set(0, 0, 0).applyMatrix4(this.root.matrixWorld);
+        if (this._have) { const d = Math.hypot(y.x - this._p.x, y.z - this._p.z) / dt; this.speed = (this.speed || 0) * 0.85 + Math.min(d, 9) * 0.15; }
+        this._p.copy(y); this._have = true;
+      }
+      this.gt = (this.gt || 0) + dt;
+      for (const f of this.anims) f(this.gt, dt);
+    }
+  }
   applyLook() {}
   setGear() {}
   setCapeColor() {}
   attach(propName, left = false) { return null; }
 
   // ---------------------------------------------------------------- gear
-  clearWorn() { for (const o of this.worn) { o.parent?.remove(o); } this.worn = []; }
+  clearWorn() { for (const o of this.worn) { o.parent?.remove(o); } this.worn = []; this.anims = []; }
   add(obj, bone) { (this.bones[bone] || this.scene).add(obj); this.worn.push(obj); return obj; }
   dress(equipment, look, cls, look2) {
     this.clearWorn();
@@ -257,7 +295,8 @@ export class RealChar {
     const wl = W(eq.weapon), ol = W(eq.offhand), hl = W(eq.helm), al = W(eq.armor);
     if (wl) this.holdItem(wl, 'right', eq.weapon);
     if (ol) this.holdItem(ol, 'left', eq.offhand);
-    if (hl && look?.helm !== false) this.wearHelm(hl);
+    if (hl && look?.showHelm !== false) this.wearHelm(hl);
+    for (const slot of GEAR_SLOTS) { const gl = W(eq[slot]); if (gl) wearGear(this, slot, gl); }
     if (al) this.wearPlates(al, ARMOR_KIND(al), cls);
     const am = W(eq.amulet), rg = W(eq.ring);
     if (am) this.wearJewel(am, 'amulet');
@@ -285,8 +324,16 @@ export class RealChar {
     const m = src.node.clone(true);
     m.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); tintMaterial(o.material, l); o.castShadow = true; o.frustumCulled = false; o.visible = true; } });
     m.visible = true; m.position.set(0, 0, 0); m.rotation.set(0, 0, 0);
+    // fit the stylised helm onto a human-sized head: widest side ~0.27 m, rim at the brow
+    const box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    const s = 0.27 / Math.max(0.01, size.x, size.z);
+    m.position.set(-c.x * s, -box.min.y * s, -c.z * s); m.scale.setScalar(s);
     const g = new THREE.Group(); g.add(m);
-    g.scale.setScalar(0.135); g.position.set(0, 0.035, 0.0);
+    // sizes above are in the rig's metres: undo any scale between the rig root and the head bone
+    const hs = new THREE.Vector3(), ss = new THREE.Vector3(); this.scene.updateMatrixWorld(true); this.bones.Head.getWorldScale(hs); this.scene.getWorldScale(ss);
+    const k = (ss.x || 1) / (hs.x || 1);
+    g.scale.setScalar(k);
+    g.position.set(0, 0.062 * k, 0.008 * k);
     this.add(g, 'Head');
   }
   wearJewel(l, kind) {
@@ -315,7 +362,7 @@ export class RealChar {
     const fur = kind === 'furs', leather = kind === 'leathers';
     const col = new THREE.Color(l.tint).multiply(new THREE.Color(fur ? 0x8a7050 : leather ? 0x6a4a30 : 0xaab0b8));
     const glow = new THREE.Color(l.glow || 0);
-    const metalMat = fur ? pm(col.getHex(), 0, 0.95) : leather ? pm(col.getHex(), 0.05, 0.75) : pm(col.getHex(), 0.88, 0.34, glow.getHex(), glow.getHex() ? 1 : 0);
+    const metalMat = fur ? pm(col.getHex(), 0, 0.95) : leather ? pm(col.getHex(), 0.05, 0.75) : pm(col.getHex(), 0.62, 0.36, glow.getHex(), glow.getHex() ? 1 : 0);
     const trim = pm(0x2a2218, 0.3, 0.7);
     const accent = pm(l.rarity >= 3 ? 0xff9a2a : l.rarity === 2 ? 0xffd84d : 0x8a6a30, 0.9, 0.3, l.rarity >= 2 ? 0x663300 : 0, l.rarity >= 2 ? 0.6 : 0);
     const bodyDepth = sw * 0.42;
@@ -410,6 +457,6 @@ export async function realFor(look, cls, equipment, lookOf, opts = {}) {
   if (!REAL_OK) return null;
   const al = equipment && equipment.armor ? lookOf(equipment.armor) : null;
   const kind = opts.kind || ARMOR_KIND(al, cls);
-  const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || 'medium', garmentStyles: opts.cloth });
+  const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || 'medium', garmentStyles: opts.cloth, armor: al });
   return res ? new RealChar(res, { scale: opts.scale ?? ((look && look.height) || 1), look }) : null;
 }

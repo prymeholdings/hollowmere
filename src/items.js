@@ -2,7 +2,8 @@ import { randi, rand, pick, shuffle, hex } from './util.js';
 
 export const RARITY_NAMES = ['Common', 'Magic', 'Rare', 'Legendary'];
 export const RARITY_COLORS = [0xebebeb, 0x6fa3ff, 0xffe14d, 0xff8c1f];
-export const SLOT_NAMES = { weapon: 'Weapon', offhand: 'Off-hand', helm: 'Helm', armor: 'Armor', ring: 'Ring', amulet: 'Amulet', fish: 'Fish', gem: 'Gem' };
+export const SLOT_NAMES = { weapon: 'Weapon', offhand: 'Off-hand', helm: 'Helm', armor: 'Armor', shoulders: 'Shoulders', gloves: 'Gloves', shirt: 'Undershirt', belt: 'Belt', pants: 'Pants', boots: 'Boots', ring: 'Ring', amulet: 'Amulet', fish: 'Fish', gem: 'Gem' };
+export const EXTRA_SLOTS = ['shoulders', 'gloves', 'shirt', 'belt', 'pants', 'boots'];
 export const SOCKET_SLOTS = ['weapon', 'offhand', 'armor', 'helm'];
 
 // ---------------------------------------------------------------- materials (tiers)
@@ -63,6 +64,25 @@ export const TYPES = {
   hood: { slot: 'helm', name: 'Hood', vis: 'Rogue_Head_Hooded', armor: 2, icon: 'hood', bonus: { dex: 2 } },
   skullhelm: { slot: 'helm', name: 'Skull Helm', vis: 'Skeleton_Warrior_Helmet', armor: 4, icon: 'helm', bonus: { vit: 1 } },
   crown: { slot: 'helm', name: 'Lich Crown', vis: 'Skeleton_Mage_Hat', armor: 2, icon: 'hat', bonus: { mana: 6 } },
+  // extra worn pieces (each is drawn on the hero; vis names the style)
+  undershirt: { slot: 'shirt', name: 'Undershirt', vis: 'undershirt', armor: 1, icon: 'shirt' },
+  jerkin: { slot: 'shirt', name: 'Jerkin', vis: 'jerkin', armor: 2, icon: 'shirt', bonus: { dex: 1 } },
+  longshirt: { slot: 'shirt', name: 'Linen Shirt', vis: 'longshirt', armor: 1, icon: 'shirt', bonus: { mana: 4 } },
+  leggings: { slot: 'pants', name: 'Leggings', vis: 'leggings', armor: 2, icon: 'pants' },
+  greaves: { slot: 'pants', name: 'Greaves', vis: 'greaves', armor: 4, icon: 'pants', bonus: { vit: 1 } },
+  kilt: { slot: 'pants', name: 'Battle Kilt', vis: 'kilt', armor: 2, icon: 'pants', bonus: { life: 5 } },
+  shoes: { slot: 'boots', name: 'Shoes', vis: 'shoes', armor: 1, icon: 'boots', bonus: { speed: 2 } },
+  boots: { slot: 'boots', name: 'Boots', vis: 'boots', armor: 2, icon: 'boots' },
+  sabatons: { slot: 'boots', name: 'Sabatons', vis: 'sabatons', armor: 4, icon: 'boots', bonus: { str: 1 } },
+  gloves: { slot: 'gloves', name: 'Gloves', vis: 'gloves', armor: 1, icon: 'gloves' },
+  gauntlets: { slot: 'gloves', name: 'Gauntlets', vis: 'gauntlets', armor: 3, icon: 'gloves', bonus: { str: 1 } },
+  wraps: { slot: 'gloves', name: 'Hand Wraps', vis: 'wraps', armor: 1, icon: 'gloves', bonus: { aspd: 3 } },
+  belt: { slot: 'belt', name: 'Belt', vis: 'belt', armor: 1, icon: 'belt' },
+  girdle: { slot: 'belt', name: 'Girdle', vis: 'girdle', armor: 3, icon: 'belt', bonus: { life: 6 } },
+  sash: { slot: 'belt', name: 'Sash', vis: 'sash', armor: 0, icon: 'belt', bonus: { mana: 6 } },
+  mantle: { slot: 'shoulders', name: 'Mantle', vis: 'mantle', armor: 1, icon: 'shoulders', bonus: { mag: 2 } },
+  spaulders: { slot: 'shoulders', name: 'Spaulders', vis: 'spaulders', armor: 3, icon: 'shoulders', bonus: { dex: 1 } },
+  pauldrons: { slot: 'shoulders', name: 'Pauldrons', vis: 'pauldrons', armor: 5, icon: 'shoulders' },
   // jewellery
   band: { slot: 'ring', name: 'Band', vis: 'ring', icon: 'ring' },
   signet: { slot: 'ring', name: 'Signet', vis: 'ring', icon: 'ring' },
@@ -106,7 +126,7 @@ export function upgradeItem(it) {
     const b = baseByName(it.base);
     if (b) { it.type = b.type; it.mat = b.mat; }
     else if (LEGACY[it.base]) { [it.type, it.mat] = LEGACY[it.base]; }
-    else it.type = { weapon: 'sword', offhand: 'buckler', armor: 'leathers', helm: 'helm', ring: 'band', amulet: 'pendant' }[it.slot] || 'sword';
+    else it.type = { weapon: 'sword', offhand: 'buckler', armor: 'leathers', helm: 'helm', ring: 'band', amulet: 'pendant', shirt: 'undershirt', pants: 'leggings', boots: 'boots', gloves: 'gloves', belt: 'belt', shoulders: 'mantle' }[it.slot] || 'sword';
   }
   if (!it.gems) it.gems = [];
   if (it.sockets === undefined) it.sockets = 0;

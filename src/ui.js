@@ -304,8 +304,8 @@ export class UI {
     for (const k in BUFF_DEFS) if (G.buffs[k] > 0) { const sk = Object.values(SKILLS).find((x) => x.o && x.o.buff === k); buffs.push([sk ? sk.id : 'arcane', G.buffs[k], BUFF_DEFS[k].name]); }
     const bk = buffs.map((b) => b[0] + Math.ceil(b[1])).join();
     if (bk !== this._bk) { this._bk = bk; $('#hud-buffs').innerHTML = buffs.map(([ic, t, n]) => `<div class="buff" title="${n}">${skillIcon(ic)}<span>${Math.ceil(t)}</span></div>`).join(''); }
-    $('#hud-loc').textContent = G.level.kind === 'town' ? 'Hollowmere' : `Sunken Wells · Floor ${G.level.floor}`;
-    $('#hud-clock').textContent = G.level.kind === 'town' ? clockText() : '';
+    $('#hud-loc').textContent = G.level.kind === 'town' ? 'Hollowmere' : G.level.kind === 'interior' ? G.level.title : `Sunken Wells · Floor ${G.level.floor}`;
+    $('#hud-clock').textContent = G.level.safe ? clockText() : '';
     this.updateAutoChip();
     const boss = G.level.kind === 'dungeon' && G.level.entities.find((e) => e.type === 'enemy' && e.boss && !e.dead && e.aggro && flatDist(e.pos, G.player.pos) < 24);
     const bb = $('#boss-bar');
@@ -371,7 +371,7 @@ export class UI {
     const ctx = cv.getContext('2d');
     const L = G.level;
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, size, size);
-    const town = L.kind === 'town';
+    const town = L.safe;
     const s = big ? Math.floor(size / Math.max(L.w, L.h)) : 6;
     const [pcx, pcy] = L.cellOf(G.player.pos);
     const ox = big ? 0 : size / 2 - pcx * s - s / 2, oy = big ? 0 : size / 2 - pcy * s - s / 2;
@@ -501,7 +501,7 @@ export class UI {
     const body = this.body('inv', 'Inventory', { right: '18px', top: '90px', width: '600px' });
     body.innerHTML = '';
     const eq = el('div', 'eqgrid');
-    const layout = { helm: [2, 1], amulet: [3, 1], weapon: [1, 2], armor: [2, 2], offhand: [3, 2], ring: [3, 3] };
+    const layout = { helm: [2, 1], amulet: [3, 1], shoulders: [4, 1], weapon: [1, 2], armor: [2, 2], offhand: [3, 2], gloves: [4, 2], shirt: [2, 3], belt: [3, 3], ring: [4, 3], pants: [2, 4], boots: [3, 4] };
     for (const slot in layout) {
       const it = G.equipment[slot];
       const s = this.itemCell(it, () => { unequip(slot); this.refresh(); }, () => { unequip(slot); this.refresh(); }, false, 'eqs');
@@ -517,7 +517,7 @@ export class UI {
     gold.style.gridColumn = 1; gold.style.gridRow = 3;
     eq.appendChild(gold);
     const petInfo = el('div', '', `<div style="font-size:12px;text-align:center;padding-top:14px;color:#ffb066">${G.petName}<br><span class="muted">${{ golem: 'Golem', wyrm: 'Wyrm', stag: 'Stag' }[G.petForm] || PET_SPECIES[G.petSpecies].stages[petStage()]}</span><br><button class="mini" id="inv-pet">Pet (P)</button></div>`);
-    petInfo.style.gridColumn = 2; petInfo.style.gridRow = 3;
+    petInfo.style.gridColumn = 1; petInfo.style.gridRow = 4;
     eq.appendChild(petInfo);
     const ipb = petInfo.querySelector('#inv-pet'); if (ipb) ipb.onclick = () => this.show('pet');
     const top = el('div', 'invtop');
@@ -538,9 +538,11 @@ export class UI {
     const btn = (t, fn, dis) => { const b = el('button', 'small', t); b.disabled = !!dis; b.onclick = () => { fn(); this.hideTooltip(); this.refresh(); }; bar.appendChild(b); };
     btn(selIt?.slot === 'fish' ? 'Feed Pet' : selIt?.slot === 'gem' ? 'Socket' : 'Equip', () => this.quickUse(this.sel.key, true), !selIt);
     if (this.open.shop) btn('Sell', () => this.sell(this.sel.key), !selIt);
+    const magic = G.backpack.filter((it) => it.rarity === 1 && it.slot !== 'gem' && it.slot !== 'fish');
+    if (this.open.shop) btn(`Sell all magic (${magic.length})`, () => this.sellAllMagic(), !magic.length);
     btn('Drop', () => { const it = G.backpack.splice(this.sel.key, 1)[0]; this.main.dropItem(it); this.sel = null; }, !selIt);
     btn('Wardrobe', () => this.show('wardrobe'), false);
-    btn(`Send ${G.petName} to sell commons`, () => petSellCommons(), G.level.kind === 'town' && !this.open.shop);
+    btn(`Send ${G.petName} to sell commons`, () => petSellCommons(), G.level.safe && !this.open.shop);
     body.appendChild(bar);
   }
   quickUse(i, viaButton = false) {
@@ -559,6 +561,19 @@ export class UI {
       ...targets.slice(0, 10).map((t) => [`${displayName(t.it)}${t.where === 'eq' ? ' (equipped)' : ''}`, () => { socketGem(G.backpack.indexOf(gem), t.it); this.sel = null; this.refresh(); }]),
       ['Cancel', null],
     ], targets.length > 3);
+  }
+  sellAllMagic() {
+    const magic = G.backpack.filter((it) => it.rarity === 1 && it.slot !== 'gem' && it.slot !== 'fish');
+    if (!magic.length) { this.toast('You have no magic items to sell.', true); return; }
+    const total = magic.reduce((a, it) => a + sellPrice(it), 0);
+    this.choice('Sell all magic items', `Sell ${magic.length} magic (blue) item${magic.length > 1 ? 's' : ''} from your backpack for ${total.toLocaleString()} gold? Equipped gear, rares, legendaries, gems and fish are kept.`, [
+      [`Sell ${magic.length} for ${total.toLocaleString()} gold`, () => {
+        G.backpack = G.backpack.filter((it) => !magic.includes(it));
+        G.gold += total; this.sel = null; this.hideTooltip();
+        msg(`Sold ${magic.length} magic items for ${total.toLocaleString()} gold`, '#ffd84d'); sfx('gold'); this.refresh();
+      }],
+      ['Keep them', null],
+    ]);
   }
   sell(i) {
     const it = G.backpack[i];
@@ -828,7 +843,7 @@ export class UI {
 
   renderQuest() {
     const body = this.body('quest', QUEST_GIVER, { left: '50%', top: '16%', width: '500px', transform: 'translateX(-50%)' });
-    const inTown = G.level.kind === 'town';
+    const inTown = G.level.safe;
     const q = G.quest;
     let html = '';
     if (q) {
@@ -1099,13 +1114,13 @@ export class UI {
       <h3><span>Clothing tint</span></h3>${sw('tint', ARMOR_TINTS)}
       <h3><span>Cape</span></h3>${sw('cape', CAPE_COLORS)}
       <div class="setrow"><span>Wear a cape</span><input type="checkbox" id="wd-cape" ${L.capeOn !== false ? 'checked' : ''}></div>
-      <div class="setrow"><span>Show helm</span><input type="checkbox" id="wd-helm" ${L.helm !== false ? 'checked' : ''}></div>
+      <div class="setrow"><span>Show helm</span><input type="checkbox" id="wd-helm" ${L.showHelm !== false ? 'checked' : ''}></div>
       ${detailRows(L)}`;
     const apply = () => { sfx('ui'); G.player?.refreshVisuals(); this.renderWardrobe(); };
     bindDetails(body, L, apply);
     body.querySelectorAll('[data-wl]').forEach((d) => (d.onclick = () => { L[d.dataset.wl] = d.dataset.v; apply(); }));
     $('#wd-cape', body).onchange = (e) => { L.capeOn = e.target.checked; apply(); };
-    $('#wd-helm', body).onchange = (e) => { L.helm = e.target.checked; apply(); };
+    $('#wd-helm', body).onchange = (e) => { L.showHelm = e.target.checked; apply(); };
   }
   // ---------------- companion (pet) panel ----------------
   renderPet() {
@@ -1113,7 +1128,7 @@ export class UI {
     const body = this.body('pet', 'Companion', { left: '50%', top: '50px', width: '760px', transform: 'translateX(-50%)', maxHeight: '90vh', overflowY: 'auto' });
     const view = this.petView && PET_SPECIES[this.petView] ? this.petView : G.petSpecies;
     const sp = PET_SPECIES[view], rec = G.pets[view], active = view === G.petSpecies;
-    const stg = petStage(rec), inTown = G.level?.kind === 'town';
+    const stg = petStage(rec), inTown = !!G.level?.safe;
     const next = STAGE_LEVELS.find((l) => l > rec.lvl);
     const xpF = rec.lvl >= PET_MAX_LEVEL ? 1 : rec.xp / petXpToNext(rec.lvl);
     const c6 = (c) => '#' + c.toString(16).padStart(6, '0');
@@ -1162,7 +1177,7 @@ export class UI {
     });
   }
   swapPet(sp) {
-    if (G.level?.kind !== 'town') { this.flash('Companions can only be swapped in town'); return; }
+    if (!G.level?.safe) { this.flash('Companions can only be swapped in town'); return; }
     G.petSpecies = sp; G.petForm = ''; G.petFormTime = 0;
     ensurePets();
     if (G.pet) { G.pet.dead = false; G.pet.applyForm(true); G.pet.hp = G.pet.maxHp; G.pet.evolve(); }
@@ -1284,7 +1299,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.6.2 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music mostly made in code, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG · v0.7.0 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };

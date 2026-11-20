@@ -77,9 +77,10 @@ const TRACKS = {
 };
 
 // CC0 recorded tracks (generated music is the fallback if one cannot be loaded)
-const FILE_TRACKS = { boss: 'assets/music/battle_theme_a.mp3', boss_deep: 'assets/music/battle_theme_a.mp3',
-  // supplied by the owner (private/ is left out of the public web build; generated music plays if absent)
-  town: 'assets/music/private/jacobs_prayer.mp3', town_night: 'assets/music/private/chopin_nocturne_72_1.mp3', menu: 'assets/music/private/jacobs_prayer.mp3',
+const FILE_TRACKS = { boss: 'assets/music/battle_theme_a.mp3', boss_deep: 'assets/music/battle_theme_a.mp3', final: 'assets/music/battle_theme_a.mp3',
+  // supplied by the owner (generated music plays if a file is missing)
+  menu: 'assets/music/private/jacobs_prayer.mp3', town: 'assets/music/private/jacobs_prayer.mp3', town_night: 'assets/music/private/chopin_nocturne_72_1.mp3',
+  dungeon: 'assets/music/private/lobotomy.mp3', crypt: 'assets/music/private/lobotomy.mp3', ember: 'assets/music/private/lobotomy.mp3',
   abyss: 'assets/music/private/lobotomy.mp3', void: 'assets/music/private/lobotomy.mp3' };
 const fileBuf = {};
 let fileSrc = null;

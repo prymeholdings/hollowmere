@@ -8,9 +8,10 @@ import { Vortex } from './vortex.js';
 import { buildPetModel, petStage, petCoatColor, PET_SPECIES, PET_SKILLS, petRank, ensurePets, addPetXp, petBonus } from './pets.js';
 import { Settings } from './settings.js';
 import { Barks } from './barks.js';
-import { REAL_OK, buildReal, RealChar, ARMOR_KIND, fullLook, realFor, NPC_SPECS } from './realchar.js';
+import { REAL_OK, buildReal, RealChar, ARMOR_KIND, armorKey, fullLook, realFor, NPC_SPECS } from './realchar.js';
 import { goreKind } from './gore.js';
 import { ENEMIES } from './data.js';
+import { daylight } from './daynight.js';
 
 const tmp = new THREE.Vector3();
 const DMG_COLORS = { phys: '#ffffff', fire: '#ffa040', frost: '#9fdcff', storm: '#c6b8ff', poison: '#9dff7a', arcane: '#b8a0ff', light: '#fff0a0', dark: '#c070e0', bleed: '#ff4a4a' };
@@ -114,10 +115,10 @@ export class Player extends Entity {
     if (!REAL_OK || Settings.realistic === false) return;
     const look = fullLook(G.look, G.cls);
     const al = G.equipment.armor ? lookOf(G.equipment.armor) : null;
-    const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls)].join('|');
+    const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls), armorKey(al)].join('|');
     if (this.realKey === key) return;
     this.realKey = key;
-    const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { detail: (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) ? 'low' : 'medium' });
+    const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { armor: al, detail: (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) ? 'low' : 'medium' });
     if (!res || this.realKey !== key || this.gone) return;
     const old = this.model;
     const rc = new RealChar(res, { scale: look.height || 1, look });
@@ -1214,6 +1215,14 @@ export class Interact extends Entity {
         lc = kind === 'millpond' ? '#ffb066' : '#99d9ff'; ly = 1.6; break;
       }
       case 'well': this.pickR = 2.0; this.pickH = 1.0; lc = '#ffb366'; ly = 4.6; break;
+      case 'door': case 'exit': {
+        // a warm doorstep glow that marks a way in (or out)
+        this.pickR = 1.0; this.pickH = 0.6;
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffb860, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending });
+        const step = add(new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.0), mat)); step.rotation.x = -Math.PI / 2; step.position.y = 0.04; this.glow = step;
+        if (kind === 'exit') { const arrow = add(new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.4, 4), new THREE.MeshBasicMaterial({ color: 0xffd890 }))); arrow.rotation.x = Math.PI / 2; arrow.position.set(0, 0.35, 0.3); this.bob = arrow; }
+        lc = kind === 'exit' ? '#ffe2a8' : '#f3d9a4'; ly = kind === 'exit' ? 1.4 : 2.4; break;
+      }
       case 'stairs_down': case 'stairs_up': {
         const down = kind === 'stairs_down';
         if (down) {
@@ -1260,7 +1269,7 @@ export class Interact extends Entity {
         lc = hex(col); break;
       }
     }
-    this.label = { text: data.name || kind, color: lc, y: ly, always: ['merchant', 'quest', 'healer', 'blacksmith', 'beastmaster', 'millpond', 'well', 'portal', 'stairs_down', 'stairs_up'].includes(kind) };
+    this.label = { text: data.name || kind, color: lc, y: ly, always: ['merchant', 'quest', 'healer', 'blacksmith', 'beastmaster', 'millpond', 'well', 'portal', 'stairs_down', 'stairs_up', 'exit'].includes(kind) };
   }
   update(dt) {
     this.t += dt;
@@ -1271,7 +1280,9 @@ export class Interact extends Entity {
       this.vortex.update(dt, G.main.camera);
       if (Math.random() < dt * 14) { const a = Math.random() * 6.28; G.main.fx.emit(this.pos.clone().add(new THREE.Vector3(Math.cos(a) * 2.2, 0.2 + Math.random() * 2, Math.sin(a) * 2.2)), { count: 1, color: Math.random() < 0.5 ? 0xb088ff : 0xe8d8ff, speed: 0.2, life: 0.7, size: 0.2, gravity: 0 }); }
     }
-    if (this.bob && this.kind !== 'relic') { this.bob.rotation.y += dt; this.bob.position.y += Math.sin(this.t * 3) * 0.004; }
+    if (this.glow) this.glow.material.opacity = (this.kind === 'exit' ? 0.3 : 0.14) + 0.08 * Math.sin(this.t * 2.4);
+    if (this.bob && this.kind === 'exit') this.bob.position.z = 0.3 + Math.sin(this.t * 3) * 0.08;
+    else if (this.bob && this.kind !== 'relic') { this.bob.rotation.y += dt; this.bob.position.y += Math.sin(this.t * 3) * 0.004; }
     if (this.shrineColor && !this.dead && Math.random() < dt * 10) G.main.fx.emit(this.pos.clone().setY(1.6), { count: 1, color: this.shrineColor, speed: 0.5, life: 0.8, size: 0.3, rise: 0.6 });
     if (this.kind === 'relic' && Math.random() < dt * 8) G.main.fx.emit(this.pos.clone().setY(0.6), { count: 1, color: 0xffcc55, speed: 0.4, life: 0.8, size: 0.3, rise: 0.6 });
   }
@@ -1290,12 +1301,19 @@ export class Interact extends Entity {
 }
 
 // swap a townsperson's stylised model for a realistic one (desktop only; phones keep the light models)
-async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false) {
+let realNpcs = 0;
+export function resetRealNpcBudget() { realNpcs = 0; }
+async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false, d = null) {
   const spec = NPC_SPECS[specKey];
   if (!REAL_OK || Settings.realistic === false || !spec) return;
-  // phones: only the shopkeepers and quest givers go realistic, after the hero has been built
-  if (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) {
-    if (!['merchant', 'quest', 'healer', 'blacksmith', 'beastmaster'].includes(specKey)) return;
+  const phone = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+  const key = ['merchant', 'quest', 'healer', 'blacksmith', 'beastmaster'].includes(specKey);
+  // keep the number of realistic townsfolk within what a laptop iGPU or phone can draw comfortably
+  const budget = phone ? 6 : Settings.quality === 'low' ? 10 : Settings.quality === 'ultra' ? 40 : 24;
+  if (!key && !(d && d.indoor) && realNpcs >= budget) return;
+  if (phone && !key && !(d && d.indoor)) return;
+  realNpcs++;
+  if (phone) {
     await new Promise((r) => setTimeout(r, 6000));
     if (ent.gone) return;
   }
@@ -1330,7 +1348,7 @@ export class Villager extends Entity {
     this.idleAnim = { sit: 'Sit_Floor_Idle', fish: 'Sit_Floor_Idle', chair: 'Sit_Chair_Idle', guard: '2H_Melee_Idle', perform: 'Spellcasting' }[this.mode] || 'Idle';
     this.char.play(this.idleAnim, 0);
     this.talkCd = 0;
-    upgradeNpc(this, VILLAGER_SPEC[d.name] || 'v_m1', d.scale || 1, d.gear, !!d.helm);
+    upgradeNpc(this, d.spec || VILLAGER_SPEC[d.name] || 'v_m1', d.scale || 1, d.gear, !!d.helm, d);
   }
   talk() {
     if (this.talkCd > 0) return;
@@ -1343,11 +1361,17 @@ export class Villager extends Entity {
     sfx('ui');
   }
   update(dt) {
-    this.char.update(dt);
     this.talkCd -= dt;
     if (!this.home) this.home = this.pos.clone();
+    // townsfolk far from the camera are not drawn or animated
+    const cam = G.main && G.main.camFocus;
+    const far = cam && G.level.kind === 'town' && flatDist(cam, this.pos) > 44;
+    this.root.visible = !far && !this.indoors;
+    if (this.root.visible) this.char.update(dt);
     const pl = G.player;
     const near = pl && flatDist(pl.pos, this.pos) < 3;
+    if (this.mode === 'routine') return this.routine(dt, near, pl);
+    if (this.mode === 'stand') { if (near) this.face(pl.pos, dt * 0.4); if (Math.random() < dt * 0.05) this.char.once(pick(['Interact', 'Cheer']), { timeScale: 0.9 }); return; }
     if (this.mode !== 'wander') {
       if (this.mode === 'perform' && Math.random() < dt * 0.15) this.char.once('Cheer', { timeScale: 1 });
       if (this.mode === 'guard' && near) this.face(pl.pos, dt * 0.3);
@@ -1370,5 +1394,28 @@ export class Villager extends Entity {
         if (G.level.walkable(t)) { this.path = G.level.findPath(this.pos, t); break; }
       }
     }
+  }
+  // a daily round: wander between the places in `stops`, go home through the front door at night
+  routine(dt, near, pl) {
+    const d = this.data, night = daylight() < 0.22;
+    if (this.indoors) {
+      if (!night && Math.random() < dt * 0.2) { this.indoors = false; this.path = []; this.wait = rand(0.5, 2); }
+      return;
+    }
+    if (near && !this.goingHome) { this.path = []; this.face(pl.pos, dt * 0.5); this.char.play('Idle', 0.25); return; }
+    if (this.path.length) {
+      this.followPath(this.path, d.speed || 1.9, dt);
+      if (this.root.visible) this.char.play('Walking_A', 0.25, 1);
+      if (!this.path.length && this.goingHome) { this.indoors = true; this.goingHome = false; }
+      return;
+    }
+    if (night && d.homeDoor && !this.goingHome) { this.goingHome = true; this.path = G.level.findPath(this.pos, d.homeDoor); if (!this.path.length) this.indoors = true; return; }
+    if (this.root.visible) this.char.play('Idle', 0.3);
+    this.wait -= dt;
+    if (this.wait > 0) return;
+    this.wait = rand(4, 14);
+    if (Math.random() < 0.25) { if (this.root.visible) this.char.once(pick(['Interact', 'Cheer', 'PickUp']), { timeScale: 0.9 }); return; }
+    const t = pick(d.stops).clone().add(new THREE.Vector3(rand(-2, 2), 0, rand(-2, 2)));
+    if (G.level.walkable(t)) this.path = G.level.findPath(this.pos, t);
   }
 }

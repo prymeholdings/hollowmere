@@ -27,7 +27,31 @@ export function loadSettings() {
   // phones and tablets start on the fastest settings
   if (!saved && typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) Object.assign(Settings, { quality: 'low', renderScale: 0.8, showHelp: false });
   try { Object.assign(Settings, JSON.parse(saved || '{}')); } catch (e) { /* defaults */ }
+  // laptops with integrated graphics (shared video memory) start one step lower; done once, the player can raise it again
+  if (!Settings.gpuTuned) {
+    Settings.gpuTuned = 1;
+    const gpu = gpuName();
+    Settings.gpu = gpu;
+    if (/Radeon\(TM\) Graphics|Radeon Graphics|Vega|Intel|UHD|Iris|Mali|Adreno|PowerVR|SwiftShader|llvmpipe/i.test(gpu) && !/RX|Pro W|Arc/i.test(gpu)) {
+      if (Settings.quality === 'high' || Settings.quality === 'ultra') Settings.quality = 'medium';
+      Settings.renderScale = Math.min(Settings.renderScale || 1, 0.9);
+      Settings.integratedGpu = true;
+    }
+    try { localStorage.setItem(KEY, JSON.stringify(Settings)); } catch (e) { /* storage blocked */ }
+  }
   syncAudio();
 }
 export function saveSettings() { try { localStorage.setItem(KEY, JSON.stringify(Settings)); } catch (e) { /* storage blocked */ } syncAudio(); }
 function syncAudio() { Audio.vol.master = Settings.master; Audio.vol.music = Settings.music; Audio.vol.sfx = Settings.sfx; applyVolumes(); }
+
+export function gpuName() {
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2') || c.getContext('webgl');
+    if (!gl) return '';
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const n = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return String(n || '');
+  } catch (e) { return ''; }
+}

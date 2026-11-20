@@ -8,7 +8,9 @@ const PROPS_CHAR = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Staff', 'Skeleto
 const DUNGEON = ['floor_tile_large', 'floor_tile_large_rocks', 'floor_tile_small_broken_A', 'floor_tile_small_weeds_A', 'floor_dirt_large', 'wall', 'wall_cracked', 'wall_broken', 'wall_half', 'pillar', 'pillar_decorated', 'torch_mounted', 'torch_lit', 'barrel_large', 'barrel_small', 'box_stacked', 'crates_stacked', 'chest', 'chest_gold', 'rubble_large', 'rubble_half', 'banner_patternA_red', 'banner_thin_blue', 'column', 'stairs', 'coin_stack_medium', 'candle_triple', 'table_long_broken', 'keg', 'bottle_A_brown', 'sword_shield_broken', 'trunk_large_A', 'shelf_small_candles'];
 const TOWN = ['building_tavern_blue', 'building_market_red', 'building_church_blue', 'building_blacksmith_green', 'building_home_A_yellow', 'building_home_B_red', 'building_home_A_blue', 'building_well_blue', 'building_windmill_yellow', 'building_tower_A_blue', 'tree_single_A', 'tree_single_B', 'trees_A_medium', 'trees_B_medium', 'rock_single_A', 'rock_single_C', 'fence_wood_straight', 'wall_straight', 'tent', 'barrel', 'crate_A_big', 'sack', 'weaponrack', 'wheelbarrow', 'flag_red', 'bucket_water', 'hills_A_trees', 'mountain_A_grass_trees', 'waterlily_A', 'waterplant_A', 'resource_lumber',
   'building_home_A_green', 'building_home_B_blue', 'building_home_B_green', 'building_home_A_red', 'building_home_B_yellow', 'building_grain', 'building_lumbermill_yellow', 'building_stage_A', 'building_watermill_blue', 'building_tower_B_red', 'building_market_yellow', 'building_archeryrange_green', 'fence_wood_straight_gate', 'trees_A_small', 'tree_single_A_cut', 'rock_single_B', 'hills_B_trees', 'crate_open', 'pallet', 'target', 'bucket_arrows', 'flag_blue', 'flag_yellow', 'cloud_big', 'crate_long_A', 'ladder', 'resource_stone', 'hill_single_A',
-  'building_barracks_red', 'building_tavern_red', 'building_mine_yellow', 'building_castle_blue', 'building_scaffolding', 'building_windmill_red', 'building_bridge_A', 'building_blacksmith_red', 'building_tower_A_yellow', 'trees_A_large', 'fence_stone_straight', 'crate_B_big', 'building_watermill_green', 'building_church_yellow', 'building_market_blue', 'building_tower_catapult_red'];
+  'building_barracks_red', 'building_tavern_red', 'building_mine_yellow', 'building_castle_blue', 'building_scaffolding', 'building_windmill_red', 'building_bridge_A', 'building_blacksmith_red', 'building_tower_A_yellow', 'trees_A_large', 'fence_stone_straight', 'crate_B_big', 'building_watermill_green', 'building_church_yellow', 'building_market_blue', 'building_tower_catapult_red',
+  'bucket_empty', 'building_archeryrange_red', 'building_barracks_blue', 'building_blacksmith_blue', 'building_blacksmith_yellow', 'building_church_green', 'building_church_red', 'building_lumbermill_green', 'building_lumbermill_red', 'building_market_green', 'building_mine_red', 'building_stage_B', 'building_stage_C', 'building_tavern_green', 'building_tavern_yellow', 'building_tower_A_green', 'building_tower_A_red', 'building_tower_B_blue', 'building_tower_B_green', 'building_tower_B_yellow', 'building_watermill_red', 'building_well_green', 'building_well_red', 'building_windmill_green', 'crate_A_small', 'crate_B_small', 'crate_long_B', 'crate_long_C', 'fence_stone_straight_gate', 'flag_green', 'hill_single_B', 'rock_single_D', 'tree_single_B_cut', 'trees_B_small', 'waterlily_B', 'waterplant_B'];
+const INTERIOR = ['banner_patternB_red', 'banner_patternC_green', 'banner_shield_blue', 'banner_triple_yellow', 'barrel_large_decorated', 'barrel_small_stack', 'bed_decorated', 'bed_floor', 'bed_frame', 'bottle_A_green', 'bottle_B_brown', 'bottle_C_green', 'box_small_decorated', 'candle_lit', 'candle_thin_lit', 'chair', 'coin_stack_large', 'floor_wood_large', 'floor_wood_large_dark', 'keg_decorated', 'keyring_hanging', 'plate_food_A', 'plate_food_B', 'plate_stack', 'shelf_large', 'shelf_small', 'shelves', 'stairs_wood', 'stool', 'sword_shield', 'sword_shield_gold', 'table_long', 'table_long_decorated_A', 'table_long_tablecloth_decorated_A', 'table_medium', 'table_medium_decorated_A', 'table_medium_tablecloth', 'table_small', 'table_small_decorated_A', 'table_small_decorated_B', 'trunk_medium_A', 'trunk_small_B', 'wall_arched', 'wall_archedwindow_open', 'wall_corner', 'wall_doorway', 'wall_shelves', 'wall_window_closed', 'wall_window_open'];
 
 export const Assets = { models: {}, anims: {}, ready: false };
 
@@ -31,6 +33,7 @@ export async function loadAll(base, onProgress) {
     ...PROPS_CHAR.map((n) => ['prop', n, `${base}chars/${n}.glb`]),
     ...DUNGEON.map((n) => ['prop', n, `${base}dungeon/${n}.glb`]),
     ...TOWN.map((n) => ['prop', n, `${base}town/${n}.glb`]),
+    ...INTERIOR.map((n) => ['prop', n, `${base}interior/${n}.glb`]),
   ];
   let done = 0;
   await Promise.all(jobs.map(async ([kind, name, url]) => {
@@ -236,7 +239,7 @@ export class CharModel {
     const own = this.name === 'Rogue_Hooded' ? 'Rogue' : this.name;
     const head = this.parts[`${own}_Head`] || this.parts.Rogue_Head_Hooded;
     if (head) head.visible = true;
-    if (hl && look.helm !== false) {
+    if (hl && look.showHelm !== false) {
       if (hl.vis === 'Rogue_Head_Hooded') { if (head) head.visible = false; this.wearSkinned('Rogue_Hooded', 'Rogue_Head_Hooded', hl); }
       else this.wear(hl, 'head');
     }

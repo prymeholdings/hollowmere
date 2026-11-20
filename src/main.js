@@ -58,7 +58,7 @@ import { loadAll, CharModel } from './assets.js';
 import { FX } from './fx.js';
 import { Gore } from './gore.js';
 import { Atmos } from './atmos.js';
-import { sfx, playMusic, unlockAudio } from './audio.js';
+import { sfx, playMusic, unlockAudio, Audio as AudioState } from './audio.js';
 import { Settings, loadSettings, saveSettings } from './settings.js';
 import { CLASSES, SKILLS, PET_COATS, cast, canCast, updateZones, clearZones } from './skills.js';
 import { box, sphere, cone } from './util.js';
@@ -69,7 +69,7 @@ const HELM_VIS = { Knight_Helmet: 'Knight_Helmet', Barbarian_Hat: 'Barbarian_Hat
 export function starterKit(s) {
   const cls = CLASSES[s.cls];
   const gear = cls.gear[s.gear || 0] || cls.gear[0];
-  const eq = { weapon: starterItem(gear.weapon[0]), offhand: gear.offhand[0] ? starterItem(gear.offhand[0]) : null, helm: null, armor: null, ring: null, amulet: null };
+  const eq = { weapon: starterItem(gear.weapon[0]), offhand: gear.offhand[0] ? starterItem(gear.offhand[0]) : null, helm: null, armor: null, ring: null, amulet: null, shoulders: null, gloves: null, shirt: null, belt: null, pants: null, boots: null };
   const helmVis = s.hooded ? 'Rogue_Head_Hooded' : HELM_VIS[cls.headgear];
   if (helmVis && (s.helm !== false || s.hooded)) eq.helm = starterHelm(helmVis);
   eq.armor = starterOutfit(OUTFIT[s.cls]);
@@ -345,6 +345,7 @@ class Main {
     this.menuMode = false;
     if (loc && loc.kind === 'dungeon' && loc.floor > 0) this.loadLevel('dungeon', loc.floor, 'resume', loc);
     else if (loc && loc.kind === 'town') { restockShop(); this.loadLevel('town', 0, 'resume', loc); }
+    else if (loc && loc.kind === 'interior') { restockShop(); this.loadLevel('interior', loc.floor, 'resume', loc); }
     else this.enterTown();
     msg(`Welcome back, ${G.heroName}.`, '#f0c674');
   }
@@ -379,6 +380,8 @@ class Main {
     if (kind === 'dungeon' && arrive === 'up') pos = L.downPos.clone().add(new THREE.Vector3(1.5, 0, 1.5));
     if (kind === 'town' && arrive === 'portal') { pos = L.portalPos.clone().add(new THREE.Vector3(0, 0, 2)); this.emerge = 0.7; }
     if (arrive === 'resume' && loc && kind === 'town') pos = new THREE.Vector3(loc.x, 0, loc.z); // dungeon floors regenerate, so resume at their entrance
+    if (arrive === 'resume' && loc && kind === 'interior') pos = new THREE.Vector3(loc.x, 0, loc.z);
+    if (kind === 'town' && arrive === 'door' && loc) { const b = L.buildings[loc.bi]; if (b && b.door) pos = b.door.clone().add(new THREE.Vector3(b.dir[0] * 1.2, 0, b.dir[1] * 1.2)); }
     if (!L.walkable(pos)) pos = L.toWorld(...L.nearestFloor(...L.cellOf(pos)));
     p.root.position.copy(pos);
     L.add(p);
@@ -402,7 +405,8 @@ class Main {
       playMusic(dungeonTrack(floor));
       Barks.reset();
       setTimeout(() => Barks.hero(floor % 5 === 0 ? 'boss' : 'down', 0.8, 0), 1500);
-    } else { this.ui.banner('Hollowmere', 'A lantern-lit town above the Wells'); playMusic('town'); Barks.reset(); setTimeout(() => Barks.hero('town', 0.5, 0), 1500); }
+    } else if (kind === 'interior') { this.ui.banner(L.title, 'Hollowmere'); playMusic(daylight() < 0.25 ? 'town_night' : 'town'); }
+    else { if (arrive !== 'door') this.ui.banner('Hollowmere', 'A lantern-lit town above the Wells'); playMusic(daylight() < 0.25 ? 'town_night' : 'town'); Barks.reset(); if (arrive !== 'door') setTimeout(() => Barks.hero('town', 0.5, 0), 1500); }
     sfx('door');
     saveGame();
   }
@@ -523,6 +527,8 @@ class Main {
       case 'portal':
         if (G.level.kind === 'town') { const f = G.portalFloor; G.portalFloor = 0; this.loadLevel('dungeon', f); }
         break;
+      case 'door': this.loadLevel('interior', e.data.bi, 'door'); break;
+      case 'exit': this.loadLevel('town', 0, 'door', { bi: e.data.bi }); break;
       case 'stairs_down': this.loadLevel('dungeon', G.level.floor + 1, 'down'); break;
       case 'stairs_up':
         if (G.level.floor <= 1) this.enterTown(); else this.loadLevel('dungeon', G.level.floor - 1, 'up');
@@ -554,7 +560,7 @@ class Main {
   }
 
   usePortal() {
-    if (!G.level || G.level.kind === 'town') { this.flash('You are already in town'); return; }
+    if (!G.level || G.level.safe) { this.flash('You are already in town'); return; }
     if (G.scrolls <= 0) { this.flash('No Town Portal scrolls (buy them from the merchant)'); return; }
     if (this.portalSeq) return;
     G.scrolls--;
@@ -831,7 +837,7 @@ class Main {
       L.sun.position.copy(this.camFocus).add(new THREE.Vector3(14, 26, 10));
       L.sun.target.position.copy(this.camFocus);
       if (this.sky) this.sky.update(dt, L, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));
-      if (L.kind === 'town' && !this.menuMode) playMusic(daylight() < 0.25 ? 'town_night' : 'town');
+      if (L.safe && !this.menuMode) playMusic(daylight() < 0.25 ? 'town_night' : 'town');
       this.ui.update(dt);
       Barks.update(dt);
       document.body.style.cursor = G.player.hover ? (G.player.hover.type === 'enemy' ? 'crosshair' : 'pointer') : 'default';
@@ -840,6 +846,6 @@ class Main {
   }
 }
 
-window.__THREE = THREE; window.__real = { buildReal, NPC_SPECS, fullLook };
+window.__THREE = THREE; window.__real = { buildReal, NPC_SPECS, fullLook }; window.__audio = AudioState; window.__items = { generate, lookOf };
 if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', () => { window.game = new Main(); });
 else window.game = new Main();
