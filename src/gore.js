@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { Settings } from './settings.js';
 import { sfx } from './audio.js';
 import { G } from './state.js';
-import { flattenGroup } from './perf.js';
+import { flattenGroup, disposeTree } from './perf.js';
 
 const CELL = 2; // matches level.js
 
@@ -506,7 +506,7 @@ export class Gore {
   addPart(obj, p, v, life = 30) {
     this.parts = this.parts || [];
     const MAX = this.mobile ? 260 : 900;
-    if (this.parts.length >= MAX) { const o = this.parts.shift(); o.obj.parent?.remove(o.obj); }
+    if (this.parts.length >= MAX) { const o = this.parts.shift(); o.obj.parent?.remove(o.obj); disposeTree(o.obj); }
     obj.position.copy(p);
     this.scene.add(obj);
     this.parts.push({ obj, v, ang: new THREE.Vector3(R(-9, 9), R(-6, 6), R(-9, 9)), t: 0, life, rest: false, bounces: 0, trail: true });
@@ -586,6 +586,7 @@ export class Gore {
     this.statics = this.statics || [];
     
     this.scene.add(m); this.statics.push({ m, t: 0 });
+    if (this.statics.length > (this.mobile ? 90 : 190)) { const old = this.statics.shift(); old.m.parent?.remove(old.m); disposeTree(old.m); }
   }
   // cut parts off a RealChar. `cuts` is how many; `from` is where the blow came from.
   dismember(rc, pos, kind, size = 1, cuts = 1, from = null, skin = 0xc89a7a, hair = true) {
@@ -639,8 +640,9 @@ export class Gore {
     this.decals.count = 0; this.dropMesh.count = 0; this.fleshMesh.count = 0; this.boneMesh.count = 0;
     this.fleshMesh.userData.next = 0; this.boneMesh.userData.next = 0;
     for (const o of this.parts || []) o.obj.parent?.remove(o.obj);
-    for (const o of this.statics || []) o.m.parent?.remove(o.m);
-    for (const o of this.settled || []) o.parent?.remove(o);
+    for (const o of this.statics || []) { o.m.parent?.remove(o.m); disposeTree(o.m); }
+    for (const o of this.settled || []) { o.parent?.remove(o); disposeTree(o); }
+    for (const o of this.parts || []) disposeTree(o.obj);
     this.parts = []; this.statics = []; this.spurts = []; this.settled = []; this.tracked = [];
   }
   update(dt) {
@@ -725,7 +727,7 @@ export class Gore {
           }
         }
       }
-      if (P.rest) { o.updateMatrix(); const f = flattenGroup(o); f.matrixAutoUpdate = false; f.updateMatrix(); this.settled = this.settled || []; this.settled.push(f); this.parts.splice(i, 1); }
+      if (P.rest) { o.updateMatrix(); const f = flattenGroup(o); f.matrixAutoUpdate = false; f.updateMatrix(); this.settled = this.settled || []; this.settled.push(f); this.parts.splice(i, 1); if (this.settled.length > (this.mobile ? 260 : 620)) { const old = this.settled.shift(); old.parent?.remove(old); disposeTree(old); } }
     }
     for (let i = (this.statics || []).length - 1; i >= 0; i--) { const S = this.statics[i]; S.t += dt;  }
     // arterial spray: pulses with the heartbeat, weakening as it bleeds out
@@ -779,6 +781,7 @@ export function goreKind(data) {
   const sh = data.shape || '';
   if (sh.startsWith('skel')) return /Venom|Verd/.test(data.name || '') ? 'ichor' : 'rot';
   if (sh === 'wisp') return 'none';
+  if (sh === 'alien') return /Void|Abyssal/.test(data.name || '') ? 'dark' : 'ichor';
   if (sh === 'blob') return /Horror|Void/.test(data.name || '') ? 'void' : 'slime';
   if (/Abyssal|Void|Hollow/.test(data.name || '')) return 'dark';
   return 'red';

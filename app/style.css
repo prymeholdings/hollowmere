@@ -135,7 +135,21 @@ body.no-portrait #hud-portrait { display: none; }
 #menu, #create, #loading { position: absolute; inset: 0; pointer-events: auto; }
 #menu { display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, #0000 20%, #000c 90%); }
 .title { font-size: 92px; margin: 0; color: var(--gold); letter-spacing: 12px; text-shadow: 0 0 40px #ff9a3a90, 4px 4px 0 #000; font-weight: normal; }
-.subtitle { margin: 0 0 46px; color: #d8c8a8; font-weight: normal; letter-spacing: 8px; font-size: 20px; text-shadow: 2px 2px 0 #000; }
+.logo-wrap { position: relative; width: min(860px, 82vw); margin: -10px 0 0; animation: logoIn 2.4s ease-out both; }
+.logo-wrap.small { width: min(560px, 76vw); animation: none; }
+.logo-wrap img { display: block; width: 100%; height: auto; pointer-events: none; user-select: none; }
+.logo-wrap .logo-glow { position: absolute; inset: 0; filter: blur(22px) saturate(1.6); opacity: 0.55; animation: logoGlow 3.2s ease-in-out infinite; will-change: opacity; }
+.logo-wrap .logo { position: relative; }
+@keyframes logoGlow { 0%, 100% { opacity: 0.35; } 45% { opacity: 0.8; } 55% { opacity: 0.6; } 62% { opacity: 0.85; } }
+@keyframes logoIn { 0% { opacity: 0; transform: scale(1.08); } 100% { opacity: 1; transform: none; } }
+#cine { position: absolute; inset: 0; pointer-events: none; display: none; }
+body.cine-on #cine { display: block; }
+#cine .lb { position: absolute; left: 0; right: 0; height: 9vh; background: #000; }
+#cine .lb.t { top: 0; } #cine .lb.b { bottom: 0; }
+#cine .fade { position: absolute; inset: 0; background: #000; opacity: 1; transition: opacity 1.1s ease; }
+#cine .cap { position: absolute; left: 0; right: 0; top: calc(4.5vh - 9px); text-align: center; color: #e8c170cc; letter-spacing: 6px; font-size: 15px; text-shadow: 0 0 10px #000, 1px 1px 2px #000; opacity: 0; transition: opacity 1.5s ease; }
+#cine .cap.on { opacity: 1; }
+.subtitle { margin: 8px 0 46px; color: #d8c8a8; font-weight: normal; letter-spacing: 8px; font-size: 20px; text-shadow: 2px 2px 0 #000; }
 #menu button { width: 300px; font-size: 19px; padding: 11px; margin: 6px; letter-spacing: 2px; }
 .foot { position: absolute; bottom: 16px; width: 100%; text-align: center; color: #8a7a60; font-size: 12px; text-shadow: 1px 1px 2px #000; }
 #loading { background: radial-gradient(ellipse at center, #1a1420, #000); display: flex; flex-direction: column; align-items: center; justify-content: center; }

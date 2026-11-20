@@ -8,7 +8,7 @@ OUT=${1:-../hollowmere-web}
 rm -rf "$OUT"; mkdir -p "$OUT/assets"
 cp app/style.css app/game.js "$OUT/"
 cp app/assets/*.txt "$OUT/assets/"
-cp web/manifest.webmanifest web/icon-192.png web/icon-512.png web/vercel.json "$OUT/"
+cp web/manifest.webmanifest web/icon-192.png web/icon-512.png web/icon-maskable-512.png web/vercel.json "$OUT/"
 python3 - app/index.html "$OUT/index.html" <<'PY'
 import sys, re
 s = open(sys.argv[1]).read()
@@ -24,6 +24,8 @@ done
 mkdir -p "$OUT/assets/ara" "$OUT/assets/music"
 cp -r app/assets/ara/. "$OUT/assets/ara/"
 cp -r app/assets/music/. "$OUT/assets/music/"
+mkdir -p "$OUT/assets/icons" "$OUT/assets/ui" "$OUT/assets/sfx" && cp -r app/assets/sfx/. "$OUT/assets/sfx/"
+mkdir -p "$OUT/assets/icons" "$OUT/assets/ui" && cp -r app/assets/icons/. "$OUT/assets/icons/" && cp -r app/assets/ui/. "$OUT/assets/ui/"
 mkdir -p "$OUT/assets/private" && cp -r app/assets/private/. "$OUT/assets/private/" 2>/dev/null || true
 cp app/assets/CREDITS.txt "$OUT/assets/" 2>/dev/null || true
 VER=$(cat "$OUT/game.js" "$OUT/style.css" "$OUT/index.html" | sha1sum | cut -c1-10)

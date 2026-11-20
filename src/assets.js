@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { Settings } from './settings.js';
 
 // All third-party models are CC0 (KayKit by Kay Lousberg). See assets/LICENSE-*.txt
-const CHARS = ['Knight', 'Mage', 'Rogue', 'Rogue_Hooded', 'Barbarian', 'Skeleton_Minion', 'Skeleton_Warrior', 'Skeleton_Mage', 'Skeleton_Rogue'];
+const CHARS = ['Knight', 'Mage', 'Rogue', 'Rogue_Hooded', 'Barbarian', 'Skeleton_Minion', 'Skeleton_Warrior', 'Skeleton_Mage', 'Skeleton_Rogue', 'Alien'];
 const PROPS_CHAR = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Staff', 'Skeleton_Crossbow', 'Skeleton_Shield_Small_A', 'Skeleton_Shield_Large_A'];
 const DUNGEON = ['floor_tile_large', 'floor_tile_large_rocks', 'floor_tile_small_broken_A', 'floor_tile_small_weeds_A', 'floor_dirt_large', 'wall', 'wall_cracked', 'wall_broken', 'wall_half', 'pillar', 'pillar_decorated', 'torch_mounted', 'torch_lit', 'barrel_large', 'barrel_small', 'box_stacked', 'crates_stacked', 'chest', 'chest_gold', 'rubble_large', 'rubble_half', 'banner_patternA_red', 'banner_thin_blue', 'column', 'stairs', 'coin_stack_medium', 'candle_triple', 'table_long_broken', 'keg', 'bottle_A_brown', 'sword_shield_broken', 'trunk_large_A', 'shelf_small_candles'];
 const TOWN = ['building_tavern_blue', 'building_market_red', 'building_church_blue', 'building_blacksmith_green', 'building_home_A_yellow', 'building_home_B_red', 'building_home_A_blue', 'building_well_blue', 'building_windmill_yellow', 'building_tower_A_blue', 'tree_single_A', 'tree_single_B', 'trees_A_medium', 'trees_B_medium', 'rock_single_A', 'rock_single_C', 'fence_wood_straight', 'wall_straight', 'tent', 'barrel', 'crate_A_big', 'sack', 'weaponrack', 'wheelbarrow', 'flag_red', 'bucket_water', 'hills_A_trees', 'mountain_A_grass_trees', 'waterlily_A', 'waterplant_A', 'resource_lumber',
@@ -26,6 +27,41 @@ async function fetchModel(loader, url) {
   return loader.parseAsync(ab, '');
 }
 
+// Each model file carries its own copy of its colour atlas, and the colour variants of one building are often the
+// same picture. Identical pictures share one texture, and anything over 512 px shrinks to 512 (1024 on Ultra), which
+// takes the town's textures from over 500 MB of video memory to around 100 MB.
+const TEX_BY_SIG = new Map();
+function texSignature(im, w, h) {
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0, 16, 16);
+  const d = g.getImageData(0, 0, 16, 16).data; let s = w + 'x' + h + ':';
+  for (let i = 0; i < d.length; i += 4) s += (d[i] >> 3).toString(36) + (d[i + 1] >> 3).toString(36) + (d[i + 2] >> 3).toString(36);
+  return s;
+}
+function slimTextures(scene, max) {
+  scene.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      const t = m.map;
+      if (!t || !t.image || t.isDataTexture || t.isCompressedTexture) continue;
+      const im = t.image, w = im.width || im.naturalWidth, h = im.height || im.naturalHeight;
+      if (!w || !h) continue;
+      if (t._slim) continue;
+      let sig; try { sig = texSignature(im, w, h) + '|' + t.colorSpace + t.flipY + t.wrapS + t.wrapT; } catch (e) { continue; }
+      const hit = TEX_BY_SIG.get(sig);
+      if (hit && hit !== t) { m.map = hit; continue; }
+      if (Math.max(w, h) > max) {
+        const sc = max / Math.max(w, h), c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w * sc)); c.height = Math.max(1, Math.round(h * sc));
+        const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, c.width, c.height);
+        if (im.close) { try { im.close(); } catch (e) { /* already closed */ } }
+        t.image = c; t.needsUpdate = true;
+      }
+      t._slim = true; TEX_BY_SIG.set(sig, t);
+    }
+  });
+}
+
 export async function loadAll(base, onProgress) {
   const loader = new GLTFLoader();
   const jobs = [
@@ -40,10 +76,16 @@ export async function loadAll(base, onProgress) {
     try {
       const g = await fetchModel(loader, url);
       g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      try { slimTextures(g.scene, Settings.quality === 'ultra' ? 1024 : 512); } catch (e) { /* full-size textures still work */ }
       Assets.models[name] = g.scene;
       if (kind === 'char') {
         const map = {};
         for (const clip of g.animations) map[clip.name] = clip;
+        if (name === 'Alien') {
+          // the alien has its own small clip set; give it every name the combat code asks for
+          const A = { Running_C: 'Running_A', Walking_B: 'Walking_A', Walking_C: 'Walking_A', '1H_Ranged_Shoot': 'Spellcast_Shoot', Spellcast_Long: 'Spellcast_Raise', Spellcast_Summon: 'Spellcast_Raise', '2H_Melee_Attack_Spin': '2H_Melee_Attack_Chop', '2H_Melee_Attack_Stab': '1H_Melee_Attack_Chop', Death_B: 'Death_A', Death_C_Skeletons: 'Death_A', Spawn_Ground_Skeletons: 'Spellcast_Raise' };
+          for (const k in A) if (!map[k] && map[A[k]]) map[k] = map[A[k]];
+        }
         Assets.anims[name] = map;
       }
     } catch (e) { console.error('asset failed', url, e); }

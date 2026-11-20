@@ -240,7 +240,8 @@ export class Player extends Entity {
     const speed = 6.2 * (G.buffs.speed > 0 ? 1.25 : 1) * (1 + (G.skills.swift_feet || 0) * 0.04 + petBonus('move') + itemBonus('move_pct') / 100);
     const moving = this.castLock <= 0 && this.followPath(this.path, speed, dt);
     if (moving && this.model.oneShot && !this.dead) { /* let attacks finish while moving */ }
-    this.model.play(moving ? 'Running_A' : 'Idle', 0.15, moving ? 1.1 * speed / 6.2 : 1);
+    if (this.model.isReal) this.model.locomote(moving ? speed : 0);
+    else this.model.play(moving ? 'Running_A' : 'Idle', 0.15, moving ? 1.1 * speed / 6.2 : 1);
     // lean into the run
     const mr = this.model.root;
     if (mr) mr.rotation.x += ((moving ? 0.07 : 0) - mr.rotation.x) * Math.min(1, dt * 8);
@@ -316,6 +317,7 @@ const SKEL = {
   skel_mage: { model: 'Skeleton_Mage', weapon: 'Skeleton_Staff' },
   skel_rogue: { model: 'Skeleton_Rogue', weapon: 'Skeleton_Crossbow' },
   brute: { model: 'Barbarian', hero: true },
+  alien: { model: 'Alien', alien: true },
 };
 
 // Swap the stylised skeleton for the realistic human model once it is built; show the old one if it fails.
@@ -357,14 +359,14 @@ export class Enemy extends Entity {
     const s = boss ? 2.4 : elite ? 1.4 : 1.15;
     const sk = SKEL[d.shape];
     if (sk) {
-      this.char = new CharModel(sk.model, { scale: 0.72 * s * (d.shape === 'brute' ? 1.25 : 1), tint: d.tint, emissive: boss || elite ? (boss ? (d.final ? 0x3a0a7a : 0x551100) : 0x332200) : d.emissive, emissiveIntensity: 0.5 });
+      this.char = new CharModel(sk.model, { scale: 0.72 * s * (d.shape === 'brute' ? 1.25 : d.shape === 'alien' ? 1.05 : 1), tint: d.tint, emissive: boss || elite ? (boss ? (d.final ? 0x3a0a7a : 0x551100) : 0x332200) : d.emissive, emissiveIntensity: 0.5 });
       if (sk.hero) this.char.setGear(true, true);
       if (sk.weapon) this.char.attach(sk.weapon);
       if (sk.shield) this.char.attach(sk.shield, true);
       this.model = this.char.root;
-      this.isSkel = !sk.hero;
+      this.isSkel = !sk.hero && !sk.alien;
       this.realScale = s;
-      if (REAL_OK && Settings.realistic !== false) { this.model.visible = false; this.wantReal = true; }
+      if (REAL_OK && Settings.realistic !== false && !sk.alien) { this.model.visible = false; this.wantReal = true; }
     } else {
       this.model = buildEnemyModel(d.shape, d.color, s);
     }
@@ -596,7 +598,8 @@ export class Enemy extends Entity {
       if (this.repath <= 0) { this.repath = 0.4 + Math.random() * 0.3; this.path = G.level.findPath(this.pos, tg.pos); }
       moving = this.followPath(this.path, this.speed * (this.slowT > 0 ? 0.5 : 1), dt);
     }
-    if (this.char) this.char.play(moving ? (this.isSkel ? 'Running_C' : 'Running_A') : 'Idle', 0.2, moving ? this.speed / 4.5 : 1);
+    if (this.char && this.char.isReal) this.char.locomote(moving ? this.speed * (this.slowT > 0 ? 0.5 : 1) : 0);
+    else if (this.char) this.char.play(moving ? (this.isSkel ? 'Running_C' : 'Running_A') : 'Idle', 0.2, moving ? this.speed / 4.5 : 1);
     for (const o of G.level.entities) {
       if (o === this || o.type !== 'enemy' || o.dead) continue;
       const dx = this.pos.x - o.pos.x, dz = this.pos.z - o.pos.z;
@@ -676,7 +679,7 @@ export class Ally extends Entity {
       if (this.repath <= 0 || !this.path.length) { this.repath = 0.5; this.path = G.level.findPath(this.pos, pl.pos); }
       moving = this.followPath(this.path, 6, dt);
     }
-    this.char.play(moving ? 'Running_C' : 'Idle', 0.2);
+    if (this.char.isReal) this.char.locomote(moving ? 6 : 0); else this.char.play(moving ? 'Running_C' : 'Idle', 0.2);
   }
 }
 
@@ -687,6 +690,7 @@ const BOSS_KITS = {
   'The Drowned Warden': { kit: ['slam', 'charge', 'slam', 'summon'], color: 0x4a9ad8, adds: ['skel_minion', 'skel_warrior'] },
   'Mother of Cinders': { kit: ['nova', 'meteors', 'nova', 'summon'], color: 0xff5522, adds: ['skel_mage', 'wisp'] },
   'Graveroot Colossus': { kit: ['quake', 'slam', 'charge', 'summon'], color: 0x9a7a4a, adds: ['brute', 'beast'] },
+  'The Pale Visitor': { kit: ['nova', 'charge', 'meteors', 'summon'], color: 0x66ffaa, adds: ['alien', 'wisp'] },
   'The Lantern-Eater': { kit: ['charge', 'nova', 'meteors', 'summon'], color: 0x8a5aff, adds: ['wisp', 'skel_rogue'] },
   'The Hollow King': { kit: ['nova', 'meteors', 'charge', 'quake', 'summon', 'vortex'], color: 0xa060ff, adds: ['skel_warrior', 'skel_mage', 'wisp'] },
 };
@@ -1478,7 +1482,7 @@ export class Villager extends Entity {
     if (near) { this.path = []; this.face(pl.pos, dt * 0.5); this.char.play('Idle', 0.25); return; }
     if (this.path.length) {
       this.followPath(this.path, this.data.speed || 1.9, dt);
-      this.char.play('Walking_A', 0.25, 1);
+      if (this.char.isReal) this.char.locomote(this.data.speed || 1.9); else this.char.play('Walking_A', 0.25, 1);
       return;
     }
     this.char.play('Idle', 0.3);
@@ -1503,7 +1507,7 @@ export class Villager extends Entity {
     if (near && !this.goingHome) { this.path = []; this.face(pl.pos, dt * 0.5); this.char.play('Idle', 0.25); return; }
     if (this.path.length) {
       this.followPath(this.path, d.speed || 1.9, dt);
-      if (this.root.visible) this.char.play('Walking_A', 0.25, 1);
+      if (this.root.visible) { if (this.char.isReal) this.char.locomote(d.speed || 1.9); else this.char.play('Walking_A', 0.25, 1); }
       if (!this.path.length && this.goingHome) { this.indoors = true; this.goingHome = false; }
       return;
     }

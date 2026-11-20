@@ -117,9 +117,10 @@ export class UI {
       <div id="panels"></div>
       <div id="tooltip" class="hidden"></div>
       <div id="toast"></div>
+      <div id="cine"><i class="lb t"></i><i class="lb b"></i><div class="cap"></div><div class="fade"></div></div>
       <div id="menu" class="hidden"></div>
       <div id="create" class="hidden"></div>
-      <div id="loading"><div class="title" style="font-size:64px">HOLLOWMERE</div><div class="muted" id="load-txt">Loading the Sunken Wells...</div><div class="lb"><div></div></div></div>`;
+      <div id="loading"><div class="logo-wrap small"><img class="logo-glow" src="assets/ui/logo.webp" alt=""><img class="logo" src="assets/ui/logo.webp" alt="HOLLOWMERE"></div><div class="muted" id="load-txt">Loading the Sunken Wells...</div><div class="lb"><div></div></div></div>`;
     { const pi = this.root.querySelector('#hud-portrait'); if (pi) pi.onerror = () => { pi.style.display = 'none'; }; }
     this.hud = $('#hud');
     this.orbHp = new Orb3D($('.orb.hp .orbgl'), [0xff5a40, 0x8a0a06, 0xffb08a]);
@@ -1308,12 +1309,12 @@ export class UI {
     const m = $('#menu');
     m.classList.remove('hidden');
     this.open.menu = true;
-    m.innerHTML = `<div class="title">HOLLOWMERE</div><div class="subtitle">THE SUNKEN WELLS</div>
+    m.innerHTML = `<div class="logo-wrap"><img class="logo-glow" src="assets/ui/logo.webp" alt=""><img class="logo" src="assets/ui/logo.webp" alt="HOLLOWMERE"></div><div class="subtitle">THE SUNKEN WELLS</div>
       <button id="m-cont" class="primary" ${hasSave() ? '' : 'disabled'}>Continue</button>
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.7.6 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG · v0.7.7 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };

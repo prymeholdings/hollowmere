@@ -89,6 +89,7 @@ export function bakeStatic(rc) {
     if (src.attributes.color) g.setAttribute('color', src.attributes.color);
     if (src.index) g.setIndex(src.index);
     for (const gr of src.groups) g.addGroup(gr.start, gr.count, gr.materialIndex);
+    g.userData.baked = true;
     g.computeVertexNormals(); g.computeBoundingSphere();
     // collapsed (severed) bones squash their vertices to a point; those triangles simply vanish
     const m = new THREE.Mesh(g, sm.material);
@@ -102,6 +103,10 @@ export function bakeStatic(rc) {
 }
 
 // ---------------------------------------------------------------- merge a resting gore part
+// free the graphics memory of a tree of one-off meshes (geometry only: materials are shared)
+export function disposeTree(obj) {
+  obj.traverse((o) => { if (o.isMesh && o.geometry && !o.geometry.userData.keep) o.geometry.dispose(); });
+}
 export function flattenGroup(obj) {
   if (!obj.isGroup && !obj.children.length) return obj;
   obj.updateMatrixWorld(true);
@@ -130,5 +135,6 @@ export function flattenGroup(obj) {
   }
   out.matrixAutoUpdate = false; out.updateMatrix();
   obj.parent?.add(out); obj.parent?.remove(obj);
+  disposeTree(obj); // the pieces were uploaded to the graphics card while they flew; free them now that one merged mesh replaces them
   return out;
 }

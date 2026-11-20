@@ -213,8 +213,60 @@ function schedule() {
 }
 
 // ---------------- sound effects ----------------
+// ---- recorded effects (Kenney sound packs, CC0): small OGG files decoded once, played with a little random
+// pitch so repeated hits never sound identical. They are layered with the generated sounds below.
+const SAMPLE_FILES = ['hit', 'impact', 'hurt', 'kill', 'big_kill', 'boss', 'coin', 'gem', 'level_up', 'dash', 'shoot', 'land', 'step', 'ui', 'confirm', 'revive', 'downed'];
+const samples = {};
+let samplesLoading = false;
+function loadSamples() {
+  if (samplesLoading || !Audio.ctx) return;
+  samplesLoading = true;
+  for (const n of SAMPLE_FILES) {
+    fetch(new URL(`assets/sfx/${n}.ogg`, document.baseURI).href).then((r) => r.arrayBuffer()).then((ab) => Audio.ctx.decodeAudioData(ab)).then((b) => { samples[n] = b; }).catch(() => { /* synthesised sound only */ });
+  }
+}
+const lastPlay = {};
+function sample(name, { gain = 0.6, rate = 1, jitter = 0.08, at = 0, rev = 0 } = {}) {
+  const b = samples[name]; if (!b || !Audio.ctx) return false;
+  const C = Audio.ctx, now = C.currentTime;
+  // never stack more than a few of the same sound inside a tiny window (big fights stay clean)
+  const k = name; if (lastPlay[k] && now - lastPlay[k] < 0.035) return true; lastPlay[k] = now;
+  const src = C.createBufferSource(); src.buffer = b;
+  src.playbackRate.value = rate * (1 + (Math.random() - 0.5) * 2 * jitter);
+  const g = C.createGain(); g.gain.value = gain;
+  src.connect(g); g.connect(Audio.sfxBus);
+  if (rev && Audio.reverb) { const r = C.createGain(); r.gain.value = rev; g.connect(r); r.connect(Audio.reverb); }
+  src.start(now + at);
+  return true;
+}
+// which recording(s) accompany each generated effect
+const LAYERS = {
+  hit: [['hit', { gain: 0.55 }]],
+  crit: [['impact', { gain: 0.8, rate: 0.9 }], ['hit', { gain: 0.5, rate: 0.8, at: 0.02 }]],
+  hurt: [['hurt', { gain: 0.6 }]],
+  die: [['kill', { gain: 0.7 }]],
+  gib: [['big_kill', { gain: 0.9, rate: 0.9 }]],
+  boom: [['impact', { gain: 0.9, rate: 0.6 }], ['big_kill', { gain: 0.5, rate: 0.7 }]],
+  gold: [['coin', { gain: 0.5 }]],
+  pick: [['gem', { gain: 0.35 }]],
+  level: [['level_up', { gain: 0.8 }]],
+  legend: [['level_up', { gain: 0.7, rate: 1.2 }], ['gem', { gain: 0.5, at: 0.1 }]],
+  blink: [['dash', { gain: 0.7 }]],
+  swing: [['dash', { gain: 0.3, rate: 1.5, jitter: 0.15 }]],
+  ui: [['ui', { gain: 0.25, jitter: 0.04 }]],
+  squelch: [['land', { gain: 0.35, rate: 0.7 }]],
+  bonecrack: [['impact', { gain: 0.55, rate: 1.3 }]],
+  fire: [['shoot', { gain: 0.45, rate: 0.7 }]],
+  zap: [['shoot', { gain: 0.45, rate: 1.4 }]],
+  nova: [['impact', { gain: 0.4, rate: 1.1 }]],
+  buff: [['confirm', { gain: 0.5 }]],
+  heal: [['revive', { gain: 0.5 }]],
+  door: [['land', { gain: 0.5, rate: 0.55 }]],
+};
 export function sfx(kind) {
   if (!Audio.ctx || Audio.ctx.state !== 'running') return;
+  loadSamples();
+  const L = LAYERS[kind]; if (L) for (const [n, o] of L) sample(n, o);
   const t = Audio.ctx.currentTime;
   const D = Audio.sfxBus;
   const v = (f, d, o) => voice(t, f, d, { dest: D, rev: 0.15, ...o });
@@ -226,11 +278,11 @@ export function sfx(kind) {
     case 'gold': v(1320, 0.12, { gain: 0.07 }); setTimeout(() => sfx('gold2'), 60); break;
     case 'gold2': v(1760, 0.15, { gain: 0.06 }); break;
     case 'pick': v(520, 0.1, { gain: 0.08 }); v(780, 0.12, { gain: 0.06 }); break;
-    case 'fire': noise(t, 0.35, { gain: 0.25, filter: 900, dest: D }); v(220, 0.3, { type: 'sawtooth', gain: 0.05, filter: 600 }); break;
+    case 'fire': noise(t, 0.5, { gain: 0.3, filter: 1100, dest: D }); noise(t + 0.03, 0.4, { gain: 0.15, filter: 3500, type: 'bandpass', dest: D, q: 0.6 }); v(180, 0.35, { type: 'sawtooth', gain: 0.07, filter: 700 }); v(262, 0.3, { type: 'sawtooth', gain: 0.04, filter: 900, detune: 14 }); break;
     case 'boom': noise(t, 0.8, { gain: 0.6, filter: 500, dest: D }); v(55, 0.6, { type: 'sine', gain: 0.4 }); break;
-    case 'zap': for (let i = 0; i < 3; i++) v(800 + Math.random() * 1200, 0.08, { type: 'square', gain: 0.05, filter: 4000 }); noise(t, 0.2, { gain: 0.2, filter: 5000, type: 'highpass', dest: D }); break;
-    case 'heal': [523, 659, 784, 1046].forEach((f, i) => voice(t + i * 0.06, f, 0.5, { dest: D, gain: 0.06, type: 'sine', rev: 0.5 })); break;
-    case 'nova': noise(t, 0.6, { gain: 0.3, filter: 6000, type: 'highpass', dest: D }); v(1200, 0.5, { type: 'sine', gain: 0.05 }); break;
+    case 'zap': for (let i = 0; i < 5; i++) voice(t + i * 0.025, 600 + Math.random() * 2200, 0.09, { dest: D, type: 'square', gain: 0.05, filter: 5000, rev: 0.1 }); noise(t, 0.28, { gain: 0.22, filter: 5200, type: 'highpass', dest: D }); v(70, 0.25, { type: 'sine', gain: 0.18 }); break;
+    case 'heal': [523, 659, 784, 1046, 1318].forEach((f, i) => { voice(t + i * 0.06, f, 0.7, { dest: D, gain: 0.06, type: 'sine', rev: 0.6 }); voice(t + i * 0.06, f * 2.003, 0.5, { dest: D, gain: 0.02, type: 'sine', rev: 0.7 }); }); break;
+    case 'nova': noise(t, 0.7, { gain: 0.3, filter: 6000, type: 'highpass', dest: D }); v(1200, 0.6, { type: 'sine', gain: 0.05 }); v(80, 0.5, { type: 'sine', gain: 0.3 }); [880, 1320, 1760].forEach((f, i) => voice(t + 0.04 * i, f, 0.7, { dest: D, type: 'sine', gain: 0.035, rev: 0.7, detune: i * 7 })); break;
     case 'buff': [392, 494, 587].forEach((f, i) => voice(t + i * 0.08, f, 0.6, { dest: D, gain: 0.07, type: 'square', filter: 1500, rev: 0.4 })); break;
     case 'blink': v(1500, 0.25, { type: 'sine', gain: 0.08 }); v(300, 0.25, { type: 'sine', gain: 0.08 }); break;
     case 'level': [392, 523, 659, 784, 1046].forEach((f, i) => voice(t + i * 0.09, f, 0.8, { dest: D, gain: 0.08, type: 'triangle', rev: 0.6 })); break;

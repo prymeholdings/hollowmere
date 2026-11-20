@@ -47,7 +47,7 @@ import { petBonus, ensurePets, buildPetModel, PET_SPECIES, newPetRecord, petCoat
 import { lookOf, starterItem, makeGem } from './items.js';
 setItemLook(lookOf);
 setRealItemLook(lookOf);
-import { G, reset, msg, saveGame, loadGame, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL, weaponDamage, socketGem } from './state.js';
+import { G, reset, msg, saveGame, loadGame, hasSave, savedLoc, maxHp, maxMp, itemBonus, tick, addFame, restockShop, MAX_FLOOR, MAX_LEVEL, weaponDamage, socketGem } from './state.js';
 import { Level } from './level.js';
 import { Player, Pet, Loot } from './entities.js';
 import { UI } from './ui.js';
@@ -162,6 +162,7 @@ class Main {
     this.ui.showMenu();
     this.menuScene();
     playMusic('menu');
+    if (/[?&]resume=1/.test(location.search) && hasSave()) setTimeout(() => { this.continueGame(); this.flash('Hollowmere recovered from a crash and put you back at your last autosave.'); }, 800);
     if (localStorage.getItem('hollowmere_ctxlost')) {
       localStorage.removeItem('hollowmere_ctxlost');
       setTimeout(() => this.flash('Your graphics card reset, so Hollowmere lowered the graphics quality to keep things smooth. You can raise it again in Settings.'), 2000);
@@ -337,7 +338,7 @@ class Main {
     this.creating = false;
     this.ui.hideCreation();
     this.ui.hideMenu();
-    this.menuMode = false;
+    this.menuMode = false; document.body.classList.remove('cine-on');
     this.enterTown();
     const first = SKILLS[cls.hotbar.rmb];
     msg(`Welcome to Hollowmere, ${G.heroName} the ${cls.title}. Speak to ${QUEST_GIVER} for work, then descend the Old Well.`, '#f0c674');
@@ -349,7 +350,7 @@ class Main {
     if (!loadGame()) { this.ui.toast('No save found', true); return; }
     if (G.look && G.look.shoulders === undefined) Object.assign(G.look, CLASS_DETAILS[G.cls] || {}, { skin: G.look.skin || '#ffffff' });
     this.ui.hideMenu();
-    this.menuMode = false;
+    this.menuMode = false; document.body.classList.remove('cine-on');
     if (loc && loc.kind === 'dungeon' && loc.floor > 0) this.loadLevel('dungeon', loc.floor, 'resume', loc);
     else if (loc && loc.kind === 'town') { restockShop(); this.loadLevel('town', 0, 'resume', loc); }
     else if (loc && loc.kind === 'interior') { restockShop(); this.loadLevel('interior', loc.floor, 'resume', loc); }
@@ -747,7 +748,7 @@ class Main {
   snapCamera() { this.camFocus = G.player ? G.player.pos.clone() : new THREE.Vector3(34, 0, 34); }
   render() {
     if (this.grade) this.grade.uniforms.time.value = performance.now() / 1000;
-    if (!this.menuMode) beforeRender(this.camera);
+    if (!this.menuMode || !this.creating) beforeRender(this.camera);
     if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     afterRender();
   }
@@ -800,6 +801,35 @@ class Main {
     this.renderer.setPixelRatio(this.basePR * v);
     this.resize();
   }
+  // Title cutscene: a loop of camera shots over Hollowmere at dusk, ending in a plunge down the Old Well,
+  // with letterbox bars, fades to black and short captions. Runs behind the logo on the title screen.
+  cinematic(dt) {
+    const L = G.level; if (!L) return;
+    const W = L.toWorld(16.5, 16.5), V = (x, y, z) => new THREE.Vector3(W.x + x, y, W.z + z);
+    const ease = (u) => u * u * (3 - 2 * u);
+    const SHOTS = this._shots || (this._shots = [
+      { d: 11, tod: 0.705, cap: 'Hollowmere', p: (u) => V(70, 58, 80).lerp(V(26, 21, 32), ease(u)), l: (u) => V(0, 0, 0).lerp(V(0, 2, 0), u) },
+      { d: 10, tod: 0.735, cap: 'A town built over the Wells', p: (u) => V(-44 + 88 * u, 17, 34), l: (u) => V(-20 + 40 * u, 0, -6) },
+      { d: 11, tod: 0.79, cap: 'Something below is waking', p: (u) => { const a = -0.6 + 1.5 * u; return V(Math.sin(a) * 10.5, 3.6 + u * 0.8, Math.cos(a) * 10.5); }, l: () => V(0, 1.2, 0) },
+      { d: 8, tod: 0.8, cap: 'Descend into the Sunken Wells', p: (u) => V(0, 14, 10).lerp(V(0, 2.4, 0.9), ease(u)), l: (u) => V(0, 0.5, 0).lerp(V(0, -3, 0), u) },
+    ]);
+    const c = this.cine || (this.cine = { i: 0, t: 0 });
+    c.t += dt;
+    const sh = SHOTS[c.i];
+    if (c.t >= sh.d) { c.t = 0; c.i = (c.i + 1) % SHOTS.length; return this.cinematic(0); }
+    const u = c.t / sh.d;
+    const pos = sh.p(u), look = sh.l(u);
+    // gentle handheld drift
+    const tt = performance.now() / 1000;
+    pos.x += Math.sin(tt * 0.7) * 0.15; pos.y += Math.sin(tt * 0.9 + 1) * 0.1;
+    this.camera.position.copy(pos); this.camera.lookAt(look);
+    this.cineLook = look; this.cineTod = sh.tod;
+    const el = document.querySelector('#cine .fade'), cap = document.querySelector('#cine .cap');
+    if (el) { const dark = c.t < 0.25 || c.t > sh.d - 1.2; if (el._d !== dark) { el._d = dark; el.style.opacity = dark ? '1' : '0'; } }
+    if (cap) { const on = c.t > 1.2 && c.t < sh.d - 2; if (cap._t !== sh.cap) { cap._t = sh.cap; cap.textContent = sh.cap.toUpperCase(); } if (cap._on !== on) { cap._on = on; cap.classList.toggle('on', on); } }
+    // embers rising out of the well in the closer shots
+    if (c.i >= 2 && Math.random() < dt * 30) this.fx.emit(V((Math.random() - 0.5) * 2, 0.8, (Math.random() - 0.5) * 2), { count: 1, color: Math.random() < 0.5 ? 0xff7a2a : 0x66aaff, speed: 0.4, up: 2.2, life: 2.2, size: 0.22, spread: 0.3, gravity: -0.2 });
+  }
   frame() {
     this.dynTick();
     const dt = Math.min(this.maxDt || 0.05, this.clock.getDelta());
@@ -815,17 +845,14 @@ class Main {
         this.camera.lookAt(p.x, 1.05, p.z);
         if (this.preview) { this.preview.update(dt); this.preview.root.rotation.y += dt * 0.25; }
         if (this.previewRig) this.previewRig.anim(performance.now() / 1000, false, dt, 0);
-      } else {
-        const a = t * 0.05;
-        this.camera.position.set(44 + Math.cos(a) * 34, 22, 44 + Math.sin(a) * 34);
-        this.camera.lookAt(44, 0, 44);
-      }
-      if (L) { L.sun.position.set(64, 40, 54); L.sun.target.position.set(44, 0, 44); }
+      } else this.cinematic(dt);
+      document.body.classList.toggle('cine-on', !this.creating && !!L);
+      if (L) { const f = this.cineLook || new THREE.Vector3(44, 0, 44); L.sun.position.set(f.x + 20, 40, f.z + 10); L.sun.target.position.set(f.x, 0, f.z); }
       if (L && this.sky) {
         // the title screen shows a slowly turning evening sky; the creation podium is lit like late afternoon
         const keep = G.timeOfDay;
         this.menuT = ((this.menuT ?? 0.66) + dt / 240) % 1;
-        G.timeOfDay = this.creating ? 0.62 : 0.69 + 0.065 * Math.sin(this.menuT * Math.PI * 2);
+        G.timeOfDay = this.creating ? 0.62 : (this.cineTod ?? 0.69 + 0.065 * Math.sin(this.menuT * Math.PI * 2));
         this.sky.update(dt, L, this.creating && this.podium ? this.podium.position : new THREE.Vector3(44, 0, 44), this.creating ? null : this.fx, false);
         G.timeOfDay = keep;
       }

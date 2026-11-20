@@ -12,11 +12,22 @@ function createWindow() {
     width: 1600, height: 900, minWidth: 1024, minHeight: 640,
     title: 'Hollowmere: The Sunken Wells',
     backgroundColor: '#000000',
+    icon: path.join(ROOT, 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.js') },
   });
   Menu.setApplicationMenu(null);
   win.loadURL('app://game/index.html');
+  // If the game's renderer or the graphics process ever dies, note why and bring the game straight back at the last autosave.
+  let crashes = 0;
+  const logCrash = (what, d) => { try { fs.mkdirSync(saveDir(), { recursive: true }); fs.appendFileSync(path.join(saveDir(), 'crash.log'), `${new Date().toISOString()} ${what} ${JSON.stringify(d)}\n`); } catch (e) { /* ignore */ } };
+  win.webContents.on('render-process-gone', (e, d) => {
+    logCrash('renderer-gone', d);
+    if (d.reason === 'clean-exit' || win.isDestroyed() || ++crashes > 4) return;
+    win.loadURL('app://game/index.html?resume=1');
+  });
+  win.webContents.on('unresponsive', () => logCrash('unresponsive', {}));
+  app.on('child-process-gone', (e, d) => { if (d.type === 'GPU') logCrash('gpu-gone', d); });
   win.webContents.on('before-input-event', (e, input) => {
     if (input.type === 'keyDown' && input.key === 'F11') { win.setFullScreen(!win.isFullScreen()); e.preventDefault(); }
   });

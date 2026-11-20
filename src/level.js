@@ -168,9 +168,18 @@ export class Level {
   }
 
   dispose() {
+    // give the graphics card back the textures of everyone who was here (they upload again if needed later)
+    const seen = new Set();
+    for (const e of this.entities) {
+      if (e === G.player || !e.root) continue;
+      e.root.traverse((o) => { if (!o.material) return; for (const m of Array.isArray(o.material) ? o.material : [o.material]) for (const k in m) { const t = m[k]; if (t && t.isTexture && !seen.has(t)) { seen.add(t); t.dispose(); } } });
+    }
     for (const e of this.entities) e.dispose?.();
     this.scene.remove(this.root);
-    this.root.traverse((o) => { if (o.material && o.material.map && o.material.map.isCanvasTexture) o.material.map.dispose(); });
+    this.root.traverse((o) => {
+      if (o.material && o.material.map && o.material.map.isCanvasTexture) o.material.map.dispose();
+      if (o.isMesh && o.geometry && o.geometry.userData.baked) o.geometry.dispose(); // frozen corpse meshes are unique to this floor
+    });
   }
 
   add(e) { e.gone = false; this.entities.push(e); this.root.add(e.root); return e; }
@@ -183,7 +192,16 @@ export class Level {
     e.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.castShadow = false; });
     (this.corpses = this.corpses || []).push(e);
     if (e.char && e.char.isReal) { e.char.lod = 0; bakeStatic(e.char); } // frozen pose becomes plain static meshes
-    G.main?.gore?.track(e.root); // never removed; hidden only while far away
+    G.main?.gore?.track(e.root); // hidden while far away
+    // each body is ~20 meshes of its own: keep the newest ones (the blood stays as decals) so memory stays bounded
+    const cap = Settings.quality === 'ultra' ? 64 : Settings.quality === 'high' ? 40 : Settings.quality === 'medium' ? 26 : 16;
+    const keep = G.main?.gore?.mobile ? Math.min(cap, 10) : cap;
+    while (this.corpses.length > keep) {
+      const old = this.corpses.shift();
+      old.root.parent?.remove(old.root);
+      old.root.traverse((o) => { if (o.isMesh && o.geometry && o.geometry.userData.baked) o.geometry.dispose(); });
+      const gt = G.main?.gore?.tracked; if (gt) { const k = gt.indexOf(old.root); if (k >= 0) gt.splice(k, 1); }
+    }
   }
   remove(e) { e.gone = true; const i = this.entities.indexOf(e); if (i >= 0) this.entities.splice(i, 1); this.root.remove(e.root); }
 

@@ -29,6 +29,8 @@ function init() {
   cam.position.set(0, 0, 5);
 }
 
+// the skill emblems (skillicon3d.js) share this renderer rather than opening another graphics context
+export function sharedIconRenderer() { if (!R) init(); return R; }
 // fit an object into the view: centre it and scale it to a unit box
 function frame(obj, fill = 1.55) {
   obj.updateMatrixWorld(true);

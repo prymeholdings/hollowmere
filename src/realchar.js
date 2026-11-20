@@ -6,6 +6,7 @@
 // follow the animation. Hair has a main colour and a highlight colour.
 import * as THREE from 'three';
 import { createCharacter } from './vendor/ara3d.js';
+import { Settings } from './settings.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { findSource, tintMaterial, modelFlash, modelFlashTick } from './assets.js';
 import { wearGear, GEAR_SLOTS } from './gearvis.js';
@@ -28,6 +29,7 @@ const CLIP_MAP = {
   Running_C: 'run', Death_C_Skeletons: 'death_backward', Skeletons_Inactive_Floor_Pose: 'sleep', Spawn_Ground_Skeletons: 'cheer', PickUp: 'pick_up', Lie_Idle: 'sleep', Wave: 'wave', Talk: 'talk_gestures', Laugh: 'laugh',
 };
 const CLIPS = [...new Set(Object.values(CLIP_MAP))];
+const CLIP_SPEED = new WeakMap(), _ws = new THREE.Vector3();
 const FALLBACK = (name) => (/Death/.test(name) ? 'death_forward' : /Hit/.test(name) ? 'hit_front' : /Run/.test(name) ? 'run' : /Walk/.test(name) ? 'walk' : /Attack/.test(name) ? 'sword_slash' : /Spell|Cast|Shoot|Throw/.test(name) ? 'throw_grenade' : 'idle');
 
 export const HAIR_STYLES = [
@@ -144,11 +146,58 @@ export function buildReal(look, cls, kind, extra = {}) {
   Object.assign(p, extra.params || {});
   const key = JSON.stringify([p.gender, p.muscle, p.weight, p.height, p.african, p.asian, p.caucasian, p.skinTint, p.eyes, p.hair, p.hairTint, p.facialHair, p.top, p.bottom, p.shoes, p.accessories, p.garmentStyles, p.seed, p.age, p.breastSize, extra.detail]);
   if (cache.has(key)) { if (extra.priority) { const j = jobs.find((x) => x.key === key); if (j) j.pri = Math.max(j.pri, extra.priority); } return cache.get(key); }
-  const pr = enqueue(() => createCharacter(p, { animations: CLIPS, detail: extra.detail || 'medium', assetsUrl: ASSET_URL }), extra.priority || 0);
+  const pr = enqueue(() => createCharacter(p, { animations: CLIPS, detail: extra.detail || 'medium', assetsUrl: ASSET_URL }).then((res) => { try { shrinkTextures(res); } catch (e) { /* keep full size */ } try { bakeMorphs(res); } catch (e) { console.warn('morph bake', e); } return res; }), extra.priority || 0);
   if (jobs.length) jobs[jobs.length - 1].key = key;
   const out = pr.then((res) => res).catch((e) => { cache.delete(key); console.warn('realistic character failed', e); return null; });
   cache.set(key, out);
   return out;
+}
+// Every body part comes with its own 1024 px texture (about 5 MB of video memory each, 20+ per character), which
+// adds up to well over a gigabyte on a laptop sharing memory with the CPU. Characters are small on screen, so
+// 512 px is plenty (1024 on Ultra) and cuts the video memory to a quarter.
+function shrinkTextures(res) {
+  const max = Settings.quality === 'ultra' ? 1024 : 512;
+  const done = new Set();
+  res.scene.traverse((o) => {
+    if (!o.material) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) for (const k in m) {
+      const t = m[k];
+      if (!t || !t.isTexture || done.has(t) || t.isDataTexture || t.isCompressedTexture) continue;
+      done.add(t);
+      const im = t.image, w = im && (im.width || im.naturalWidth), h = im && (im.height || im.naturalHeight);
+      if (!w || !h || Math.max(w, h) <= max) continue;
+      const sc = max / Math.max(w, h), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * sc)); c.height = Math.max(1, Math.round(h * sc));
+      const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, c.width, c.height);
+      if (im.close) { try { im.close(); } catch (e) { /* already closed */ } }
+      t.image = c; t.needsUpdate = true;
+    }
+  });
+}
+// Every body part carries face-shape morph targets. Three.js packs them into a float texture per mesh and keeps a copy
+// of the data in memory: about 10 MB of RAM and 10 MB of video memory for EACH character. The game only ever shows
+// the fixed expression, so apply the current influences once and drop the targets.
+function bakeMorphs(res) {
+  res.scene.traverse((o) => {
+    const g = o.geometry;
+    if (!o.isMesh || !g || !g.morphAttributes || !g.morphAttributes.position) return;
+    const inf = o.morphTargetInfluences || [], rel = g.morphTargetsRelative;
+    for (const key of ['position', 'normal']) {
+      const list = g.morphAttributes[key], base = g.attributes[key];
+      if (!list || !base) continue;
+      const a = base.array;
+      for (let t = 0; t < list.length; t++) {
+        const w = inf[t]; if (!w) continue;
+        const m = list[t].array;
+        if (rel) for (let i = 0; i < a.length; i++) a[i] += m[i] * w;
+        else for (let i = 0; i < a.length; i++) a[i] += (m[i] - a[i]) * w;
+      }
+      if (key === 'position') base.needsUpdate = true;
+    }
+    g.morphAttributes = {}; g.morphTargetsRelative = false;
+    o.morphTargetInfluences = undefined; o.morphTargetDictionary = undefined;
+    if (g.boundingSphere) g.boundingSphere = null; if (g.boundingBox) g.boundingBox = null;
+  });
 }
 export function clearRealCache() { for (const p of cache.values()) p.then((r) => r && r.dispose && null); cache.clear(); }
 
@@ -280,6 +329,43 @@ export class RealChar {
     a.enabled = true; a.play();
     if (this.current) this.current.crossFadeTo(a, fade, false);
     this.current = a;
+  }
+  // Locomotion matched to how fast the character really moves: walk or run is picked by speed, and the clip
+  // plays exactly fast enough that the planted foot keeps pace with the ground (no skating, no moonwalking).
+  locomote(v) {
+    if (v < 0.05) { this.play('Idle', 0.25); return; }
+    const run = this._run ? v > 2.3 : v > 3.0; this._run = run;
+    const name = run ? 'Running_A' : 'Walking_A';
+    this.root.getWorldScale(_ws);
+    const natural = this.clipSpeed(name) * (_ws.x || 1);
+    const ts = THREE.MathUtils.clamp(natural > 0.05 ? v / natural : 1, 0.45, 2.4);
+    this.play(name, 0.25, ts / this.speedFor(name));
+  }
+  // how fast (m/s, in the character's own units) a looping clip carries the body: twice the foot's stride sweep per cycle
+  clipSpeed(name) {
+    const a = this.action(name); if (!a) return 1;
+    const clip = a.getClip();
+    if (CLIP_SPEED.has(clip)) return CLIP_SPEED.get(clip);
+    let sp = name.startsWith('Run') ? 3.6 : 1.4;
+    try {
+      const foot = this.bones.LeftFoot || this.bones.leftFoot || Object.values(this.bones).find((b) => /left.*foot|foot.*l$/i.test(b.name));
+      if (foot && clip.duration > 0.2) {
+        const tmp = new THREE.AnimationMixer(this.scene), act = tmp.clipAction(clip);
+        act.play();
+        const N = 48, p = new THREE.Vector3(); let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
+        for (let i = 0; i < N; i++) {
+          tmp.setTime((i / N) * clip.duration);
+          this.root.updateMatrixWorld(true);
+          foot.getWorldPosition(p); this.root.worldToLocal(p);
+          minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+        }
+        act.stop(); tmp.uncacheRoot(this.scene);
+        const range = Math.max(maxZ - minZ, (maxX - minX) * 0.6);
+        if (range > 0.05) sp = (2 * range) / clip.duration;
+      }
+    } catch (e) { /* keep the default */ }
+    CLIP_SPEED.set(clip, sp);
+    return sp;
   }
   speedFor(name) { return /Running/.test(name) ? 1.15 : /Walking/.test(name) ? 1.2 : 1; }
   once(name, { fade = 0.12, timeScale = 1, hold = false, onDone } = {}) {

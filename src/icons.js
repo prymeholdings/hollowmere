@@ -1,5 +1,6 @@
 // Hand-made SVG icons for items and skills (original artwork). Equipment and gems use 3D-rendered icons.
 import { itemIconURL } from './iconrender.js';
+import { skill3dURL, requestSkill3d, skill3dSVG } from './skillicon3d.js';
 const wrap = (inner, c1, c2 = '#000') => `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="g" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="${c1}" stop-opacity="0.35"/><stop offset="1" stop-color="${c2}" stop-opacity="0"/></radialGradient></defs><rect width="64" height="64" fill="url(#g)"/>${inner}</svg>`;
 const M = '#d8dde4', D = '#5a4630', G = '#e8c35a';
 const ITEM = {
@@ -71,6 +72,13 @@ const SK = {
 };
 export const EXTRA = {};
 export function skillIcon(key) {
+  // the 3D emblem when it has been rendered; otherwise the flat icon, tagged so the emblem replaces it later
+  const u = skill3dURL(key);
+  if (u) return skill3dSVG(key, u);
+  if (typeof document !== 'undefined') requestSkill3d(key);
+  return flatSkillIcon(key).replace('<svg ', `<svg data-sk="${key}" `);
+}
+function flatSkillIcon(key) {
   if (EXTRA[key]) return wrap(EXTRA[key].inner, EXTRA[key].glow);
   const glow = { icelance: '#9fe8ff', venom: '#77ee33', firewall: '#ff7a2a', toxic: '#77dd33', glacial: '#bfeeff', ballzap: '#a8b8ff', inferno: '#ff6a1a', cataclysm: '#c8a8ff', pyro: '#ff8a3a', cryo: '#9fe8ff', conduit: '#b8c8ff', fire: '#ff8a3a', bolt: '#8ac8ff', frost: '#9fe8ff', meteor: '#ff6a2a', heal: '#7dff9a', skull: '#9aff9a', whirl: '#ffffff', slam: '#e0a050', knives: '#cfd8e0', blink: '#a46aff', cry: '#ff5a3a', blizzard: '#9fe8ff', quake: '#e0a050', smoke: '#aaaaaa', blades: '#cfd8e0', brutal: '#ff5a3a', wind: '#9fffc0', arcane: '#8ab8ff', elemental: '#c8a8ff', feet: '#9fd8ff', lethal: '#ff6a6a', blood: '#ff3a4a', fortune: '#ffd84d', mastery: '#ffd84d', toughness: '#bfe0ff', pet_bond: '#ff9a5a' }[key] || '#ffffff';
   return wrap(SK[key] || SK.attack, glow);

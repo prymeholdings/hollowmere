@@ -1976,13 +1976,14 @@ async function V(e, t) {
 		...await i(e.data)
 	})));
 	L(c.animations, n.faces, n.clipNames);
+	n.files = null; /* hollowmere: the exported GLB bytes (6-10 MB per character) were kept alive by the clip() closure */
 	let u = new Map(c.animations.map((e) => [e.name, e])), d = I(c.scene, n.params.expression), p = g(c.scene), m, h = {
 		...c,
 		props: l,
 		params: n.params,
 		colors: n.colors,
 		height: n.height,
-		glb: o.data,
+		glb: null,
 		clip: (e) => u.get(n.clipNames[e] ?? e),
 		setExpression: d.setExpression,
 		setMouth: d.setMouth,
