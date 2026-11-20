@@ -103,6 +103,13 @@ class Main {
     loadSettings();
     applyUI();
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // if the graphics driver drops the context (white screen), save, switch to the lighter stylised models and restart
+    this.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      try { if (G.player && !this.menuMode) saveGame(); } catch (err) { /* keep going */ }
+      try { if (Settings.realistic !== false) { Settings.realistic = false; saveSettings(); localStorage.setItem('hollowmere_ctxlost', '1'); } } catch (err) { /* storage off */ }
+      setTimeout(() => location.reload(), 400);
+    });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -113,7 +120,7 @@ class Main {
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.5, 260);
     this.fx = new FX(this.scene);
     this.gore = new Gore(this.scene);
-    this.zoom = 0.82;
+    this.zoom = Math.min(1.5, Math.max(0.3, +localStorage.getItem('hollowmere_zoom') || 0.82));
     this.keys = {};
     this.mouse = new THREE.Vector2();
     this.raycaster = new THREE.Raycaster();
@@ -149,6 +156,10 @@ class Main {
     this.ui.showMenu();
     this.menuScene();
     playMusic('menu');
+    if (localStorage.getItem('hollowmere_ctxlost')) {
+      localStorage.removeItem('hollowmere_ctxlost');
+      setTimeout(() => this.flash('Your graphics card reset, so Hollowmere switched to the classic character models. You can turn Realistic characters back on in Settings.'), 2000);
+    }
   }
 
   applyQuality() {
@@ -164,7 +175,7 @@ class Main {
       this.envTex = pm.fromScene(new RoomEnvironment(), 0.04).texture;
       pm.dispose();
     }
-    this.scene.environment = q === 'low' ? null : this.envTex;
+    this.scene.environment = this.envTex; // image-based light is cheap and makes the realistic skin and metals read on every setting
     this.applyShadowRes();
     this.scene.traverse((o) => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach((m) => (m.needsUpdate = true)); } });
     if (this.composer) { this.composer.dispose(); this.composer = null; this.gtao = null; }
@@ -425,6 +436,8 @@ class Main {
   goldFind() { return Math.round(itemBonus('gold_find') + (G.buffs.wealth > 0 ? 100 : 0) + (G.skills.fortune || 0) * 8 + petBonus('gold_find')); }
   randomTreasure() { return generate(Math.max(G.lvl, G.currentFloor) + 1, 80, 1); }
   flash(t) { this.ui.flash(t); }
+  // camera distance: 0.3 is close behind the hero, 1.5 is far out
+  setZoom(z) { this.zoom = Math.min(1.5, Math.max(0.3, z)); try { localStorage.setItem('hollowmere_zoom', this.zoom.toFixed(3)); } catch (e) { /* storage off */ } }
   floatText(pos, text, color, size = 20, yOff = 2) {
     if (!Settings.damageNumbers && /^\d+!?$/.test(String(text))) return;
     this.ui.floatText(pos, text, color, size, yOff);
@@ -646,7 +659,7 @@ class Main {
       else if (e.button === 2) { G.player.hover = this.pick(); this.castSlot('rmb'); }
     });
     window.addEventListener('mouseup', (e) => { if (e.button === 0) this.holding = false; });
-    cv.addEventListener('wheel', (e) => { this.zoom = Math.min(1.5, Math.max(0.55, this.zoom + Math.sign(e.deltaY) * 0.08)); });
+    cv.addEventListener('wheel', (e) => { this.setZoom(this.zoom + Math.sign(e.deltaY) * 0.08); }, { passive: true });
     window.addEventListener('keydown', (e) => {
       this.keys[e.key] = true;
       if (e.key === 'Alt' || e.key === 'Tab') e.preventDefault();
@@ -800,14 +813,16 @@ class Main {
       const k = this.camCatch > 0 ? 1 : Math.min(1, dt * 7);
       this.camCatch = (this.camCatch || 0) - dt;
       this.camFocus.lerp(G.player.pos, k);
-      const off = new THREE.Vector3(0, 21, 14).multiplyScalar(this.zoom);
+      // close in, the camera also drops to a lower, more over-the-shoulder angle
+      const za = THREE.MathUtils.smoothstep(this.zoom, 0.3, 0.8);
+      const off = new THREE.Vector3(0, 11 + 10 * za, 16 - 2 * za).multiplyScalar(this.zoom);
       this.camera.position.copy(this.camFocus).add(off);
       if (this.shakeAmt > 0) {
         this.camera.position.x += rand(-1, 1) * this.shakeAmt;
         this.camera.position.y += rand(-1, 1) * this.shakeAmt * 0.5;
         this.shakeAmt = Math.max(0, this.shakeAmt - dt * 1.8);
       }
-      this.camera.lookAt(this.camFocus.clone().add(new THREE.Vector3(0, 0.8, 0)));
+      this.camera.lookAt(this.camFocus.clone().add(new THREE.Vector3(0, 0.8 + 0.5 * (1 - za), 0)));
       L.sun.position.copy(this.camFocus).add(new THREE.Vector3(14, 26, 10));
       L.sun.target.position.copy(this.camFocus);
       if (this.sky) this.sky.update(dt, L, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));

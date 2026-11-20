@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { createCharacter } from './vendor/ara3d.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { findSource, tintMaterial } from './assets.js';
+import { findSource, tintMaterial, modelFlash, modelFlashTick } from './assets.js';
 
 export const REAL_OK = typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined' && !new URLSearchParams(location.search).has('stylised');
 const ASSET_URL = new URL('assets/ara/', document.baseURI).href;
@@ -240,7 +240,8 @@ export class RealChar {
     this.current = a;
     return a.getClip().duration / timeScale;
   }
-  update(dt) { this.mixer.update(dt); }
+  flash(s = 1) { modelFlash(this, s); }
+  update(dt) { this.mixer.update(dt); modelFlashTick(this, dt); }
   applyLook() {}
   setGear() {}
   setCapeColor() {}

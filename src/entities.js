@@ -15,7 +15,25 @@ import { ENEMIES } from './data.js';
 const tmp = new THREE.Vector3();
 const DMG_COLORS = { phys: '#ffffff', fire: '#ffa040', frost: '#9fdcff', storm: '#c6b8ff', poison: '#9dff7a', arcane: '#b8a0ff', light: '#fff0a0', dark: '#c070e0', bleed: '#ff4a4a' };
 
+// soft contact shadow under characters: grounds them on phones (no shadow maps) and adds depth on PC
+let BLOB_MAT = null;
+const BLOB_GEO = new THREE.PlaneGeometry(1, 1);
+function blobMat() {
+  if (BLOB_MAT) return BLOB_MAT;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 2, 32, 32, 31);
+  g.addColorStop(0, 'rgba(0,0,0,0.75)'); g.addColorStop(0.55, 'rgba(0,0,0,0.38)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  BLOB_MAT = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: Settings.quality === 'low' ? 1 : 0.55 });
+  return BLOB_MAT;
+}
 class Entity {
+  blob(r) {
+    const m = new THREE.Mesh(BLOB_GEO, blobMat());
+    m.rotation.x = -Math.PI / 2; m.position.y = 0.025; m.scale.set(r * 2, r * 2, 1); m.renderOrder = -1;
+    this.root.add(m); this.blobM = m; return m;
+  }
   constructor(type) {
     this.type = type;
     this.root = new THREE.Group();
@@ -67,6 +85,7 @@ const ATTACKS = {
 export class Player extends Entity {
   constructor() {
     super('player');
+    this.blob(0.5);
     const cls = CLASSES[G.cls] || CLASSES.Knight;
     this.model = new CharModel(cls.model, { scale: 0.72 * (G.look?.height || 1) });
     this.model.applyLook(cls, G.look || {});
@@ -125,6 +144,7 @@ export class Player extends Entity {
     d *= 1 - Math.min(0.9, itemBonus('dr') / 100);
     if (Math.random() < Math.min(0.25, stat('dex') * 0.004) + (G.buffs.smoke > 0 ? 0.3 : 0) + petBonus('dodge') + Math.min(0.6, itemBonus('dodge') / 100)) { G.main.floatText(this.pos, 'Dodge', '#cccccc', 16, 2.2); return; }
     G.hp -= d;
+    this.model.flash?.(0.6);
     { const th = itemBonus('thorns'); if (th > 0) { let nb = null, bd = 3; for (const o of G.level.entities) if (o.type === 'enemy' && !o.dead) { const dd = flatDist(o.pos, this.pos); if (dd < bd) { bd = dd; nb = o; } } if (nb) nb.takeDamage(d * th / 100, false, 'phys'); } }
     G.main.floatText(this.pos, Math.round(d), '#ff5555', 20, 2.2);
     G.main.gore.hit(this.pos, 'red', Math.min(1, d / maxHp() * 2.5), null);
@@ -209,7 +229,10 @@ export class Player extends Entity {
     const speed = 6.2 * (G.buffs.speed > 0 ? 1.25 : 1) * (1 + (G.skills.swift_feet || 0) * 0.04 + petBonus('move') + itemBonus('move_pct') / 100);
     const moving = this.castLock <= 0 && this.followPath(this.path, speed, dt);
     if (moving && this.model.oneShot && !this.dead) { /* let attacks finish while moving */ }
-    this.model.play(moving ? 'Running_A' : 'Idle', 0.15, moving ? 1.1 : 1);
+    this.model.play(moving ? 'Running_A' : 'Idle', 0.15, moving ? 1.1 * speed / 6.2 : 1);
+    // lean into the run
+    const mr = this.model.root;
+    if (mr) mr.rotation.x += ((moving ? 0.07 : 0) - mr.rotation.x) * Math.min(1, dt * 8);
   }
 }
 
@@ -300,6 +323,7 @@ export class Enemy extends Entity {
     this.root.add(this.model);
     this.pickR = (d.shape === 'brute' ? 0.85 : sk ? 0.6 : 0.65) * s;
     this.pickH = (d.shape === 'beast' || d.shape === 'blob' ? 0.5 : 1.0) * s;
+    this.blob(0.5 * s * (d.shape === 'brute' ? 1.35 : d.shape === 'beast' ? 1.2 : 1));
     if (elite || boss) {
       ring(this.root, 0.9 * s, boss ? 0xff3322 : 0xffcc33);
       this.label = { text: boss ? d.name : `Champion ${d.name}`, color: boss ? '#ff6644' : '#ffcc33', y: 2.4 * s, always: true };
@@ -363,6 +387,11 @@ export class Enemy extends Entity {
     this.lastDmg = d;
     this.aggro = true;
     this.hitT = 0.15;
+    this.char?.flash?.(crit ? 1.6 : 1);
+    if (G.player && !this.boss && this.hp > 0) {
+      const v = this.pos.clone().sub(G.player.pos).setY(0);
+      if (v.lengthSq() > 0.01) { v.normalize().multiplyScalar(crit ? 0.32 : 0.14); const to = this.pos.clone().add(v); if (G.level.walkable(to)) this.pos.copy(to); }
+    }
     G.main.gore.hit(this.pos, goreKind(this.data), Math.min(1, d / this.maxHp * 2.2 + (crit ? 0.25 : 0)), G.player ? G.player.pos : null);
     if (Settings.damageNumbers) G.main.floatText(this.pos, Math.round(d) + (crit ? '!' : ''), crit ? '#ffdd33' : DMG_COLORS[kind] || '#fff', crit ? 30 : 22, this.pickH * 2.2);
     sfx(crit ? 'crit' : 'hit');
@@ -411,6 +440,7 @@ export class Enemy extends Entity {
     if (this.dead) {
       this.deathT -= dt;
       if (this.char) { if (this.deathT < 0.8) this.model.position.y -= dt * 1.2; }
+      if (this.blobM && this.deathT < 0.8) this.blobM.visible = false;
       else { this.model.scale.multiplyScalar(0.9); this.model.rotation.z += dt * 4; }
       if (this.deathT <= 0) G.level.remove(this);
       return;
@@ -495,6 +525,7 @@ export class Enemy extends Entity {
 export class Ally extends Entity {
   constructor() {
     super('ally');
+    this.blob(0.45);
     this.char = new CharModel('Skeleton_Minion', { tint: 0x99ffbb, emissive: 0x115522, emissiveIntensity: 0.7 });
     this.char.attach('Skeleton_Blade');
     this.root.add(this.char.root);
@@ -710,6 +741,7 @@ Enemy.prototype.bossSummon = function (K, n) {
 export class Pet extends Entity {
   constructor() {
     super('pet');
+    this.blob(0.4);
     ensurePets();
     this.path = [];
     this.repath = 0;
@@ -1247,7 +1279,13 @@ export class Interact extends Entity {
 // swap a townsperson's stylised model for a realistic one (desktop only; phones keep the light models)
 async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false) {
   const spec = NPC_SPECS[specKey];
-  if (!REAL_OK || Settings.realistic === false || !spec || (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches)) return;
+  if (!REAL_OK || Settings.realistic === false || !spec) return;
+  // phones: only the shopkeepers and quest givers go realistic, after the hero has been built
+  if (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) {
+    if (!['merchant', 'quest', 'healer', 'blacksmith', 'beastmaster'].includes(specKey)) return;
+    await new Promise((r) => setTimeout(r, 6000));
+    if (ent.gone) return;
+  }
   const rc = await realFor(spec.look, 'Knight', null, lookOf, { kind: spec.kind, cloth: spec.cloth, scale, detail: 'low' });
   if (!rc || ent.gone || !ent.root.parent && !ent.root) return;
   if (spec.armor) { rc.wearPlates({ tint: 0xdfe8f4, glow: 0, rarity: 0 }, 'plate'); if (helm) rc.wearHelm({ vis: 'Knight_Helmet', tint: 0xdfe8f4 }); }
@@ -1264,6 +1302,7 @@ const VILLAGER_SPEC = { 'Marta the Baker': 'v_f1', 'Old Tobin': 'v_m1', Lettie: 
 export class Villager extends Entity {
   constructor(d) {
     super('interact');
+    this.blob(0.45);
     this.kind = 'villager';
     this.data = d;
     this.mode = d.mode || 'wander';

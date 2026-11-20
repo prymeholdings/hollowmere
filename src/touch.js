@@ -37,6 +37,7 @@ export class Touch {
     // stop the page from scrolling or zooming while playing
     document.addEventListener('touchmove', (e) => { if (!e.target.closest('.panel, #create, #menu')) e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturestart', (e) => e.preventDefault());
+    this.pinch();
     const first = () => { if (!isStandalone()) toggleFullscreen(true); };
     document.addEventListener('click', first, { once: true, capture: true });
   }
@@ -53,6 +54,7 @@ export class Touch {
       <div id="t-top">
         <button data-p="inv">Bag</button><button data-p="skills">Skills</button><button data-p="zodiac">Stars</button><button data-p="char">Hero</button><button data-p="pet">Pet</button><button data-p="quest">Quest</button><button data-p="map">Map</button><button data-p="auto">Auto</button><button data-p="fs" class="fsbtn">⛶</button><button data-p="pause">☰</button>
       </div>
+      <div id="t-zoom"><button class="tz" data-z="in">+</button><button class="tz" data-z="out">−</button></div>
       <div id="t-rotate">Turn your phone sideways for the best view</div>`;
     document.body.appendChild(root);
     this.root = root;
@@ -74,6 +76,30 @@ export class Touch {
       b.addEventListener('touchend', up, { passive: false }); b.addEventListener('touchcancel', up, { passive: false });
     }
     for (const b of root.querySelectorAll('#t-top button')) b.addEventListener('click', () => this.panel(b.dataset.p));
+  }
+  // two-finger pinch on the game view zooms the camera (also +/- buttons); remembered between sessions
+  pinch() {
+    const m = this.main, cv = m.renderer.domElement;
+    const P = { a: null, b: null, d0: 0, z0: 0 };
+    const dist = (t1, t2) => Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    const find = (list, id) => { for (const t of list) if (t.identifier === id) return t; return null; };
+    cv.addEventListener('touchstart', (e) => {
+      for (const t of e.changedTouches) { if (P.a === null) P.a = t.identifier; else if (P.b === null && t.identifier !== P.a) P.b = t.identifier; }
+      if (P.a !== null && P.b !== null) {
+        const t1 = find(e.touches, P.a), t2 = find(e.touches, P.b);
+        if (t1 && t2) { P.d0 = dist(t1, t2); P.z0 = m.zoom; }
+      }
+    }, { passive: true });
+    cv.addEventListener('touchmove', (e) => {
+      if (P.a === null || P.b === null || !P.d0) return;
+      const t1 = find(e.touches, P.a), t2 = find(e.touches, P.b);
+      if (!t1 || !t2) return;
+      e.preventDefault();
+      m.setZoom(P.z0 * P.d0 / Math.max(20, dist(t1, t2)));
+    }, { passive: false });
+    const end = (e) => { for (const t of e.changedTouches) { if (t.identifier === P.a) P.a = null; if (t.identifier === P.b) P.b = null; } if (P.a === null || P.b === null) P.d0 = 0; };
+    cv.addEventListener('touchend', end); cv.addEventListener('touchcancel', end);
+    for (const b of this.root.querySelectorAll('.tz')) b.addEventListener('click', () => m.setZoom(m.zoom * (b.dataset.z === 'in' ? 0.85 : 1.18)));
   }
   moveStick(t) {
     const S = this.stick;

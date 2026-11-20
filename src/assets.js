@@ -138,6 +138,31 @@ export function jewelMesh(l, kind) {
 }
 
 // An animated, skinned character instance.
+
+// white hit-flash plus a quick squash, shared by the stylised and the realistic character models
+export function modelFlash(m, s = 1) {
+  if (!m._fm) {
+    m._fm = [];
+    m.root.traverse((o) => {
+      if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+      if (!o.userData.ownMat && !o.userData.own) { o.material = o.material.clone(); o.userData.ownMat = true; }
+      const mat = o.material;
+      if (mat.emissive) m._fm.push({ m: mat, e: mat.emissive.clone(), i: mat.emissiveIntensity });
+    });
+    m._fbase = m.root.scale.clone();
+  }
+  m._fd = 0.14; m._ft = m._fd; m._fs = Math.min(2, s);
+}
+const FLASH_WHITE = new THREE.Color(1, 0.94, 0.85);
+export function modelFlashTick(m, dt) {
+  if (!(m._ft > 0)) return;
+  m._ft = Math.max(0, m._ft - dt);
+  const k = m._ft / m._fd, ks = k * m._fs;
+  for (const f of m._fm) { f.m.emissive.copy(f.e).lerp(FLASH_WHITE, Math.min(1, ks * 0.85)); f.m.emissiveIntensity = f.i + ks * 0.9; }
+  const b = m._fbase;
+  m.root.scale.set(b.x * (1 + 0.06 * ks), b.y * (1 - 0.1 * ks), b.z * (1 + 0.06 * ks));
+}
+
 export class CharModel {
   constructor(name, opts = {}) {
     this.name = name;
@@ -329,5 +354,6 @@ export class CharModel {
     this.current = a;
     return a.getClip().duration / timeScale;
   }
-  update(dt) { this.mixer.update(dt); }
+  flash(s = 1) { modelFlash(this, s); }
+  update(dt) { this.mixer.update(dt); modelFlashTick(this, dt); }
 }
