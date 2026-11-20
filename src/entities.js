@@ -94,8 +94,9 @@ export class Player extends Entity {
     super('player');
     this.blob(0.5);
     const cls = CLASSES[G.cls] || CLASSES.Knight;
-    this.model = new CharModel(cls.model, { scale: 0.72 * (G.look?.height || 1) });
-    this.model.applyLook(cls, G.look || {});
+    this.isAlien = G.look?.race === 'alien';
+    this.model = new CharModel(this.isAlien ? 'Alien' : cls.model, { scale: (this.isAlien ? 0.84 : 0.72) * (G.look?.height || 1), tint: this.isAlien ? G.look.alienTint : undefined });
+    if (!this.isAlien) this.model.applyLook(cls, G.look || {});
     this.root.add(this.model.root);
     this.attacks = ATTACKS[G.cls] || ATTACKS.Knight;
     this.ranged = null;
@@ -114,12 +115,12 @@ export class Player extends Entity {
     this.hitAnimCd = 0;
     this.refreshVisuals();
     // no blocky stand-in: the hero stays hidden for the moment it takes to build the realistic body
-    if (REAL_OK && Settings.realistic !== false) { this.model.root.visible = false; this.standIn = setTimeout(() => { if (this.model && !this.model.isReal) this.model.root.visible = true; }, 45000); }
+    if (!this.isAlien && REAL_OK && Settings.realistic !== false) { this.model.root.visible = false; this.standIn = setTimeout(() => { if (this.model && !this.model.isReal) this.model.root.visible = true; }, 45000); }
     this.upgradeReal();
   }
   // swap the stylised stand-in for the realistic human once it has been built
   async upgradeReal() {
-    if (!REAL_OK || Settings.realistic === false) return;
+    if (this.isAlien || !REAL_OK || Settings.realistic === false) return;
     const look = fullLook(G.look, G.cls);
     const al = G.equipment.armor ? lookOf(G.equipment.armor) : null;
     const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls), armorKey(al)].join('|');

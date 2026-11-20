@@ -208,9 +208,23 @@ export function modelFlashTick(m, dt) {
   m.root.scale.set(b.x * (1 + 0.06 * ks), b.y * (1 - 0.1 * ks), b.z * (1 + 0.06 * ks));
 }
 
+// the alien has a small clip set; every animation name the game asks for maps to the closest one
+function alienClip(n) {
+  if (/Death/.test(n)) return 'Death_A';
+  if (/Hit|Dodge|Block|Stun/.test(n)) return 'Hit_A';
+  if (/Run/.test(n)) return 'Running_A';
+  if (/Walk|Sneak/.test(n)) return 'Walking_A';
+  if (/Cheer|Wave/.test(n)) return 'Cheer';
+  if (/Interact|PickUp|Use/.test(n)) return 'Interact';
+  if (/Spell|Cast|Shoot|Ranged|Throw|Raise|Summon|Long/.test(n)) return 'Spellcast_Shoot';
+  if (/Attack|Melee|Slice|Chop|Stab|Punch|Kick|Spin|Slash|Jump/.test(n)) return '2H_Melee_Attack_Chop';
+  return 'Idle';
+}
+export const ALIEN_GRIP = { rx: 3.14, ry: 0, rz: 0, x: 0, y: 0.02, z: 0.02, s: 0.65 };
 export class CharModel {
   constructor(name, opts = {}) {
     this.name = name;
+    this.alien = name === 'Alien';
     const src = Assets.models[name];
     this.root = src ? SkeletonUtils.clone(src) : new THREE.Group();
     this.scale = opts.scale ?? 0.72;
@@ -267,6 +281,7 @@ export class CharModel {
   // ---------------------------------------------------------------- wardrobe
   // Show every equipped item on the 3D model: weapon, off-hand, helm, armor (body/arms/legs), jewellery.
   dress(equipment, look, cls) {
+    if (this.alien) return this.dressAlien(equipment);
     this.gearDef = null;
     for (const n of ALL_ACCESSORIES) if (this.parts[n]) this.parts[n].visible = false;
     if (cls.headgear && this.parts[cls.headgear]) this.parts[cls.headgear].visible = false;
@@ -321,6 +336,20 @@ export class CharModel {
       skinSafeTint(o.material, tint, tone || 0xffffff);
     });
   }
+  // the alien hero shows its weapon and off-hand in its hands (armour changes stats only)
+  dressAlien(eq) {
+    for (const o of this.worn || []) o.parent?.remove(o);
+    this.worn = [];
+    if (!this.bones) { this.bones = {}; this.root.traverse((o) => { if (o.isBone) this.bones[o.name] = o; }); }
+    this.bones['handslot.r'] = this.bones.DEF_handR || this.bones['DEF-handR'];
+    this.bones['handslot.l'] = this.bones['DEF-handL'];
+    const W = (it) => (it ? itemLook(it) : null);
+    for (const [it, slot, side] of [[eq.weapon, 'handslot.r', 1], [eq.offhand, 'handslot.l', -1]]) {
+      const l = W(it); if (!l) continue;
+      const m = this.wear(l, slot);
+      if (m) { m.rotation.set(ALIEN_GRIP.rx, ALIEN_GRIP.ry * side, ALIEN_GRIP.rz * side); m.position.set(ALIEN_GRIP.x * side, ALIEN_GRIP.y, ALIEN_GRIP.z); m.scale.multiplyScalar(ALIEN_GRIP.s); }
+    }
+  }
   addDetails(outfit, look, al) { /* filled in by details.js */ if (CharModel.detailHook) CharModel.detailHook(this, outfit, look, al); }
   wear(l, boneName) {
     const src = findSource(l.vis);
@@ -365,7 +394,7 @@ export class CharModel {
   }
   action(name) {
     if (!this.actions[name]) {
-      const clip = this.clips[name];
+      const clip = this.clips[name] || (this.alien ? this.clips[alienClip(name)] : null);
       if (!clip) return null;
       this.actions[name] = this.mixer.clipAction(clip);
     }

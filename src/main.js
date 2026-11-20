@@ -279,8 +279,9 @@ class Main {
     const s = this.creation;
     const cls = CLASSES[s.cls];
     if (this.preview) this.podium.remove(this.preview.root);
-    this.preview = new CharModel(cls.model, { scale: s.height });
-    this.preview.applyLook(cls, s);
+    const alien = s.race === 'alien';
+    this.preview = new CharModel(alien ? 'Alien' : cls.model, { scale: alien ? 0.95 * s.height : s.height, tint: alien ? s.alienTint : undefined });
+    if (!alien) this.preview.applyLook(cls, s);
     this.preview.dress(starterKit(s), s, cls);
     if (this.previewPet) this.podium.remove(this.previewPet);
     const psp = PET_SPECIES[s.petSpecies] ? s.petSpecies : 'fox';
@@ -294,7 +295,7 @@ class Main {
     this.podium.add(this.preview.root);
     this.preview.once('Cheer', { timeScale: 1.2 });
     sfx('buff');
-    if (Settings.realistic !== false && REAL_OK) {
+    if (Settings.realistic !== false && REAL_OK && !alien) {
       const stand = this.preview; stand.root.visible = false;
       const kit = starterKit(s), stamp = (this.previewStamp = (this.previewStamp || 0) + 1);
       clearTimeout(this.previewTimer);
@@ -322,7 +323,7 @@ class Main {
     reset();
     G.heroName = (s.name || '').trim().slice(0, 18) || 'Wanderer';
     G.cls = s.cls;
-    G.look = { cape: s.cape, hooded: !!s.hooded, helm: s.helm, gear: s.gear, tint: s.tint, height: s.height, capeOn: s.capeOn, pet: s.pet, skin: s.skin, shoulders: s.shoulders, belt: s.belt, back: s.back, metal: s.metal, scarf: s.scarf, ...(s.sex ? { sex: s.sex, weight: s.weight, muscle: s.muscle, hairStyle: s.hairStyle, hairColor: s.hairColor, hairHi: s.hairHi, beard: s.beard, eyes: s.eyes, skinTone: s.skinTone } : {}) };
+    G.look = { race: s.race === 'alien' ? 'alien' : undefined, alienTint: s.alienTint, cape: s.cape, hooded: !!s.hooded, helm: s.helm, gear: s.gear, tint: s.tint, height: s.height, capeOn: s.capeOn, pet: s.pet, skin: s.skin, shoulders: s.shoulders, belt: s.belt, back: s.back, metal: s.metal, scarf: s.scarf, ...(s.sex ? { sex: s.sex, weight: s.weight, muscle: s.muscle, hairStyle: s.hairStyle, hairColor: s.hairColor, hairHi: s.hairHi, beard: s.beard, eyes: s.eyes, skinTone: s.skinTone } : {}) };
     G.petName = (s.petName || '').trim().slice(0, 14) || 'Pip';
     G.petSpecies = PET_SPECIES[s.petSpecies] ? s.petSpecies : 'fox';
     G.pets = null; ensurePets();

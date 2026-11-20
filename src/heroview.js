@@ -56,11 +56,12 @@ export class HeroView {
   rebuild() {
     const cls = CLASSES[G.cls] || CLASSES.Knight;
     if (this.model) this.pivot.remove(this.model.root);
-    this.model = new CharModel(cls.model, { scale: 0.72 * (G.look?.height || 1) });
-    this.model.applyLook(cls, G.look || {});
+    const alien = G.look?.race === 'alien';
+    this.model = new CharModel(alien ? 'Alien' : cls.model, { scale: (alien ? 0.84 : 0.72) * (G.look?.height || 1), tint: alien ? G.look.alienTint : undefined });
+    if (!alien) this.model.applyLook(cls, G.look || {});
     this.model.dress(G.equipment, G.look || {}, cls);
     this.pivot.add(this.model.root);
-    if (Settings.realistic !== false) {
+    if (Settings.realistic !== false && !alien) {
       const sig = this.sig, stand = this.model;
       stand.root.visible = false;
       realFor(fullLook(G.look, G.cls), G.cls, G.equipment, lookOf, { priority: 8 }).then((rc) => {

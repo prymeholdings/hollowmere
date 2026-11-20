@@ -29,12 +29,19 @@ const KEYLABEL = { rmb: 'RMB', q: 'Q', w: 'W', e: 'E', r: 'R' };
 
 
 // rows of the hero look editor shared by character creation and the in-game Wardrobe
-function bodyRows(state) {
-  if (!REAL_OK || Settings.realistic === false) return '';
+const ALIEN_TINTS = [['#ffffff', 'Grey-green'], ['#9ec8ff', 'Teal'], ['#d0a8ff', 'Violet'], ['#ffb98a', 'Ember'], ['#c9c9c9', 'Ash']];
+function raceRows(state) {
+  const al = state.race === 'alien';
+  return `<h3><span>Species</span></h3><div class="chips"><button class="chip ${al ? '' : 'on'}" data-det="race" data-v="human">Human</button><button class="chip ${al ? 'on' : ''}" data-det="race" data-v="alien">Grey Alien</button></div>
+    ${al ? `<div class="muted" style="margin:6px 0">A thin, long-limbed visitor from somewhere far below the Wells. Plays exactly like the class you chose; only the body changes.</div><h3><span>Skin colour</span></h3><div class="chips">${ALIEN_TINTS.map(([v, l]) => `<button class="chip ${(state.alienTint || '#ffffff') === v ? 'on' : ''}" data-det="alienTint" data-v="${v}">${l}</button>`).join('')}</div>` : ''}`;
+}
+function bodyRows(state, creating) {
+  if (state.race === 'alien') return creating ? raceRows(state) : '';
+  if (!REAL_OK || Settings.realistic === false) return creating ? raceRows(state) : '';
   const chips = (key, opts) => `<div class="chips">${opts.map(([v, l]) => `<button class="chip ${state[key] === v ? 'on' : ''}" data-det="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
   const sw = (key, list, none) => `<div class="swatches">${list.map((c) => `<div class="sw ${c === (state[key] || '') ? 'on' : ''}" style="background:${c || 'repeating-linear-gradient(45deg,#2a2218,#2a2218 4px,#4a3a26 4px,#4a3a26 8px)'}" data-det="${key}" data-v="${c}" title="${c ? '' : none}"></div>`).join('')}</div>`;
   const male = state.sex !== 'f';
-  return `<h3><span>Body</span></h3>
+  return `${creating ? raceRows(state) : ''}<h3><span>Body</span></h3>
     <div class="chips"><button class="chip ${male ? 'on' : ''}" data-det="sex" data-v="m">Male</button><button class="chip ${!male ? 'on' : ''}" data-det="sex" data-v="f">Female</button></div>
     <div class="setrow"><span>Build</span><span><input type="range" data-rng="weight" min="0" max="100" value="${Math.round((state.weight ?? 0.5) * 100)}"> ${Math.round((state.weight ?? 0.5) * 100)}</span></div>
     <div class="setrow"><span>Muscle</span><span><input type="range" data-rng="muscle" min="0" max="100" value="${Math.round((state.muscle ?? 0.6) * 100)}"> ${Math.round((state.muscle ?? 0.6) * 100)}</span></div>
@@ -1130,7 +1137,7 @@ export class UI {
       <h3><span>Cape</span></h3>${sw('cape', CAPE_COLORS)}
       <div class="setrow"><span>Wear a cape</span><input type="checkbox" id="wd-cape" ${L.capeOn !== false ? 'checked' : ''}></div>
       <div class="setrow"><span>Show helm</span><input type="checkbox" id="wd-helm" ${L.showHelm !== false ? 'checked' : ''}></div>
-      ${detailRows(L)}`;
+      ${L.race === 'alien' ? '' : detailRows(L)}`;
     const apply = () => { sfx('ui'); G.player?.refreshVisuals(); this.renderWardrobe(); };
     bindDetails(body, L, apply);
     body.querySelectorAll('[data-wl]').forEach((d) => (d.onclick = () => { L[d.dataset.wl] = d.dataset.v; apply(); }));
@@ -1314,7 +1321,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.7.7 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG · v0.7.8 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };
@@ -1344,7 +1351,7 @@ export class UI {
           ${['str', 'dex', 'vit', 'mag'].map((k) => `<div class="statbar"><span>${statName[k]}</span><div><i style="width:${(cls.base[k] / 20) * 100}%"></i></div><b>${cls.base[k]}</b></div>`).join('')}
           <h3><span>Starting skills</span></h3><div class="muted">${Object.keys(cls.skills).map(skillName).join(', ')}. You can learn every skill tree later.</div>`;
       } else if (state.tab === 'body') {
-        inner = bodyRows(state);
+        inner = bodyRows(state, true);
       } else if (state.tab === 'look') {
         inner = `<h3><span>Weapons</span></h3><div class="chips">${cls.gear.map((g, i) => `<button class="chip ${state.gear === i ? 'on' : ''}" data-gear="${i}">${g.label}</button>`).join('')}</div>
           <h3><span>Armor tint</span></h3><div class="swatches">${ARMOR_TINTS.map((col) => `<div class="sw ${col === state.tint ? 'on' : ''}" style="background:${col}" data-tint="${col}"></div>`).join('')}</div>
@@ -1353,7 +1360,7 @@ export class UI {
           ${cls.alt ? `<div class="setrow"><span>Wear a hood</span><input type="checkbox" id="cr-hood" ${state.hooded ? 'checked' : ''}></div>` : ''}
           ${cls.headgear ? `<div class="setrow"><span>Wear ${state.cls === 'Mage' ? 'hat' : 'helmet'}</span><input type="checkbox" id="cr-helm" ${state.helm ? 'checked' : ''}></div>` : ''}
           <div class="setrow"><span>Height</span><span><input type="range" id="cr-height" min="88" max="112" value="${Math.round(state.height * 100)}"> ${Math.round(state.height * 100)}%</span></div>
-          ${detailRows(state)}`;
+          ${state.race === 'alien' ? '' : detailRows(state)}`;
       } else {
         const PS = PET_SPECIES[state.petSpecies] || PET_SPECIES.fox;
         inner = `<h3><span>Companion</span></h3><div class="chips">${Object.entries(PET_SPECIES).map(([k, v]) => `<button class="chip ${state.petSpecies === k ? 'on' : ''}" data-psp="${k}">${v.name}</button>`).join('')}</div>
@@ -1363,7 +1370,7 @@ export class UI {
       }
       c.innerHTML = `<div class="panel cls"><h2>Choose your class</h2>${Object.entries(CLASSES).map(([k, v]) => `<div class="clscard ${k === state.cls ? 'on' : ''}" data-cls="${k}"><div class="ic">${skillIcon(skillIconKey(Object.keys(v.skills)[0]))}</div><div><b>${v.title}</b><small>${v.desc}</small></div></div>`).join('')}</div>
         <div class="panel info"><h2>${cls.title}</h2>
-          <div class="crtabs">${tab('class', 'Class')}${REAL_OK && Settings.realistic !== false ? tab('body', 'Body') : ''}${tab('look', 'Appearance')}${tab('pet', 'Companion')}</div>
+          <div class="crtabs">${tab('class', 'Class')}${tab('body', 'Body')}${tab('look', 'Appearance')}${tab('pet', 'Companion')}</div>
           <div class="crbody">${inner}</div>
           <h3><span>Hero name</span></h3><input type="text" id="cr-name" maxlength="18" placeholder="Name your hero" value="${state.name}" style="width:100%">
           <div style="text-align:center;margin-top:14px"><button id="cr-rand">Randomize</button><button id="cr-back">Back</button><button id="cr-go" class="primary big">Begin</button></div>
