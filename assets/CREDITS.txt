@@ -23,8 +23,14 @@ ara3d. "The data used in this project was obtained from mocap.cs.cmu.edu. The da
 Music: "Battle Theme A" by cynicmusic (https://opengameart.org/content/battle-theme-a), CC0 1.0, used for guardian fights.
 All other music and sound effects are generated in code. Blood, gore, skills, perks, zodiac stars and barks are original work.
 
-Owner-supplied music (private installer only, not in the public web build):
+Owner-supplied music (shipped in the installer and the owner's web build at the owner's request):
  - Chopin, Nocturne No. 19 in E minor, Op. 72 No. 1 (town at night)
  - Emile Mosseri, "Jacob's Prayer" (Minari soundtrack) (town by day, title menu)
- - "Lobotomy" by unseenglobalmedia (Abyss and Void depths)
+ - "Lobotomy" by unseenglobalmedia (title menu fallback, every dungeon floor)
 The owner is responsible for holding the rights to distribute these recordings.
+
+---- Version 0.7 additions ----
+More Medieval Hexagon buildings and props (colour variants of taverns, markets, churches, smithies, towers, mills, barracks,
+wells, stages, crates, flags) and house furniture from KayKit Dungeon Remastered (beds, tables, chairs, shelves, kegs, plates,
+bottles, candles, trunks, banners, wooden floors, walls, doors and windows), all by Kay Lousberg under CC0 1.0.
+Building interiors, townsfolk routines and the expanded town layout are original work.

@@ -21379,7 +21379,7 @@ void main() {
       const normals = [];
       const binormals = [];
       const vec = new Vector3();
-      const mat4 = new Matrix4();
+      const mat5 = new Matrix4();
       for (let i = 0; i <= segments; i++) {
         const u2 = i / segments;
         tangents[i] = this.getTangentAt(u2, new Vector3());
@@ -21411,7 +21411,7 @@ void main() {
         if (vec.length() > Number.EPSILON) {
           vec.normalize();
           const theta = Math.acos(clamp(tangents[i - 1].dot(tangents[i]), -1, 1));
-          normals[i].applyMatrix4(mat4.makeRotationAxis(vec, theta));
+          normals[i].applyMatrix4(mat5.makeRotationAxis(vec, theta));
         }
         binormals[i].crossVectors(tangents[i], normals[i]);
       }
@@ -21422,7 +21422,7 @@ void main() {
           theta = -theta;
         }
         for (let i = 1; i <= segments; i++) {
-          normals[i].applyMatrix4(mat4.makeRotationAxis(tangents[i], theta * i));
+          normals[i].applyMatrix4(mat5.makeRotationAxis(tangents[i], theta * i));
           binormals[i].crossVectors(tangents[i], normals[i]);
         }
       }
@@ -32504,10 +32504,14 @@ void main() {
   var FILE_TRACKS = {
     boss: "assets/music/battle_theme_a.mp3",
     boss_deep: "assets/music/battle_theme_a.mp3",
-    // supplied by the owner (private/ is left out of the public web build; generated music plays if absent)
+    final: "assets/music/battle_theme_a.mp3",
+    // supplied by the owner (generated music plays if a file is missing)
+    menu: "assets/music/private/jacobs_prayer.mp3",
     town: "assets/music/private/jacobs_prayer.mp3",
     town_night: "assets/music/private/chopin_nocturne_72_1.mp3",
-    menu: "assets/music/private/jacobs_prayer.mp3",
+    dungeon: "assets/music/private/lobotomy.mp3",
+    crypt: "assets/music/private/lobotomy.mp3",
+    ember: "assets/music/private/lobotomy.mp3",
     abyss: "assets/music/private/lobotomy.mp3",
     void: "assets/music/private/lobotomy.mp3"
   };
@@ -32829,7 +32833,8 @@ void main() {
   // src/items.js
   var RARITY_NAMES = ["Common", "Magic", "Rare", "Legendary"];
   var RARITY_COLORS = [15461355, 7316479, 16769357, 16747551];
-  var SLOT_NAMES = { weapon: "Weapon", offhand: "Off-hand", helm: "Helm", armor: "Armor", ring: "Ring", amulet: "Amulet", fish: "Fish", gem: "Gem" };
+  var SLOT_NAMES = { weapon: "Weapon", offhand: "Off-hand", helm: "Helm", armor: "Armor", shoulders: "Shoulders", gloves: "Gloves", shirt: "Undershirt", belt: "Belt", pants: "Pants", boots: "Boots", ring: "Ring", amulet: "Amulet", fish: "Fish", gem: "Gem" };
+  var EXTRA_SLOTS = ["shoulders", "gloves", "shirt", "belt", "pants", "boots"];
   var SOCKET_SLOTS = ["weapon", "offhand", "armor", "helm"];
   var MATS = [
     { key: "rusted", name: "Rusted", lvl: 1, tint: 12098180 },
@@ -32884,6 +32889,25 @@ void main() {
     hood: { slot: "helm", name: "Hood", vis: "Rogue_Head_Hooded", armor: 2, icon: "hood", bonus: { dex: 2 } },
     skullhelm: { slot: "helm", name: "Skull Helm", vis: "Skeleton_Warrior_Helmet", armor: 4, icon: "helm", bonus: { vit: 1 } },
     crown: { slot: "helm", name: "Lich Crown", vis: "Skeleton_Mage_Hat", armor: 2, icon: "hat", bonus: { mana: 6 } },
+    // extra worn pieces (each is drawn on the hero; vis names the style)
+    undershirt: { slot: "shirt", name: "Undershirt", vis: "undershirt", armor: 1, icon: "shirt" },
+    jerkin: { slot: "shirt", name: "Jerkin", vis: "jerkin", armor: 2, icon: "shirt", bonus: { dex: 1 } },
+    longshirt: { slot: "shirt", name: "Linen Shirt", vis: "longshirt", armor: 1, icon: "shirt", bonus: { mana: 4 } },
+    leggings: { slot: "pants", name: "Leggings", vis: "leggings", armor: 2, icon: "pants" },
+    greaves: { slot: "pants", name: "Greaves", vis: "greaves", armor: 4, icon: "pants", bonus: { vit: 1 } },
+    kilt: { slot: "pants", name: "Battle Kilt", vis: "kilt", armor: 2, icon: "pants", bonus: { life: 5 } },
+    shoes: { slot: "boots", name: "Shoes", vis: "shoes", armor: 1, icon: "boots", bonus: { speed: 2 } },
+    boots: { slot: "boots", name: "Boots", vis: "boots", armor: 2, icon: "boots" },
+    sabatons: { slot: "boots", name: "Sabatons", vis: "sabatons", armor: 4, icon: "boots", bonus: { str: 1 } },
+    gloves: { slot: "gloves", name: "Gloves", vis: "gloves", armor: 1, icon: "gloves" },
+    gauntlets: { slot: "gloves", name: "Gauntlets", vis: "gauntlets", armor: 3, icon: "gloves", bonus: { str: 1 } },
+    wraps: { slot: "gloves", name: "Hand Wraps", vis: "wraps", armor: 1, icon: "gloves", bonus: { aspd: 3 } },
+    belt: { slot: "belt", name: "Belt", vis: "belt", armor: 1, icon: "belt" },
+    girdle: { slot: "belt", name: "Girdle", vis: "girdle", armor: 3, icon: "belt", bonus: { life: 6 } },
+    sash: { slot: "belt", name: "Sash", vis: "sash", armor: 0, icon: "belt", bonus: { mana: 6 } },
+    mantle: { slot: "shoulders", name: "Mantle", vis: "mantle", armor: 1, icon: "shoulders", bonus: { mag: 2 } },
+    spaulders: { slot: "shoulders", name: "Spaulders", vis: "spaulders", armor: 3, icon: "shoulders", bonus: { dex: 1 } },
+    pauldrons: { slot: "shoulders", name: "Pauldrons", vis: "pauldrons", armor: 5, icon: "shoulders" },
     // jewellery
     band: { slot: "ring", name: "Band", vis: "ring", icon: "ring" },
     signet: { slot: "ring", name: "Signet", vis: "ring", icon: "ring" },
@@ -32942,7 +32966,7 @@ void main() {
         it.mat = b2.mat;
       } else if (LEGACY[it.base]) {
         [it.type, it.mat] = LEGACY[it.base];
-      } else it.type = { weapon: "sword", offhand: "buckler", armor: "leathers", helm: "helm", ring: "band", amulet: "pendant" }[it.slot] || "sword";
+      } else it.type = { weapon: "sword", offhand: "buckler", armor: "leathers", helm: "helm", ring: "band", amulet: "pendant", shirt: "undershirt", pants: "leggings", boots: "boots", gloves: "gloves", belt: "belt", shoulders: "mantle" }[it.slot] || "sword";
     }
     if (!it.gems) it.gems = [];
     if (it.sockets === void 0) it.sockets = 0;
@@ -34004,7 +34028,13 @@ void main() {
         helm: null,
         armor: { base: "Rusted Leathers", name: "Rusted Leathers", type: "leathers", mat: "rusted", slot: "armor", rarity: 0, ilvl: 1, req: 1, armor: 4, affixes: { dex: 1 }, sockets: 0, gems: [], value: 6 },
         ring: null,
-        amulet: null
+        amulet: null,
+        shoulders: null,
+        gloves: null,
+        shirt: null,
+        belt: null,
+        pants: null,
+        boots: null
       },
       backpack: [],
       deepest: 0,
@@ -34464,6 +34494,7 @@ void main() {
     G.base = { str: 10, dex: 10, vit: 10, mag: 10, ...d2.base };
     G.skills = { ...SKILL_ZERO, ...d2.skills };
     G.stars = { ...d2.stars || {} };
+    for (const k2 of ["shoulders", "gloves", "shirt", "belt", "pants", "boots"]) if (!(k2 in G.equipment)) G.equipment[k2] = null;
     for (const k2 in G.equipment) if (G.equipment[k2]) upgradeItem(G.equipment[k2]);
     G.backpack.forEach(upgradeItem);
     (G.shopStock || []).forEach(upgradeItem);
@@ -34534,6 +34565,20 @@ void main() {
       Object.assign(Settings, JSON.parse(saved || "{}"));
     } catch (e) {
     }
+    if (!Settings.gpuTuned) {
+      Settings.gpuTuned = 1;
+      const gpu = gpuName();
+      Settings.gpu = gpu;
+      if (/Radeon\(TM\) Graphics|Radeon Graphics|Vega|Intel|UHD|Iris|Mali|Adreno|PowerVR|SwiftShader|llvmpipe/i.test(gpu) && !/RX|Pro W|Arc/i.test(gpu)) {
+        if (Settings.quality === "high" || Settings.quality === "ultra") Settings.quality = "medium";
+        Settings.renderScale = Math.min(Settings.renderScale || 1, 0.9);
+        Settings.integratedGpu = true;
+      }
+      try {
+        localStorage.setItem(KEY, JSON.stringify(Settings));
+      } catch (e) {
+      }
+    }
     syncAudio();
   }
   function saveSettings() {
@@ -34548,6 +34593,19 @@ void main() {
     Audio2.vol.music = Settings.music;
     Audio2.vol.sfx = Settings.sfx;
     applyVolumes();
+  }
+  function gpuName() {
+    try {
+      const c2 = document.createElement("canvas");
+      const gl = c2.getContext("webgl2") || c2.getContext("webgl");
+      if (!gl) return "";
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      const n = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      return String(n || "");
+    } catch (e) {
+      return "";
+    }
   }
 
   // src/barks.js
@@ -36908,11 +36966,11 @@ void main() {
           const jointNode = jointNodes[i];
           if (jointNode) {
             bones.push(jointNode);
-            const mat4 = new Matrix4();
+            const mat5 = new Matrix4();
             if (inverseBindMatrices !== null) {
-              mat4.fromArray(inverseBindMatrices.array, i * 16);
+              mat5.fromArray(inverseBindMatrices.array, i * 16);
             }
-            boneInverses.push(mat4);
+            boneInverses.push(mat5);
           } else {
             console.warn('THREE.GLTFLoader: Joint "%s" could not be found.', skinDef.joints[i]);
           }
@@ -39443,8 +39501,45 @@ void main() {
     "building_watermill_green",
     "building_church_yellow",
     "building_market_blue",
-    "building_tower_catapult_red"
+    "building_tower_catapult_red",
+    "bucket_empty",
+    "building_archeryrange_red",
+    "building_barracks_blue",
+    "building_blacksmith_blue",
+    "building_blacksmith_yellow",
+    "building_church_green",
+    "building_church_red",
+    "building_lumbermill_green",
+    "building_lumbermill_red",
+    "building_market_green",
+    "building_mine_red",
+    "building_stage_B",
+    "building_stage_C",
+    "building_tavern_green",
+    "building_tavern_yellow",
+    "building_tower_A_green",
+    "building_tower_A_red",
+    "building_tower_B_blue",
+    "building_tower_B_green",
+    "building_tower_B_yellow",
+    "building_watermill_red",
+    "building_well_green",
+    "building_well_red",
+    "building_windmill_green",
+    "crate_A_small",
+    "crate_B_small",
+    "crate_long_B",
+    "crate_long_C",
+    "fence_stone_straight_gate",
+    "flag_green",
+    "hill_single_B",
+    "rock_single_D",
+    "tree_single_B_cut",
+    "trees_B_small",
+    "waterlily_B",
+    "waterplant_B"
   ];
+  var INTERIOR = ["banner_patternB_red", "banner_patternC_green", "banner_shield_blue", "banner_triple_yellow", "barrel_large_decorated", "barrel_small_stack", "bed_decorated", "bed_floor", "bed_frame", "bottle_A_green", "bottle_B_brown", "bottle_C_green", "box_small_decorated", "candle_lit", "candle_thin_lit", "chair", "coin_stack_large", "floor_wood_large", "floor_wood_large_dark", "keg_decorated", "keyring_hanging", "plate_food_A", "plate_food_B", "plate_stack", "shelf_large", "shelf_small", "shelves", "stairs_wood", "stool", "sword_shield", "sword_shield_gold", "table_long", "table_long_decorated_A", "table_long_tablecloth_decorated_A", "table_medium", "table_medium_decorated_A", "table_medium_tablecloth", "table_small", "table_small_decorated_A", "table_small_decorated_B", "trunk_medium_A", "trunk_small_B", "wall_arched", "wall_archedwindow_open", "wall_corner", "wall_doorway", "wall_shelves", "wall_window_closed", "wall_window_open"];
   var Assets = { models: {}, anims: {}, ready: false };
   async function fetchModel(loader, url) {
     if (!globalThis.HM_PACKED) return loader.loadAsync(url);
@@ -39462,7 +39557,8 @@ void main() {
       ...CHARS.map((n) => ["char", n, `${base}chars/${n}.glb`]),
       ...PROPS_CHAR.map((n) => ["prop", n, `${base}chars/${n}.glb`]),
       ...DUNGEON.map((n) => ["prop", n, `${base}dungeon/${n}.glb`]),
-      ...TOWN.map((n) => ["prop", n, `${base}town/${n}.glb`])
+      ...TOWN.map((n) => ["prop", n, `${base}town/${n}.glb`]),
+      ...INTERIOR.map((n) => ["prop", n, `${base}interior/${n}.glb`])
     ];
     let done = 0;
     await Promise.all(jobs.map(async ([kind, name, url]) => {
@@ -39527,33 +39623,33 @@ void main() {
   function setItemLook(fn) {
     itemLook = fn;
   }
-  function tintMaterial(mat4, l2, skinSafe = false) {
+  function tintMaterial(mat5, l2, skinSafe = false) {
     if (!l2) return;
-    if (skinSafe) skinSafeTint(mat4, l2.tint);
-    else mat4.color.multiply(new Color(l2.tint));
+    if (skinSafe) skinSafeTint(mat5, l2.tint);
+    else mat5.color.multiply(new Color(l2.tint));
     const glow = new Color(l2.glow || 0);
     for (const g2 of l2.gems || []) glow.add(new Color(g2).multiplyScalar(0.07));
     if (l2.rarity >= 3) glow.add(new Color(16747551).multiplyScalar(0.1));
     if (glow.r + glow.g + glow.b > 1e-3) {
-      mat4.emissive = glow;
-      mat4.emissiveIntensity = 1;
+      mat5.emissive = glow;
+      mat5.emissiveIntensity = 1;
     }
     if (l2.tint !== 16777215) {
-      mat4.metalness = Math.max(mat4.metalness || 0, 0.25);
-      mat4.roughness = Math.min(mat4.roughness ?? 1, 0.6);
+      mat5.metalness = Math.max(mat5.metalness || 0, 0.25);
+      mat5.roughness = Math.min(mat5.roughness ?? 1, 0.6);
     }
   }
-  function skinSafeTint(mat4, color, skin = null) {
+  function skinSafeTint(mat5, color, skin = null) {
     const c2 = new Color(color);
-    if (mat4.userData.tintU) {
-      mat4.userData.tintU.value.copy(c2);
-      if (skin) mat4.userData.skinU.value.set(skin);
+    if (mat5.userData.tintU) {
+      mat5.userData.tintU.value.copy(c2);
+      if (skin) mat5.userData.skinU.value.set(skin);
       return;
     }
     const u2 = { value: c2 }, su = { value: new Color(skin || 16777215) };
-    mat4.userData.tintU = u2;
-    mat4.userData.skinU = su;
-    mat4.onBeforeCompile = (sh) => {
+    mat5.userData.tintU = u2;
+    mat5.userData.skinU = su;
+    mat5.onBeforeCompile = (sh) => {
       sh.uniforms.uTint = u2;
       sh.uniforms.uSkin = su;
       sh.fragmentShader = "uniform vec3 uTint;\nuniform vec3 uSkin;\n" + sh.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
@@ -39561,8 +39657,8 @@ void main() {
       float sk = step(0.45, dc.r) * step(0.2, dc.g) * step(0.11, dc.b) * step(dc.g, dc.r) * step(dc.b, dc.g) * step(0.36, dc.g / max(dc.r, 0.001)) * step(dc.b / max(dc.r, 0.001), 0.75);
       diffuseColor.rgb *= mix(uTint, uSkin, sk);`);
     };
-    mat4.customProgramCacheKey = () => "skintint2";
-    mat4.needsUpdate = true;
+    mat5.customProgramCacheKey = () => "skintint2";
+    mat5.needsUpdate = true;
   }
   var jewelGeo = {};
   function jewelMesh(l2, kind) {
@@ -39606,8 +39702,8 @@ void main() {
           o2.material = o2.material.clone();
           o2.userData.ownMat = true;
         }
-        const mat4 = o2.material;
-        if (mat4.emissive) m3._fm.push({ m: mat4, e: mat4.emissive.clone(), i: mat4.emissiveIntensity });
+        const mat5 = o2.material;
+        if (mat5.emissive) m3._fm.push({ m: mat5, e: mat5.emissive.clone(), i: mat5.emissiveIntensity });
       });
       m3._fbase = m3.root.scale.clone();
     }
@@ -39711,7 +39807,7 @@ void main() {
       const own = this.name === "Rogue_Hooded" ? "Rogue" : this.name;
       const head = this.parts[`${own}_Head`] || this.parts.Rogue_Head_Hooded;
       if (head) head.visible = true;
-      if (hl && look.helm !== false) {
+      if (hl && look.showHelm !== false) {
         if (hl.vis === "Rogue_Head_Hooded") {
           if (head) head.visible = false;
           this.wearSkinned("Rogue_Hooded", "Rogue_Head_Hooded", hl);
@@ -39880,6 +39976,442 @@ void main() {
     }
   };
 
+  // src/gearvis.js
+  var GEAR_SLOTS = ["shirt", "pants", "boots", "gloves", "belt", "shoulders"];
+  var mats = /* @__PURE__ */ new Map();
+  var mat3 = (color, metal = 0.1, rough = 0.8, em = 0, emi = 0, unique = false) => {
+    const k2 = [color, metal, rough, em, emi].join("|");
+    if (unique) return new MeshStandardMaterial({ color, metalness: metal, roughness: rough, emissive: em, emissiveIntensity: emi });
+    if (!mats.has(k2)) mats.set(k2, new MeshStandardMaterial({ color, metalness: metal, roughness: rough, emissive: em, emissiveIntensity: emi }));
+    return mats.get(k2);
+  };
+  var tinted = (base, tint) => new Color(base).multiply(new Color(tint));
+  var RARITY_ACCENT = [9071152, 6986464, 16767053, 16751146, 14696512];
+  var STYLE = {
+    // shirts
+    undershirt: { cloth: 15260864, sleeves: 0.45 },
+    jerkin: { cloth: 9067060, sleeves: 0, leather: true, lace: true },
+    longshirt: { cloth: 10127984, sleeves: 1 },
+    // pants
+    leggings: { cloth: 6965808, leather: true },
+    greaves: { cloth: 11186360, metal: true },
+    kilt: { cloth: 8006186, skirt: true },
+    // boots
+    shoes: { cloth: 5914664, leather: true, h: 0.12 },
+    boots: { cloth: 4862496, leather: true, h: 0.5 },
+    sabatons: { cloth: 11186360, metal: true, h: 0.55 },
+    // gloves
+    gloves: { cloth: 6965808, leather: true, cuff: 0.25 },
+    gauntlets: { cloth: 11186360, metal: true, cuff: 0.55 },
+    wraps: { cloth: 14209208, wrap: true, cuff: 0.5 },
+    // belts
+    belt: { cloth: 4862496, leather: true, pouch: true },
+    girdle: { cloth: 9080470, metal: true, plates: true },
+    sash: { cloth: 10103354, sash: true },
+    // shoulders
+    mantle: { cloth: 5913226, mantle: true },
+    spaulders: { cloth: 8016434, leather: true, spikes: true },
+    pauldrons: { cloth: 11186360, metal: true, big: true }
+  };
+  function colorsFor(l2) {
+    const s2 = STYLE[l2.vis] || STYLE.belt;
+    const col2 = tinted(s2.cloth, l2.tint ?? 16777215);
+    const glow = new Color(l2.glow || 0);
+    const accentC = RARITY_ACCENT[Math.min(l2.rarity || 0, 4)];
+    const body = s2.metal ? mat3(col2.getHex(), 0.7, 0.36, glow.getHex(), glow.getHex() ? 0.8 : 0) : s2.leather ? mat3(col2.getHex(), 0.05, 0.75, glow.getHex(), glow.getHex() ? 0.5 : 0) : mat3(col2.getHex(), 0, 0.92, glow.getHex(), glow.getHex() ? 0.5 : 0);
+    const dark = mat3(col2.clone().multiplyScalar(0.55).getHex(), s2.metal ? 0.5 : 0.05, 0.7);
+    const accent = mat3(accentC, 0.9, 0.3, (l2.rarity || 0) >= 2 ? accentC : 0, (l2.rarity || 0) >= 2 ? 0.5 : 0, true);
+    return { s: s2, col: col2, body, dark, accent, accentC, glowing: (l2.rarity || 0) >= 2 || !!l2.glow };
+  }
+  function wearGear(rc, slot, l2) {
+    const sc = rc.scene;
+    sc.updateMatrixWorld(true);
+    const wp = (n) => rc.bones[n] ? rc.bones[n].getWorldPosition(new Vector3()) : new Vector3();
+    const rel = (n) => sc.worldToLocal(wp(n));
+    const hips = rel("Hips"), neck = rel("Neck"), lsh = rel("LeftArm"), rsh = rel("RightArm");
+    const sw = Math.abs(lsh.x - rsh.x), torsoH = neck.y - hips.y;
+    const toLocal = (bone, v2) => rc.bones[bone].worldToLocal(sc.localToWorld(v2.clone()));
+    const C3 = colorsFor(l2);
+    const { s: s2 } = C3;
+    const attach = (obj, bone) => {
+      rc.bones[bone].add(obj);
+      rc.worn.push(obj);
+      obj.castShadow = true;
+      return obj;
+    };
+    const place = (obj, bone, v2) => {
+      obj.position.copy(toLocal(bone, v2));
+      return obj;
+    };
+    const seg = (boneName, childName, r0, r1, from, to, material, open = false) => {
+      const a = rel(boneName), b2 = rel(childName);
+      const v2 = b2.clone().sub(a);
+      const len = v2.length();
+      const mesh = new Mesh(new CylinderGeometry(r1, r0, len * (to - from), 16, 1, open), material);
+      const mid = a.clone().addScaledVector(v2, (from + to) / 2);
+      const q = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), v2.clone().normalize());
+      const bone = rc.bones[boneName];
+      const wq = bone.getWorldQuaternion(new Quaternion()), scq = sc.getWorldQuaternion(new Quaternion());
+      mesh.position.copy(toLocal(boneName, mid));
+      mesh.quaternion.copy(wq.invert().multiply(scq).multiply(q));
+      mesh.material.side = DoubleSide;
+      attach(mesh, boneName);
+      return mesh;
+    };
+    const pulse = (material, base, amp = 0.35, speed = 2.2) => rc.anims.push((t) => {
+      material.emissiveIntensity = base + amp * (0.5 + 0.5 * Math.sin(t * speed));
+    });
+    const speedOf = () => rc.speed || 0;
+    const sides = ["Left", "Right"];
+    switch (slot) {
+      case "shirt": {
+        const cx = (lsh.x + rsh.x) / 2;
+        const y0 = hips.y + torsoH * 0.04, y1 = neck.y - torsoH * 0.06;
+        const body = new Mesh(new CylinderGeometry(sw * 0.205, sw * 0.185, y1 - y0, 24, 1, true), C3.body);
+        body.scale.z = 0.78;
+        body.material.side = DoubleSide;
+        body.position.copy(toLocal("Spine1", new Vector3(cx, (y0 + y1) / 2, 0)));
+        attach(body, "Spine1");
+        const collar = new Mesh(new TorusGeometry(sw * 0.1, sw * 0.022, 8, 20), s2.lace ? C3.dark : C3.body);
+        collar.rotation.x = Math.PI / 2;
+        collar.position.copy(toLocal("Spine2", new Vector3(cx, y1, 0.012)));
+        attach(collar, "Spine2");
+        if (s2.lace) for (let i = 0; i < 4; i++) {
+          const k2 = new Mesh(new BoxGeometry(sw * 0.1, 6e-3, 4e-3), C3.accent);
+          k2.position.copy(toLocal("Spine1", new Vector3(cx, y1 - 0.05 - i * 0.05, sw * 0.16)));
+          attach(k2, "Spine1");
+        }
+        if (s2.sleeves) for (const side of sides) {
+          const up = seg(`${side}Arm`, `${side}ForeArm`, sw * 0.082, sw * 0.07, 0.02, s2.sleeves >= 1 ? 1 : 0.62, C3.body, true);
+          if (s2.sleeves >= 1) seg(`${side}ForeArm`, `${side}Hand`, sw * 0.068, sw * 0.056, 0, 0.92, C3.body, true);
+        }
+        rc.anims.push((t) => {
+          const b2 = 1 + Math.sin(t * 1.9) * 0.012;
+          body.scale.set(b2, 1, 0.78 * b2);
+        });
+        break;
+      }
+      case "pants": {
+        for (const side of sides) {
+          seg(`${side}UpLeg`, `${side}Leg`, sw * 0.14, sw * 0.108, 0.04, 1, C3.body);
+          seg(`${side}Leg`, `${side}Foot`, sw * 0.106, sw * (s2.metal ? 0.082 : 0.074), 0, s2.metal ? 0.88 : 0.78, C3.body);
+          if (s2.metal) {
+            const k2 = new Mesh(new SphereGeometry(sw * 0.075, 14, 10), C3.accent);
+            const p2 = rel(`${side}Leg`);
+            p2.z += sw * 0.06;
+            place(k2, `${side}Leg`, p2);
+            attach(k2, `${side}Leg`);
+          }
+        }
+        const band = new Mesh(new CylinderGeometry(sw * 0.235, sw * 0.225, torsoH * 0.12, 24, 1, true), C3.dark);
+        band.scale.z = 0.8;
+        band.material.side = DoubleSide;
+        place(band, "Hips", new Vector3((lsh.x + rsh.x) / 2, hips.y + torsoH * 0.03, 0));
+        attach(band, "Hips");
+        if (s2.skirt) {
+          const skirt = new Mesh(new CylinderGeometry(sw * 0.24, sw * 0.4, torsoH * 0.62, 28, 1, true), C3.body);
+          skirt.material.side = DoubleSide;
+          skirt.scale.z = 0.9;
+          place(skirt, "Hips", new Vector3((lsh.x + rsh.x) / 2, hips.y - torsoH * 0.26, 0));
+          attach(skirt, "Hips");
+          const hem = new Mesh(new TorusGeometry(sw * 0.4, 0.012, 6, 32), C3.accent);
+          hem.rotation.x = Math.PI / 2;
+          hem.scale.y = 0.9;
+          place(hem, "Hips", new Vector3((lsh.x + rsh.x) / 2, hips.y - torsoH * 0.57, 0));
+          attach(hem, "Hips");
+          rc.anims.push((t) => {
+            const k2 = 1 + Math.min(speedOf(), 5) * 0.035 + Math.sin(t * 7) * 0.012 * Math.min(speedOf(), 3);
+            skirt.scale.x = k2;
+            hem.scale.x = k2;
+          });
+        } else {
+          rc.anims.push((t) => {
+            for (const side of sides) {
+              const g2 = rc.bones[`${side}UpLeg`];
+              if (g2) g2.children.forEach((c2) => {
+                if (c2.userData.flap) c2.rotation.x = Math.sin(t * 6) * 0.03;
+              });
+            }
+          });
+        }
+        break;
+      }
+      case "boots": {
+        const tall = s2.h || 0.3;
+        const feet = [];
+        for (const side of sides) {
+          const ft = rel(`${side}Foot`), toe = rel(`${side}ToeBase`), te = rel(`${side}Toe_End`);
+          const shaft = seg(`${side}Leg`, `${side}Foot`, sw * (s2.metal ? 0.09 : 0.1), sw * 0.072, 1 - tall, 1.02, C3.body);
+          const cuff = new Mesh(new TorusGeometry(sw * 0.095, 0.011, 6, 20), C3.dark);
+          const a = rel(`${side}Leg`), b2 = ft;
+          const top = a.clone().lerp(b2, 1 - tall);
+          cuff.rotation.x = Math.PI / 2;
+          place(cuff, `${side}Leg`, top);
+          attach(cuff, `${side}Leg`);
+          const len = Math.max(0.12, Math.abs(te.z - ft.z) + 0.07), foot = new Mesh(new BoxGeometry(sw * 0.17, 0.085, len), C3.body);
+          foot.geometry.translate(0, 0, len / 2 - 0.045);
+          place(foot, `${side}Foot`, new Vector3(ft.x, ft.y - 0.035, ft.z - 2e-3));
+          attach(foot, `${side}Foot`);
+          const toeCap = new Mesh(new SphereGeometry(sw * 0.088, 12, 8), s2.metal ? C3.accent : C3.dark);
+          toeCap.scale.set(1, 0.55, 1);
+          place(toeCap, `${side}Foot`, new Vector3(te.x, te.y + 0.01, te.z + 0.025));
+          attach(toeCap, `${side}Foot`);
+          const sole = new Mesh(new BoxGeometry(sw * 0.175, 0.016, len + 0.01), C3.dark);
+          sole.geometry.translate(0, 0, len / 2 - 0.045);
+          place(sole, `${side}Foot`, new Vector3(ft.x, ft.y - 0.078, ft.z - 2e-3));
+          attach(sole, `${side}Foot`);
+          feet.push({ bone: rc.bones[`${side}Foot`], up: false });
+        }
+        const v2 = new Vector3();
+        rc.anims.push((t, dt) => {
+          if (speedOf() < 1.2) return;
+          for (const f2 of feet) {
+            f2.bone.getWorldPosition(v2);
+            const gy = rc.root.getWorldPosition(new Vector3()).y;
+            const h2 = v2.y - gy;
+            if (h2 > 0.14) f2.up = true;
+            else if (f2.up && h2 < 0.1) {
+              f2.up = false;
+              globalThis.game?.fx?.emit?.(new Vector3(v2.x, gy + 0.05, v2.z), { count: 2, color: 12101768, speed: 0.4, life: 0.5, size: 0.18, rise: 0.25, gravity: 0 });
+            }
+          }
+        });
+        break;
+      }
+      case "gloves": {
+        for (const side of sides) {
+          const h2 = rel(`${side}Hand`), fa = rel(`${side}ForeArm`);
+          const cuff = seg(`${side}ForeArm`, `${side}Hand`, sw * 0.074, sw * 0.062, 1 - (s2.cuff || 0.3), 1, C3.body);
+          const palm = new Mesh(new BoxGeometry(sw * 0.1, 0.034, 0.1), C3.body);
+          palm.geometry.translate(0, 0, 0);
+          const dir = new Vector3(0, -1, 0);
+          place(palm, `${side}Hand`, new Vector3(h2.x, h2.y - 0.075, h2.z));
+          attach(palm, `${side}Hand`);
+          palm.rotation.x = 0;
+          palm.scale.set(1, 3, 1);
+          palm.geometry = new BoxGeometry(sw * 0.1, 0.1, 0.045);
+          for (let i = 0; i < 4; i++) {
+            const fx = (i - 1.5) * sw * 0.026;
+            const f2 = new Mesh(new CapsuleGeometry(sw * 0.011, 0.045, 3, 8), s2.metal ? C3.dark : C3.body);
+            place(f2, `${side}Hand`, new Vector3(h2.x + fx * (side === "Left" ? -1 : 1), h2.y - 0.155, h2.z));
+            attach(f2, `${side}Hand`);
+          }
+          if (s2.metal) {
+            const k2 = new Mesh(new BoxGeometry(sw * 0.105, 0.016, 0.05), C3.accent);
+            place(k2, `${side}Hand`, new Vector3(h2.x, h2.y - 0.1, h2.z + 0.025));
+            attach(k2, `${side}Hand`);
+          }
+          if (s2.wrap) for (let i = 0; i < 5; i++) {
+            const w2 = new Mesh(new TorusGeometry(sw * 0.068, 6e-3, 6, 14), C3.dark);
+            w2.rotation.x = Math.PI / 2;
+            const p2 = fa.clone().lerp(h2, 0.5 + i * 0.1);
+            place(w2, `${side}ForeArm`, p2);
+            attach(w2, `${side}ForeArm`);
+          }
+          if (C3.glowing) {
+            const rune = new Mesh(new TorusGeometry(sw * 0.07, 6e-3, 6, 18), mat3(C3.accentC, 0.2, 0.3, C3.accentC, 1, true));
+            rune.rotation.x = Math.PI / 2;
+            place(rune, `${side}ForeArm`, fa.clone().lerp(h2, 0.82));
+            attach(rune, `${side}ForeArm`);
+            pulse(rune.material, 0.6, 1, 2.8);
+          }
+        }
+        break;
+      }
+      case "belt": {
+        const cx = (lsh.x + rsh.x) / 2, y2 = hips.y + torsoH * 0.07;
+        const h2 = s2.sash ? torsoH * 0.13 : s2.plates ? torsoH * 0.1 : torsoH * 0.055;
+        const ring2 = new Mesh(new CylinderGeometry(sw * 0.232, sw * 0.226, h2, 28, 1, true), C3.body);
+        ring2.scale.z = 0.8;
+        ring2.material.side = DoubleSide;
+        place(ring2, "Hips", new Vector3(cx, y2, 0));
+        attach(ring2, "Hips");
+        const buckle = new Mesh(new BoxGeometry(sw * (s2.plates ? 0.16 : 0.09), h2 * 1.3, 0.016), C3.accent);
+        place(buckle, "Hips", new Vector3(cx, y2, sw * 0.232 * 0.8 + 4e-3));
+        attach(buckle, "Hips");
+        if (s2.plates) for (const dx of [-0.17, -0.1, 0.1, 0.17]) {
+          const pl = new Mesh(new BoxGeometry(sw * 0.06, h2 * 1.1, 0.012), C3.dark);
+          place(pl, "Hips", new Vector3(cx + sw * dx * 1.2, y2, sw * 0.232 * 0.8 * Math.cos(dx * 3) + 3e-3));
+          attach(pl, "Hips");
+        }
+        if (s2.pouch) {
+          const pivot = new Group();
+          const pouch = new Mesh(new BoxGeometry(0.07, 0.085, 0.04), C3.dark);
+          pouch.position.y = -0.045;
+          pivot.add(pouch);
+          const flap = new Mesh(new BoxGeometry(0.072, 0.03, 0.045), C3.body);
+          flap.position.y = -0.01;
+          pivot.add(flap);
+          pivot.position.copy(toLocal("Hips", new Vector3(cx + sw * 0.19, y2 - 0.01, sw * 0.12)));
+          pivot.rotation.y = -0.5;
+          attach(pivot, "Hips");
+          rc.anims.push((t) => {
+            const sp = Math.min(speedOf(), 6);
+            pivot.rotation.z = Math.sin(t * (5 + sp)) * (0.05 + sp * 0.06);
+            pivot.rotation.x = Math.cos(t * (4 + sp)) * sp * 0.03;
+          });
+        }
+        if (s2.sash) {
+          const tails = [];
+          for (const dx of [0.12, 0.2]) {
+            const pivot = new Group();
+            const tail = new Mesh(new BoxGeometry(sw * 0.07, torsoH * 0.55, 8e-3), C3.body);
+            tail.position.y = -torsoH * 0.27;
+            pivot.add(tail);
+            pivot.position.copy(toLocal("Hips", new Vector3(cx + sw * dx, y2 - 0.01, sw * 0.17)));
+            attach(pivot, "Hips");
+            tails.push(pivot);
+          }
+          rc.anims.push((t) => {
+            const sp = Math.min(speedOf(), 6);
+            tails.forEach((p2, i) => {
+              p2.rotation.x = Math.sin(t * (4 + sp) + i) * (0.06 + sp * 0.05) + sp * 0.07;
+              p2.rotation.z = Math.sin(t * 3 + i * 2) * 0.05;
+            });
+          });
+        }
+        if (C3.glowing && !s2.sash) pulse(C3.accent, 0.3, 0.6, 2.4);
+        break;
+      }
+      case "shoulders": {
+        const R0 = sw * (s2.big ? 0.3 : s2.mantle ? 0.27 : 0.25);
+        const gems = [];
+        for (const side of sides) {
+          const sh = side === "Left" ? lsh : rsh, sgn = side === "Left" ? 1 : -1;
+          const dome = new Mesh(new SphereGeometry(1, 22, 14, 0, Math.PI * 2, 0, Math.PI * (s2.mantle ? 0.7 : 0.58)), C3.body);
+          dome.material.side = DoubleSide;
+          dome.scale.set(R0, R0 * (s2.big ? 1 : 0.82), R0 * 1.12);
+          place(dome, `${side}Arm`, new Vector3(sh.x + sgn * 0.01, sh.y - 0.012, sh.z));
+          dome.rotation.z = -sgn * 0.3;
+          attach(dome, `${side}Arm`);
+          const rim = new Mesh(new TorusGeometry(1, 0.05, 8, 26), C3.dark);
+          rim.rotation.x = Math.PI / 2;
+          rim.scale.set(R0 * 0.99, R0 * 1.1, 1);
+          rim.position.copy(dome.position).add(new Vector3(0, -0.01, 0));
+          rim.rotation.z = dome.rotation.z;
+          attach(rim, `${side}Arm`);
+          rim.position.y -= R0 * (s2.mantle ? 0.35 : 0.2);
+          if (s2.spikes) for (let i = 0; i < 3; i++) {
+            const sp = new Mesh(new ConeGeometry(0.018, 0.075, 8), C3.accent);
+            sp.position.copy(dome.position).add(new Vector3(sgn * (0 - i * 0.012), R0 * 0.62 + 0.02, (i - 1) * 0.045));
+            sp.rotation.z = -sgn * (0.35 + i * 0.12);
+            attach(sp, `${side}Arm`);
+          }
+          if (s2.big) for (let i = 0; i < 3; i++) {
+            const lam = new Mesh(new CylinderGeometry(R0 * (0.9 - i * 0.07), R0 * (0.82 - i * 0.07), 0.035, 18, 1, true), C3.body);
+            lam.material.side = DoubleSide;
+            lam.position.copy(dome.position).add(new Vector3(sgn * 0.01 * i, -R0 * 0.28 - i * 0.04, 0));
+            lam.rotation.z = dome.rotation.z;
+            attach(lam, `${side}Arm`);
+          }
+          const gem = new Mesh(new OctahedronGeometry(0.02), mat3(C3.accentC, 0.2, 0.2, C3.accentC, 1.2, true));
+          gem.position.copy(dome.position).add(new Vector3(sgn * 6e-3, R0 * 0.7, 0.04));
+          attach(gem, `${side}Arm`);
+          gems.push(gem);
+          if (s2.mantle) {
+            const pivot = new Group();
+            pivot.position.copy(dome.position).add(new Vector3(sgn * 0.01, -R0 * 0.05, 0));
+            const flap = new Mesh(new BoxGeometry(R0 * 1.5, 0.2, 0.012), C3.body);
+            flap.position.y = -0.1;
+            flap.position.z = -0.02;
+            pivot.add(flap);
+            attach(pivot, `${side}Arm`);
+            rc.anims.push((t) => {
+              pivot.rotation.x = Math.sin(t * 2.2 + sgn) * 0.05 + Math.min(speedOf(), 5) * 0.05;
+            });
+          }
+        }
+        rc.anims.push((t) => {
+          gems.forEach((g2, i) => {
+            g2.rotation.y = t * 1.5;
+            g2.material.emissiveIntensity = 0.7 + 0.6 * Math.sin(t * 2.6 + i);
+          });
+        });
+        break;
+      }
+    }
+  }
+  function gearIcon(l2, slot) {
+    const C3 = colorsFor(l2), { s: s2 } = C3;
+    const g2 = new Group();
+    const add = (geo2, m3, x2 = 0, y2 = 0, z2 = 0) => {
+      const o2 = new Mesh(geo2, m3);
+      o2.position.set(x2, y2, z2);
+      g2.add(o2);
+      return o2;
+    };
+    const side = (m3) => {
+      m3.material = m3.material.clone();
+      m3.material.side = DoubleSide;
+      return m3;
+    };
+    switch (slot) {
+      case "shirt": {
+        side(add(new CylinderGeometry(0.42, 0.36, 0.9, 20, 1, true), C3.body)).scale.z = 0.6;
+        side(add(new CylinderGeometry(0.17, 0.15, s2.sleeves >= 1 ? 0.8 : 0.4, 12, 1, true), C3.body, -0.58, 0.2 - (s2.sleeves >= 1 ? 0.12 : 0), 0)).rotation.z = 0.5;
+        side(add(new CylinderGeometry(0.17, 0.15, s2.sleeves >= 1 ? 0.8 : 0.4, 12, 1, true), C3.body, 0.58, 0.2 - (s2.sleeves >= 1 ? 0.12 : 0), 0)).rotation.z = -0.5;
+        add(new TorusGeometry(0.17, 0.035, 8, 18), C3.dark, 0, 0.45, 0).rotation.x = Math.PI / 2;
+        break;
+      }
+      case "pants": {
+        add(new CylinderGeometry(0.5, 0.46, 0.2, 22, 1, true), C3.dark, 0, 0.5, 0).material.side = DoubleSide;
+        if (s2.skirt) {
+          add(new CylinderGeometry(0.46, 0.8, 0.9, 24, 1, true), C3.body, 0, 0, 0).material.side = DoubleSide;
+          break;
+        }
+        add(new CylinderGeometry(0.24, 0.17, 1, 14), C3.body, -0.25, -0.1, 0);
+        add(new CylinderGeometry(0.24, 0.17, 1, 14), C3.body, 0.25, -0.1, 0);
+        if (s2.metal) {
+          add(new SphereGeometry(0.14, 10, 8), C3.accent, -0.25, -0.1, 0.1);
+          add(new SphereGeometry(0.14, 10, 8), C3.accent, 0.25, -0.1, 0.1);
+        }
+        break;
+      }
+      case "boots": {
+        const hgt = 0.4 + (s2.h || 0.3) * 1.2;
+        add(new CylinderGeometry(0.27, 0.21, hgt, 16), C3.body, 0, hgt / 2 - 0.1, 0);
+        add(new TorusGeometry(0.265, 0.035, 8, 20), C3.dark, 0, hgt - 0.1, 0).rotation.x = Math.PI / 2;
+        add(new BoxGeometry(0.46, 0.22, 0.85), C3.body, 0, -0.08, 0.2);
+        add(new SphereGeometry(0.24, 12, 8), s2.metal ? C3.accent : C3.dark, 0, -0.04, 0.58).scale.set(1, 0.6, 1);
+        add(new BoxGeometry(0.47, 0.06, 0.9), C3.dark, 0, -0.2, 0.2);
+        g2.rotation.y = -0.5;
+        break;
+      }
+      case "gloves": {
+        add(new BoxGeometry(0.62, 0.7, 0.28), C3.body, 0, 0, 0);
+        for (let i = 0; i < 4; i++) add(new CapsuleGeometry(0.075, 0.38 - (i === 0 || i === 3 ? 0.08 : 0), 3, 8), s2.metal ? C3.dark : C3.body, -0.23 + i * 0.155, 0.55, 0);
+        add(new CapsuleGeometry(0.085, 0.3, 3, 8), s2.metal ? C3.dark : C3.body, -0.42, 0.05, 0.05).rotation.z = 0.8;
+        side(add(new CylinderGeometry(0.34, 0.3, 0.45, 16, 1, true), C3.body, 0, -0.55, 0));
+        if (s2.metal) add(new BoxGeometry(0.64, 0.1, 0.3), C3.accent, 0, 0.2, 0.02);
+        g2.rotation.set(0.1, 0.5, 0.2);
+        break;
+      }
+      case "belt": {
+        const r = side(add(new CylinderGeometry(0.8, 0.8, s2.sash ? 0.34 : s2.plates ? 0.28 : 0.16, 28, 1, true), C3.body));
+        r.scale.z = 0.7;
+        add(new BoxGeometry(s2.plates ? 0.38 : 0.24, s2.sash ? 0.3 : 0.26, 0.05), C3.accent, 0, 0, 0.58);
+        if (s2.pouch) add(new BoxGeometry(0.2, 0.26, 0.12), C3.dark, 0.5, -0.2, 0.45);
+        if (s2.sash) add(new BoxGeometry(0.16, 0.8, 0.03), C3.body, 0.18, -0.55, 0.6);
+        g2.rotation.x = 0.7;
+        break;
+      }
+      case "shoulders": {
+        for (const sg of [-1, 1]) {
+          const d2 = add(new SphereGeometry(0.46, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), C3.body, sg * 0.5, 0, 0);
+          d2.material = d2.material.clone();
+          d2.material.side = DoubleSide;
+          d2.rotation.z = -sg * 0.3;
+          add(new TorusGeometry(0.44, 0.04, 8, 22), C3.dark, sg * 0.5, -0.12, 0).rotation.x = Math.PI / 2;
+          if (s2.spikes) for (let i = 0; i < 3; i++) add(new ConeGeometry(0.05, 0.28, 8), C3.accent, sg * (0.5 - i * 0.04), 0.4, (i - 1) * 0.16).rotation.z = -sg * (0.3 + i * 0.12);
+          add(new OctahedronGeometry(0.07), C3.accent, sg * 0.5, 0.3, 0.2);
+        }
+        g2.rotation.x = 0.35;
+        break;
+      }
+    }
+    return g2;
+  }
+
   // src/realchar.js
   var REAL_OK = typeof Worker !== "undefined" && typeof WebAssembly !== "undefined" && !new URLSearchParams(location.search).has("stylised");
   var ASSET_URL = new URL("assets/ara/", document.baseURI).href;
@@ -39970,8 +40502,8 @@ void main() {
   var defaultLook = (cls, sex) => ({ sex, weight: 0.5, muscle: cls === "Mage" ? 0.3 : cls === "Rogue" ? 0.45 : 0.65, hairStyle: STYLES[sex][0], hairColor: "#2a1c12", hairHi: "", beard: sex === "m" && cls !== "Mage" ? "stubble" : "none", eyes: "brown", skinTone: 1 });
   var OUTFIT = {
     none: { top: "tattered_shirt", bottom: "tattered_pants", shoes: "sandals", accessories: ["belt"] },
-    robe: { top: "long_tunic", bottom: "trousers", shoes: "loafers", accessories: ["belt", "shoulder_drape", "waist_sash"] },
-    leathers: { top: "tunic", bottom: "trousers", shoes: "combat_boots", accessories: ["leather_armor", "arm_wraps", "belt", "gloves", "crossed_straps"] },
+    robe: { top: "thobe", bottom: "trousers", shoes: "loafers", accessories: ["shoulder_drape", "waist_sash"] },
+    leathers: { top: "tunic", bottom: "tattered_pants", shoes: "combat_boots", accessories: ["leather_armor", "arm_wraps", "belt", "gloves", "crossed_straps"] },
     furs: { top: "tattered_shirt", bottom: "hide_aprons", shoes: "combat_boots", accessories: ["fur_bands", "arm_wraps", "belt", "gloves"] },
     plate: { top: "tunic", bottom: "trousers", shoes: "combat_boots", accessories: ["belt", "gloves"] },
     merchant: { top: "tunic", bottom: "trousers", shoes: "loafers", accessories: ["waist_sash", "shoulder_drape", "gold_necklace"] },
@@ -39982,17 +40514,33 @@ void main() {
     bard: { top: "tunic", bottom: "trousers", shoes: "loafers", accessories: ["crossed_straps", "waist_sash", "beret"] },
     noble: { top: "long_tunic", bottom: "trousers", shoes: "oxfords", accessories: ["gold_chains", "waist_sash"] }
   };
-  var ARMOR_KIND = (it, cls) => {
-    if (!it) return cls === "Mage" ? "robe" : "none";
+  var ARMOR_KIND = (it) => {
+    if (!it) return "none";
     const v2 = it.vis || "";
     return v2 === "Mage" ? "robe" : v2 === "Rogue" ? "leathers" : v2 === "Barbarian" ? "furs" : v2 === "Knight" ? "plate" : "leathers";
   };
   var CLOTH_COLORS = { Knight: "#3a3a44", Barbarian: "#4a3828", Mage: "#3a2a5a", Rogue: "#26303a" };
-  function paramsFor(look, cls, kind, sub) {
+  var KIND_BASE = { robe: 6964904, leathers: 9067060, furs: 9071176, plate: 4868696 };
+  var RARITY_TRIM = ["#5a4a3a", "#3a6ad0", "#d8b040", "#e07020", "#c03030"];
+  var hexOf = (c2) => "#" + c2.getHexString();
+  function armorStyles(al, kind) {
+    if (!al || !KIND_BASE[kind]) return null;
+    const tint = new Color(typeof al.tint === "number" ? al.tint : al.tint || 16777215);
+    const main = new Color(KIND_BASE[kind]).multiply(tint);
+    const dark = main.clone().multiplyScalar(0.55);
+    const trim = RARITY_TRIM[Math.min(al.rarity || 0, 4)];
+    if (kind === "robe") return { thobe: { pattern: "solid", color: hexOf(main), color2: hexOf(dark) }, shoulder_drape: { pattern: "solid", color: hexOf(dark) }, waist_sash: { pattern: "solid", color: trim }, trousers: { pattern: "solid", color: hexOf(dark) } };
+    if (kind === "leathers") return { tunic: { pattern: "leather", color: hexOf(main) }, leather_armor: { pattern: "leather", color: hexOf(dark) }, tattered_pants: { pattern: "solid", color: hexOf(dark) } };
+    if (kind === "furs") return { tattered_shirt: { pattern: "solid", color: hexOf(dark) }, hide_aprons: { pattern: "leather", color: hexOf(main) } };
+    return { tunic: { pattern: "solid", color: hexOf(dark) } };
+  }
+  var armorKey = (al) => al ? [al.vis, al.tint, al.rarity].join(":") : "-";
+  function paramsFor(look, cls, kind, sub, al) {
     const sex = look.sex === "f" ? "f" : "m";
     const sk = SKIN_PRESETS[look.skinTone ?? 1] || SKIN_PRESETS[1];
     const o2 = OUTFIT[kind];
     const cloth = CLOTH_COLORS[cls] || "#3a3a44";
+    sub = { ...armorStyles(al, kind) || {}, ...sub || {} };
     return {
       name: "Hero",
       seed: 7,
@@ -40041,6 +40589,10 @@ void main() {
     v_f1: { look: L2("f", "long01", "#2a1c12", 2, 0.5, 0.3), kind: "peasant", cloth: { tunic: { pattern: "solid", color: "#8a3a3a" } } },
     v_f2: { look: L2("f", "bob01", "#a87a3e", 1, 0.6, 0.25), kind: "noble", cloth: { long_tunic: { pattern: "solid", color: "#4a3a6a" } } },
     v_f3: { look: L2("f", "cornrows", "#15110e", 5, 0.45, 0.4), kind: "healer", cloth: { long_tunic: { pattern: "solid", color: "#3a6a5a" } } },
+    v_m5: { look: L2("m", "short03", "#a87a3e", 0, 0.75, 0.4, { beard: "goatee" }), kind: "noble", cloth: { long_tunic: { pattern: "solid", color: "#5a2a2a" } } },
+    v_m6: { look: L2("m", "buzz", "#15110e", 4, 0.45, 0.7, { beard: "stubble" }), kind: "farmer", cloth: { tattered_shirt: { pattern: "solid", color: "#4a5a6a" } } },
+    v_f4: { look: L2("f", "ponytail01", "#2a1c12", 3, 0.55, 0.35), kind: "peasant", cloth: { tunic: { pattern: "solid", color: "#6a6a3a" } } },
+    v_f5: { look: L2("f", "braid01", "#e8d8a8", 0, 0.5, 0.3, { eyes: "bluegreen" }), kind: "bard", cloth: { tunic: { pattern: "solid", color: "#7a3a5a" } } },
     guard: { look: L2("m", "short01", "#2a1c12", 2, 0.65, 0.8), kind: "plate", cloth: {}, armor: true },
     guardf: { look: L2("f", "ponytail01", "#7a5230", 1, 0.5, 0.7), kind: "plate", cloth: {}, armor: true }
   };
@@ -40049,7 +40601,7 @@ void main() {
   var cache = /* @__PURE__ */ new Map();
   var queue = Promise.resolve();
   function buildReal(look, cls, kind, extra = {}) {
-    const p2 = paramsFor(look, cls, kind, extra.garmentStyles);
+    const p2 = paramsFor(look, cls, kind, extra.garmentStyles, extra.armor);
     Object.assign(p2, extra.params || {});
     const key = JSON.stringify([p2.gender, p2.muscle, p2.weight, p2.height, p2.african, p2.asian, p2.caucasian, p2.skinTint, p2.eyes, p2.hair, p2.hairTint, p2.facialHair, p2.top, p2.bottom, p2.shoes, p2.accessories, p2.garmentStyles, p2.seed, p2.age, p2.breastSize, extra.detail]);
     if (cache.has(key)) return cache.get(key);
@@ -40086,6 +40638,7 @@ void main() {
       this.oneShot = null;
       this.parts = {};
       this.bones = {};
+      this.anims = [];
       this.scene.traverse((o2) => {
         if (o2.isBone) this.bones[o2.name] = o2;
         if (o2.isMesh) {
@@ -40222,6 +40775,23 @@ void main() {
     update(dt) {
       this.mixer.update(dt);
       modelFlashTick(this, dt);
+      if (this.anims && this.anims.length && dt > 0) {
+        const hb = this.bones.Hips;
+        if (hb) {
+          this._p = this._p || new Vector3();
+          this._q = this._q || new Vector3();
+          this.root.updateWorldMatrix(true, false);
+          const y2 = this._q.set(0, 0, 0).applyMatrix4(this.root.matrixWorld);
+          if (this._have) {
+            const d2 = Math.hypot(y2.x - this._p.x, y2.z - this._p.z) / dt;
+            this.speed = (this.speed || 0) * 0.85 + Math.min(d2, 9) * 0.15;
+          }
+          this._p.copy(y2);
+          this._have = true;
+        }
+        this.gt = (this.gt || 0) + dt;
+        for (const f2 of this.anims) f2(this.gt, dt);
+      }
     }
     applyLook() {
     }
@@ -40238,6 +40808,7 @@ void main() {
         o2.parent?.remove(o2);
       }
       this.worn = [];
+      this.anims = [];
     }
     add(obj, bone) {
       (this.bones[bone] || this.scene).add(obj);
@@ -40251,7 +40822,11 @@ void main() {
       const wl = W(eq.weapon), ol = W(eq.offhand), hl = W(eq.helm), al = W(eq.armor);
       if (wl) this.holdItem(wl, "right", eq.weapon);
       if (ol) this.holdItem(ol, "left", eq.offhand);
-      if (hl && look?.helm !== false) this.wearHelm(hl);
+      if (hl && look?.showHelm !== false) this.wearHelm(hl);
+      for (const slot of GEAR_SLOTS) {
+        const gl = W(eq[slot]);
+        if (gl) wearGear(this, slot, gl);
+      }
       if (al) this.wearPlates(al, ARMOR_KIND(al), cls);
       const am = W(eq.amulet), rg = W(eq.ring);
       if (am) this.wearJewel(am, "amulet");
@@ -40310,18 +40885,27 @@ void main() {
       m3.visible = true;
       m3.position.set(0, 0, 0);
       m3.rotation.set(0, 0, 0);
+      const box2 = new Box3().setFromObject(m3), size = box2.getSize(new Vector3()), c2 = box2.getCenter(new Vector3());
+      const s2 = 0.27 / Math.max(0.01, size.x, size.z);
+      m3.position.set(-c2.x * s2, -box2.min.y * s2, -c2.z * s2);
+      m3.scale.setScalar(s2);
       const g2 = new Group();
       g2.add(m3);
-      g2.scale.setScalar(0.135);
-      g2.position.set(0, 0.035, 0);
+      const hs = new Vector3(), ss = new Vector3();
+      this.scene.updateMatrixWorld(true);
+      this.bones.Head.getWorldScale(hs);
+      this.scene.getWorldScale(ss);
+      const k2 = (ss.x || 1) / (hs.x || 1);
+      g2.scale.setScalar(k2);
+      g2.position.set(0, 0.062 * k2, 8e-3 * k2);
       this.add(g2, "Head");
     }
     wearJewel(l2, kind) {
-      const mat4 = pm(14727248, 0.9, 0.25, 6965776, 0.3);
+      const mat5 = pm(14727248, 0.9, 0.25, 6965776, 0.3);
       const gem = pm(new Color(l2.tint || 6728447), 0.2, 0.15, new Color(l2.tint || 6728447), 0.8);
       const g2 = new Group();
       if (kind === "amulet") {
-        const chain = new Mesh(new TorusGeometry(0.1, 4e-3, 6, 24), mat4);
+        const chain = new Mesh(new TorusGeometry(0.1, 4e-3, 6, 24), mat5);
         chain.rotation.x = Math.PI / 2 - 0.35;
         g2.add(chain);
         const j2 = new Mesh(new OctahedronGeometry(0.02), gem);
@@ -40330,7 +40914,7 @@ void main() {
         g2.position.set(0, 0.1, 0.03);
         this.add(g2, "Spine2");
       } else {
-        const r = new Mesh(new TorusGeometry(0.014, 4e-3, 6, 14), mat4);
+        const r = new Mesh(new TorusGeometry(0.014, 4e-3, 6, 14), mat5);
         r.rotation.y = Math.PI / 2;
         g2.add(r);
         const j2 = new Mesh(new SphereGeometry(7e-3, 8, 6), gem);
@@ -40353,7 +40937,7 @@ void main() {
       const fur = kind === "furs", leather2 = kind === "leathers";
       const col2 = new Color(l2.tint).multiply(new Color(fur ? 9072720 : leather2 ? 6965808 : 11186360));
       const glow = new Color(l2.glow || 0);
-      const metalMat = fur ? pm(col2.getHex(), 0, 0.95) : leather2 ? pm(col2.getHex(), 0.05, 0.75) : pm(col2.getHex(), 0.88, 0.34, glow.getHex(), glow.getHex() ? 1 : 0);
+      const metalMat = fur ? pm(col2.getHex(), 0, 0.95) : leather2 ? pm(col2.getHex(), 0.05, 0.75) : pm(col2.getHex(), 0.62, 0.36, glow.getHex(), glow.getHex() ? 1 : 0);
       const trim = pm(2761240, 0.3, 0.7);
       const accent = pm(l2.rarity >= 3 ? 16751146 : l2.rarity === 2 ? 16767053 : 9071152, 0.9, 0.3, l2.rarity >= 2 ? 6697728 : 0, l2.rarity >= 2 ? 0.6 : 0);
       const bodyDepth = sw * 0.42;
@@ -40413,11 +40997,11 @@ void main() {
           this.worn.push(lam);
         }
       }
-      const seg = (boneName, childName, r0, r1, from, to, mat4) => {
+      const seg = (boneName, childName, r0, r1, from, to, mat5) => {
         const a = rel(boneName), b2 = rel(childName);
         const v2 = b2.clone().sub(a);
         const len = v2.length();
-        const mesh = new Mesh(new CylinderGeometry(r1, r0, len * (to - from), 14, 1, false), mat4);
+        const mesh = new Mesh(new CylinderGeometry(r1, r0, len * (to - from), 14, 1, false), mat5);
         const mid = a.clone().addScaledVector(v2, (from + to) / 2);
         const q = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), v2.clone().normalize());
         const bone = this.bones[boneName];
@@ -40478,7 +41062,7 @@ void main() {
     if (!REAL_OK) return null;
     const al = equipment && equipment.armor ? lookOf2(equipment.armor) : null;
     const kind = opts.kind || ARMOR_KIND(al, cls);
-    const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || "medium", garmentStyles: opts.cloth });
+    const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || "medium", garmentStyles: opts.cloth, armor: al });
     return res ? new RealChar(res, { scale: opts.scale ?? (look && look.height || 1), look }) : null;
   }
 
@@ -43041,6 +43625,7 @@ void main(){
     if (it.slot === "gem") return gemMesh(GEMS[it.gem].color, it.tier);
     const l2 = lookOf(it);
     if (l2.slot === "ring" || l2.slot === "amulet") return orient(jewelMesh(l2, l2.slot), "jewel");
+    if (EXTRA_SLOTS.includes(l2.slot)) return orient(gearIcon(l2, l2.slot), "armor");
     if (l2.slot === "armor") {
       const src2 = Assets.models[l2.vis];
       if (!src2) return null;
@@ -43583,8 +44168,134 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     return "red";
   }
 
+  // src/daynight.js
+  var DAY_SECONDS = 600;
+  var C2 = (h2) => new Color(h2);
+  var SKY = [
+    // [time, sky/fog, hemisphere sky, hemisphere ground, sun colour]
+    [0, C2(461596), C2(2767466), C2(1053724), C2(8032464)],
+    [0.2, C2(922672), C2(3425402), C2(1316896), C2(8032464)],
+    [0.26, C2(14715482), C2(16756874), C2(4864560), C2(16752736)],
+    [0.32, C2(11059424), C2(14214399), C2(5925440), C2(16769720)],
+    [0.68, C2(10467544), C2(14214399), C2(5925440), C2(16769720)],
+    [0.74, C2(14711370), C2(16752752), C2(4863012), C2(16747082)],
+    [0.8, C2(1448506), C2(3819648), C2(1316896), C2(8032464)],
+    [1, C2(461596), C2(2767466), C2(1053724), C2(8032464)]
+  ];
+  var tmp2 = [C2(0), C2(0), C2(0), C2(0)];
+  function sample(t) {
+    let i = 0;
+    while (i < SKY.length - 2 && t > SKY[i + 1][0]) i++;
+    const a = SKY[i], b2 = SKY[i + 1];
+    const k2 = Math.min(1, Math.max(0, (t - a[0]) / (b2[0] - a[0])));
+    for (let j2 = 0; j2 < 4; j2++) tmp2[j2].copy(a[j2 + 1]).lerp(b2[j2 + 1], k2);
+    return tmp2;
+  }
+  function daylight(t = G.timeOfDay ?? 0.4) {
+    const e = Math.sin((t - 0.25) * Math.PI * 2);
+    return Math.min(1, Math.max(0, (e + 0.12) / 0.4));
+  }
+  function clockText(t = G.timeOfDay ?? 0.4) {
+    const m3 = Math.floor(t * 24 * 60);
+    const hh = Math.floor(m3 / 60), mm = m3 % 60;
+    const night = daylight(t) < 0.3;
+    return `${night ? "\u263E" : "\u2600"} ${String(hh).padStart(2, "0")}:${String(mm - mm % 5).padStart(2, "0")} \xB7 ${t < 0.22 || t > 0.82 ? "Night" : t < 0.32 ? "Dawn" : t < 0.7 ? "Day" : "Dusk"}`;
+  }
+  var Sky = class {
+    constructor(scene2) {
+      this.scene = scene2;
+      const n = 1400, pos = new Float32Array(n * 3), col2 = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        const u2 = Math.random(), v2 = Math.random() * 0.9;
+        const th = u2 * Math.PI * 2, ph = Math.acos(1 - v2);
+        const r = 260;
+        pos[i * 3] = Math.cos(th) * Math.sin(ph) * r;
+        pos[i * 3 + 1] = Math.cos(ph) * r;
+        pos[i * 3 + 2] = Math.sin(th) * Math.sin(ph) * r;
+        const w2 = 0.6 + Math.random() * 0.4, tint = Math.random();
+        col2[i * 3] = w2 * (tint < 0.15 ? 0.8 : 1);
+        col2[i * 3 + 1] = w2 * 0.95;
+        col2[i * 3 + 2] = w2 * (tint > 0.85 ? 0.8 : 1);
+      }
+      const g2 = new BufferGeometry();
+      g2.setAttribute("position", new BufferAttribute(pos, 3));
+      g2.setAttribute("color", new BufferAttribute(col2, 3));
+      this.stars = new Points(g2, new PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+      this.stars.frustumCulled = false;
+      this.stars.renderOrder = -1;
+      const mc = document.createElement("canvas");
+      mc.width = mc.height = 128;
+      const x2 = mc.getContext("2d");
+      const gr = x2.createRadialGradient(64, 64, 10, 64, 64, 64);
+      gr.addColorStop(0, "#fffbe8");
+      gr.addColorStop(0.32, "#f4eed8");
+      gr.addColorStop(0.36, "rgba(200,210,255,0.35)");
+      gr.addColorStop(1, "rgba(120,140,255,0)");
+      x2.fillStyle = gr;
+      x2.fillRect(0, 0, 128, 128);
+      x2.fillStyle = "rgba(180,170,150,0.35)";
+      for (const [a, b2, r] of [[54, 56, 7], [72, 70, 5], [62, 76, 4], [70, 52, 3]]) {
+        x2.beginPath();
+        x2.arc(a, b2, r, 0, 7);
+        x2.fill();
+      }
+      const mt = new CanvasTexture(mc);
+      mt.colorSpace = SRGBColorSpace;
+      this.moon = new Sprite(new SpriteMaterial({ map: mt, transparent: true, depthWrite: false, fog: false, opacity: 0 }));
+      this.moon.scale.setScalar(46);
+      this.group = new Group();
+      this.group.add(this.stars, this.moon);
+      scene2.add(this.group);
+      this.firefly = 0;
+    }
+    dispose() {
+      this.scene.remove(this.group);
+      this.stars.geometry.dispose();
+    }
+    // apply lighting for the current time; focus = where the camera looks
+    update(dt, L3, focus, fx, playing) {
+      if (playing) G.timeOfDay = ((G.timeOfDay ?? 0.4) + dt / DAY_SECONDS) % 1;
+      const t = G.timeOfDay ?? 0.4;
+      const d2 = daylight(t);
+      const [sky, hs, hg, sc] = sample(t);
+      this.scene.background.copy(sky);
+      this.scene.fog.color.copy(sky);
+      L3.ambient.color.copy(hs);
+      L3.ambient.groundColor.copy(hg);
+      L3.ambient.intensity = 0.55 + 0.85 * d2;
+      const ang = (t - 0.25) * Math.PI * 2;
+      const sunUp = Math.sin(ang) > -0.05;
+      const dir = sunUp ? new Vector3(Math.cos(ang) * 22, Math.max(8, Math.sin(ang) * 30), 10) : new Vector3(-Math.cos(ang) * 18, Math.max(10, -Math.sin(ang) * 26), 12);
+      L3.sun.color.copy(sc);
+      L3.sun.intensity = sunUp ? 0.5 + 2.1 * d2 : 0.55;
+      L3.sun.position.copy(focus).add(dir);
+      L3.sun.target.position.copy(focus);
+      this.scene.environmentIntensity = 0.1 + 0.2 * d2;
+      this.group.position.set(focus.x, 0, focus.z);
+      this.stars.material.opacity = Math.max(0, 1 - d2 * 1.6);
+      this.stars.rotation.y = t * Math.PI * 2 * 0.25;
+      this.moon.material.opacity = Math.max(0, 1 - d2 * 1.4);
+      this.moon.position.set(-Math.cos(ang) * 150, 60 + Math.max(0, -Math.sin(ang)) * 110, -120);
+      const night = 1 - d2;
+      if (L3.lamps) L3.lamps.forEach((l2, i) => {
+        l2.intensity = 1.5 + night * 9 + Math.sin(performance.now() / 200 + i) * 0.5 * night;
+      });
+      if (L3.lampBulbs) for (const b2 of L3.lampBulbs) b2.material.emissiveIntensity = 0.4 + night * 3;
+      if (L3.windowGlow) L3.windowGlow.material.opacity = night * 0.9;
+      if (night > 0.5 && fx) {
+        this.firefly += dt * 18 * night;
+        while (this.firefly > 1) {
+          this.firefly--;
+          const p2 = focus.clone().add(new Vector3((Math.random() - 0.5) * 34, 0.4 + Math.random() * 1.6, (Math.random() - 0.5) * 26));
+          fx.emit(p2, { count: 1, color: Math.random() < 0.7 ? 14221162 : 16769162, speed: 0.25, up: 0.2, life: 2.2, size: 0.28, drag: 0.5 });
+        }
+      }
+      return d2;
+    }
+  };
+
   // src/entities.js
-  var tmp2 = new Vector3();
+  var tmp3 = new Vector3();
   var DMG_COLORS = { phys: "#ffffff", fire: "#ffa040", frost: "#9fdcff", storm: "#c6b8ff", poison: "#9dff7a", arcane: "#b8a0ff", light: "#fff0a0", dark: "#c070e0", bleed: "#ff4a4a" };
   var BLOB_MAT = null;
   var HALO_GEO = new SphereGeometry(1, 12, 8);
@@ -43643,16 +44354,16 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     followPath(path, speed, dt) {
       if (!path.length) return false;
       const p2 = path[0];
-      tmp2.set(p2.x - this.pos.x, 0, p2.z - this.pos.z);
+      tmp3.set(p2.x - this.pos.x, 0, p2.z - this.pos.z);
       const step = speed * dt;
-      const len = tmp2.length();
+      const len = tmp3.length();
       if (len <= step) {
         this.pos.x = p2.x;
         this.pos.z = p2.z;
         path.shift();
       } else {
-        tmp2.multiplyScalar(step / len);
-        this.pos.add(tmp2);
+        tmp3.multiplyScalar(step / len);
+        this.pos.add(tmp3);
         this.face(p2, dt);
       }
       return true;
@@ -43705,10 +44416,10 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (!REAL_OK || Settings.realistic === false) return;
       const look = fullLook(G.look, G.cls);
       const al = G.equipment.armor ? lookOf(G.equipment.armor) : null;
-      const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls)].join("|");
+      const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls), armorKey(al)].join("|");
       if (this.realKey === key) return;
       this.realKey = key;
-      const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { detail: typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches ? "low" : "medium" });
+      const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { armor: al, detail: typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches ? "low" : "medium" });
       if (!res || this.realKey !== key || this.gone) return;
       const old = this.model;
       const rc = new RealChar(res, { scale: look.height || 1, look });
@@ -44287,7 +44998,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         if (d2 > 1e-4 && d2 < min * min) {
           const d3 = Math.sqrt(d2), push = (min - d3) * 0.5;
           const nx = this.pos.x + dx / d3 * push, nz = this.pos.z + dz / d3 * push;
-          if (G.level.walkable(tmp2.set(nx, 0, nz))) {
+          if (G.level.walkable(tmp3.set(nx, 0, nz))) {
             this.pos.x = nx;
             this.pos.z = nz;
           }
@@ -44919,7 +45630,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         this.model.position.z *= 0.85;
         this.model.position.y = moving ? Math.abs(Math.sin(this.t * 14)) * 0.12 : Math.sin(this.t * 2) * 0.01;
       }
-      if (this.rig?.parts.lamps && G.level.kind === "dungeon" && Math.random() < dt * 5) G.main.fx.emit(this.rig.parts.lamps[0].getWorldPosition(tmp2), { count: 1, color: 16764006, speed: 0.3, life: 0.6, size: 0.25, rise: 0.4 });
+      if (this.rig?.parts.lamps && G.level.kind === "dungeon" && Math.random() < dt * 5) G.main.fx.emit(this.rig.parts.lamps[0].getWorldPosition(tmp3), { count: 1, color: 16764006, speed: 0.3, life: 0.6, size: 0.25, rise: 0.4 });
     }
   };
   var SpiritFox = class extends Entity {
@@ -45305,6 +46016,25 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
           lc = "#ffb366";
           ly = 4.6;
           break;
+        case "door":
+        case "exit": {
+          this.pickR = 1;
+          this.pickH = 0.6;
+          const mat5 = new MeshBasicMaterial({ color: 16758880, transparent: true, opacity: 0.32, depthWrite: false, blending: AdditiveBlending });
+          const step = add(new Mesh(new PlaneGeometry(1.5, 1), mat5));
+          step.rotation.x = -Math.PI / 2;
+          step.position.y = 0.04;
+          this.glow = step;
+          if (kind === "exit") {
+            const arrow = add(new Mesh(new ConeGeometry(0.22, 0.4, 4), new MeshBasicMaterial({ color: 16767120 })));
+            arrow.rotation.x = Math.PI / 2;
+            arrow.position.set(0, 0.35, 0.3);
+            this.bob = arrow;
+          }
+          lc = kind === "exit" ? "#ffe2a8" : "#f3d9a4";
+          ly = kind === "exit" ? 1.4 : 2.4;
+          break;
+        }
         case "stairs_down":
         case "stairs_up": {
           const down = kind === "stairs_down";
@@ -45380,7 +46110,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
           break;
         }
       }
-      this.label = { text: data.name || kind, color: lc, y: ly, always: ["merchant", "quest", "healer", "blacksmith", "beastmaster", "millpond", "well", "portal", "stairs_down", "stairs_up"].includes(kind) };
+      this.label = { text: data.name || kind, color: lc, y: ly, always: ["merchant", "quest", "healer", "blacksmith", "beastmaster", "millpond", "well", "portal", "stairs_down", "stairs_up", "exit"].includes(kind) };
     }
     update(dt) {
       this.t += dt;
@@ -45394,7 +46124,9 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
           G.main.fx.emit(this.pos.clone().add(new Vector3(Math.cos(a) * 2.2, 0.2 + Math.random() * 2, Math.sin(a) * 2.2)), { count: 1, color: Math.random() < 0.5 ? 11569407 : 15259903, speed: 0.2, life: 0.7, size: 0.2, gravity: 0 });
         }
       }
-      if (this.bob && this.kind !== "relic") {
+      if (this.glow) this.glow.material.opacity = (this.kind === "exit" ? 0.3 : 0.14) + 0.08 * Math.sin(this.t * 2.4);
+      if (this.bob && this.kind === "exit") this.bob.position.z = 0.3 + Math.sin(this.t * 3) * 0.08;
+      else if (this.bob && this.kind !== "relic") {
         this.bob.rotation.y += dt;
         this.bob.position.y += Math.sin(this.t * 3) * 4e-3;
       }
@@ -45418,11 +46150,20 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (this.kind === "relic") G.level.remove(this);
     }
   };
-  async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false) {
+  var realNpcs = 0;
+  function resetRealNpcBudget() {
+    realNpcs = 0;
+  }
+  async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false, d2 = null) {
     const spec = NPC_SPECS[specKey];
     if (!REAL_OK || Settings.realistic === false || !spec) return;
-    if (typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches) {
-      if (!["merchant", "quest", "healer", "blacksmith", "beastmaster"].includes(specKey)) return;
+    const phone = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
+    const key = ["merchant", "quest", "healer", "blacksmith", "beastmaster"].includes(specKey);
+    const budget = phone ? 6 : Settings.quality === "low" ? 10 : Settings.quality === "ultra" ? 40 : 24;
+    if (!key && !(d2 && d2.indoor) && realNpcs >= budget) return;
+    if (phone && !key && !(d2 && d2.indoor)) return;
+    realNpcs++;
+    if (phone) {
       await new Promise((r) => setTimeout(r, 6e3));
       if (ent.gone) return;
     }
@@ -45459,7 +46200,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.idleAnim = { sit: "Sit_Floor_Idle", fish: "Sit_Floor_Idle", chair: "Sit_Chair_Idle", guard: "2H_Melee_Idle", perform: "Spellcasting" }[this.mode] || "Idle";
       this.char.play(this.idleAnim, 0);
       this.talkCd = 0;
-      upgradeNpc(this, VILLAGER_SPEC[d2.name] || "v_m1", d2.scale || 1, d2.gear, !!d2.helm);
+      upgradeNpc(this, d2.spec || VILLAGER_SPEC[d2.name] || "v_m1", d2.scale || 1, d2.gear, !!d2.helm, d2);
     }
     talk() {
       if (this.talkCd > 0) return;
@@ -45475,11 +46216,20 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       sfx("ui");
     }
     update(dt) {
-      this.char.update(dt);
       this.talkCd -= dt;
       if (!this.home) this.home = this.pos.clone();
+      const cam2 = G.main && G.main.camFocus;
+      const far = cam2 && G.level.kind === "town" && flatDist(cam2, this.pos) > 44;
+      this.root.visible = !far && !this.indoors;
+      if (this.root.visible) this.char.update(dt);
       const pl = G.player;
       const near = pl && flatDist(pl.pos, this.pos) < 3;
+      if (this.mode === "routine") return this.routine(dt, near, pl);
+      if (this.mode === "stand") {
+        if (near) this.face(pl.pos, dt * 0.4);
+        if (Math.random() < dt * 0.05) this.char.once(pick(["Interact", "Cheer"]), { timeScale: 0.9 });
+        return;
+      }
       if (this.mode !== "wander") {
         if (this.mode === "perform" && Math.random() < dt * 0.15) this.char.once("Cheer", { timeScale: 1 });
         if (this.mode === "guard" && near) this.face(pl.pos, dt * 0.3);
@@ -45513,6 +46263,49 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
           }
         }
       }
+    }
+    // a daily round: wander between the places in `stops`, go home through the front door at night
+    routine(dt, near, pl) {
+      const d2 = this.data, night = daylight() < 0.22;
+      if (this.indoors) {
+        if (!night && Math.random() < dt * 0.2) {
+          this.indoors = false;
+          this.path = [];
+          this.wait = rand(0.5, 2);
+        }
+        return;
+      }
+      if (near && !this.goingHome) {
+        this.path = [];
+        this.face(pl.pos, dt * 0.5);
+        this.char.play("Idle", 0.25);
+        return;
+      }
+      if (this.path.length) {
+        this.followPath(this.path, d2.speed || 1.9, dt);
+        if (this.root.visible) this.char.play("Walking_A", 0.25, 1);
+        if (!this.path.length && this.goingHome) {
+          this.indoors = true;
+          this.goingHome = false;
+        }
+        return;
+      }
+      if (night && d2.homeDoor && !this.goingHome) {
+        this.goingHome = true;
+        this.path = G.level.findPath(this.pos, d2.homeDoor);
+        if (!this.path.length) this.indoors = true;
+        return;
+      }
+      if (this.root.visible) this.char.play("Idle", 0.3);
+      this.wait -= dt;
+      if (this.wait > 0) return;
+      this.wait = rand(4, 14);
+      if (Math.random() < 0.25) {
+        if (this.root.visible) this.char.once(pick(["Interact", "Cheer", "PickUp"]), { timeScale: 0.9 });
+        return;
+      }
+      const t = pick(d2.stops).clone().add(new Vector3(rand(-2, 2), 0, rand(-2, 2)));
+      if (G.level.walkable(t)) this.path = G.level.findPath(this.pos, t);
     }
   };
 
@@ -47328,7 +48121,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   };
   var METALS = { iron: [10133672, 0.85, 0.35], gold: [14198848, 0.9, 0.3], dark: [3816002, 0.8, 0.45], copper: [12611648, 0.85, 0.35], silver: [14739184, 0.95, 0.2] };
   var cache3 = /* @__PURE__ */ new Map();
-  function mat3(color, metal = 0, rough = 0.8, emissive = 0) {
+  function mat4(color, metal = 0, rough = 0.8, emissive = 0) {
     const k2 = `${color}|${metal}|${rough}|${emissive}`;
     if (!cache3.has(k2)) cache3.set(k2, new MeshStandardMaterial({ color, metalness: metal, roughness: rough, emissive: emissive || 0, emissiveIntensity: emissive ? 1.2 : 0 }));
     return cache3.get(k2);
@@ -47349,8 +48142,8 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     parent.add(o2);
     return o2;
   }
-  var leather = () => mat3(5913122, 0, 0.9);
-  var darkLeather = () => mat3(3810838, 0, 0.9);
+  var leather = () => mat4(5913122, 0, 0.9);
+  var darkLeather = () => mat4(3810838, 0, 0.9);
   function shoulderPad(kind, metal, s2) {
     const p2 = new Group();
     const [mc, mm, mr] = METALS[metal] || METALS.iron;
@@ -47358,16 +48151,16 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       M4(G3.dome, leather(), 0.24, 0.12, 0.26, 0, 0, 0, p2);
       M4(G3.dome, darkLeather(), 0.2, 0.1, 0.22, 0, -0.06, 0, p2);
     } else if (kind === "fur") {
-      const f2 = mat3(9072728, 0, 1);
+      const f2 = mat4(9072728, 0, 1);
       M4(G3.sph, f2, 0.26, 0.16, 0.28, 0, 0.02, 0, p2);
-      M4(G3.sph, mat3(11045482, 0, 1), 0.18, 0.12, 0.22, -s2 * 0.08, 0.08, 0, p2);
+      M4(G3.sph, mat4(11045482, 0, 1), 0.18, 0.12, 0.22, -s2 * 0.08, 0.08, 0, p2);
     } else {
-      const m3 = kind === "gilded" ? mat3(14198848, 0.95, 0.25) : mat3(mc, mm, mr);
+      const m3 = kind === "gilded" ? mat4(14198848, 0.95, 0.25) : mat4(mc, mm, mr);
       M4(G3.dome, m3, 0.26, 0.15, 0.28, 0, 0, 0, p2);
       M4(G3.dome, m3, 0.22, 0.12, 0.24, 0, -0.08, 0, p2);
       M4(G3.torus, m3, 0.21, 0.21, 0.4, 0, 0, 0, p2).rotation.x = Math.PI / 2;
-      if (kind === "spiked") for (const z2 of [-0.1, 0.08]) M4(G3.cone, mat3(mc, mm, mr), 0.05, 0.22, 0.05, 0, 0.17, z2, p2);
-      if (kind === "gilded") M4(G3.sph, mat3(4897023, 0.2, 0.1, 2783440), 0.04, 0.04, 0.04, 0, 0.12, 0.2, p2);
+      if (kind === "spiked") for (const z2 of [-0.1, 0.08]) M4(G3.cone, mat4(mc, mm, mr), 0.05, 0.22, 0.05, 0, 0.17, z2, p2);
+      if (kind === "gilded") M4(G3.sph, mat4(4897023, 0.2, 0.1, 2783440), 0.04, 0.04, 0.04, 0, 0.12, 0.2, p2);
     }
     return p2;
   }
@@ -47375,7 +48168,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     const g2 = new Group();
     const [mc, mm, mr] = METALS[metal] || METALS.iron;
     M4(G3.cyl, darkLeather(), 0.43, 0.08, 0.39, 0, 0, 0, g2);
-    M4(G3.box, mat3(mc, mm, mr), 0.12, 0.1, 0.03, 0, 0, 0.395, g2);
+    M4(G3.box, mat4(mc, mm, mr), 0.12, 0.1, 0.03, 0, 0, 0.395, g2);
     if (kind === "pouches") {
       M4(G3.box, leather(), 0.12, 0.14, 0.09, 0.3, -0.06, 0.27, g2);
       M4(G3.box, leather(), 0.11, 0.12, 0.08, -0.33, -0.05, 0.22, g2);
@@ -47385,8 +48178,8 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       const cols = [16726602, 3832575, 16726602, 8060762];
       cols.forEach((c2, i) => {
         const a = -0.9 + i * 0.6, x2 = Math.sin(a) * 0.43, z2 = Math.cos(a) * 0.4;
-        M4(G3.cyl, mat3(c2, 0.1, 0.15, c2), 0.035, 0.11, 0.035, x2, -0.06, z2, g2);
-        M4(G3.cyl, mat3(9071178, 0, 0.9), 0.02, 0.03, 0.02, x2, 0.01, z2, g2);
+        M4(G3.cyl, mat4(c2, 0.1, 0.15, c2), 0.035, 0.11, 0.035, x2, -0.06, z2, g2);
+        M4(G3.cyl, mat4(9071178, 0, 0.9), 0.02, 0.03, 0.02, x2, 0.01, z2, g2);
       });
     }
     return g2;
@@ -47402,22 +48195,22 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       M4(G3.cyl, leather(), 0.09, 0.55, 0.09, 0, 0, 0, q);
       for (let i = 0; i < 5; i++) {
         const x2 = (i - 2) * 0.03;
-        M4(G3.cyl, mat3(13152400, 0, 0.8), 8e-3, 0.2, 8e-3, x2, 0.36, i % 2 * 0.03, q);
-        M4(G3.cone, mat3(15261904, 0, 0.9), 0.025, 0.06, 6e-3, x2, 0.48, i % 2 * 0.03, q);
+        M4(G3.cyl, mat4(13152400, 0, 0.8), 8e-3, 0.2, 8e-3, x2, 0.36, i % 2 * 0.03, q);
+        M4(G3.cone, mat4(15261904, 0, 0.9), 0.025, 0.06, 6e-3, x2, 0.48, i % 2 * 0.03, q);
       }
     } else if (kind === "satchel") {
       M4(G3.box, leather(), 0.38, 0.32, 0.16, 0, 0, -0.02, g2);
       M4(G3.box, darkLeather(), 0.39, 0.12, 0.17, 0, 0.12, -0.02, g2);
-      M4(G3.box, mat3(mc, mm, mr), 0.05, 0.05, 0.02, 0, 0.06, -0.11, g2);
+      M4(G3.box, mat4(mc, mm, mr), 0.05, 0.05, 0.02, 0, 0.06, -0.11, g2);
     } else if (kind === "scabbard") {
       const s2 = new Group();
       s2.rotation.z = -0.6;
       g2.add(s2);
       M4(G3.box, darkLeather(), 0.08, 0.7, 0.05, 0, 0, 0, s2);
-      M4(G3.box, mat3(mc, mm, mr), 0.2, 0.03, 0.06, 0, 0.36, 0, s2);
+      M4(G3.box, mat4(mc, mm, mr), 0.2, 0.03, 0.06, 0, 0.36, 0, s2);
       M4(G3.cyl, darkLeather(), 0.02, 0.18, 0.02, 0, 0.47, 0, s2);
     } else if (kind === "bedroll") {
-      const r = M4(G3.cyl, mat3(6969914, 0, 1), 0.11, 0.5, 0.11, 0, 0.3, 0, g2);
+      const r = M4(G3.cyl, mat4(6969914, 0, 1), 0.11, 0.5, 0.11, 0, 0.3, 0, g2);
       r.rotation.z = Math.PI / 2;
       M4(G3.torus, darkLeather(), 0.115, 0.115, 0.5, 0.14, 0.3, 0, g2).rotation.y = Math.PI / 2;
       M4(G3.torus, darkLeather(), 0.115, 0.115, 0.5, -0.14, 0.3, 0, g2).rotation.y = Math.PI / 2;
@@ -47426,15 +48219,15 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       const l2 = new Group();
       l2.position.set(0.22, -0.18, -0.05);
       g2.add(l2);
-      M4(G3.cyl, mat3(mc, mm, mr), 0.06, 0.02, 0.06, 0, 0.08, 0, l2);
-      M4(G3.cyl, mat3(16765040, 0, 0.2, 16752688), 0.05, 0.12, 0.05, 0, 0, 0, l2);
-      M4(G3.cyl, mat3(mc, mm, mr), 0.06, 0.02, 0.06, 0, -0.07, 0, l2);
+      M4(G3.cyl, mat4(mc, mm, mr), 0.06, 0.02, 0.06, 0, 0.08, 0, l2);
+      M4(G3.cyl, mat4(16765040, 0, 0.2, 16752688), 0.05, 0.12, 0.05, 0, 0, 0, l2);
+      M4(G3.cyl, mat4(mc, mm, mr), 0.06, 0.02, 0.06, 0, -0.07, 0, l2);
     }
     return g2;
   }
   function scarf(color) {
     const g2 = new Group();
-    const m3 = mat3(new Color(color).getHex(), 0, 0.95);
+    const m3 = mat4(new Color(color).getHex(), 0, 0.95);
     M4(G3.torus, m3, 0.3, 0.3, 1.8, 0, 0, 0, g2).rotation.x = Math.PI / 2;
     const tail = M4(G3.box, m3, 0.1, 0.3, 0.04, 0.12, -0.17, 0.3, g2);
     tail.rotation.z = 0.25;
@@ -47485,132 +48278,6 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     }
   };
 
-  // src/daynight.js
-  var DAY_SECONDS = 600;
-  var C2 = (h2) => new Color(h2);
-  var SKY = [
-    // [time, sky/fog, hemisphere sky, hemisphere ground, sun colour]
-    [0, C2(461596), C2(2767466), C2(1053724), C2(8032464)],
-    [0.2, C2(922672), C2(3425402), C2(1316896), C2(8032464)],
-    [0.26, C2(14715482), C2(16756874), C2(4864560), C2(16752736)],
-    [0.32, C2(11059424), C2(14214399), C2(5925440), C2(16769720)],
-    [0.68, C2(10467544), C2(14214399), C2(5925440), C2(16769720)],
-    [0.74, C2(14711370), C2(16752752), C2(4863012), C2(16747082)],
-    [0.8, C2(1448506), C2(3819648), C2(1316896), C2(8032464)],
-    [1, C2(461596), C2(2767466), C2(1053724), C2(8032464)]
-  ];
-  var tmp3 = [C2(0), C2(0), C2(0), C2(0)];
-  function sample(t) {
-    let i = 0;
-    while (i < SKY.length - 2 && t > SKY[i + 1][0]) i++;
-    const a = SKY[i], b2 = SKY[i + 1];
-    const k2 = Math.min(1, Math.max(0, (t - a[0]) / (b2[0] - a[0])));
-    for (let j2 = 0; j2 < 4; j2++) tmp3[j2].copy(a[j2 + 1]).lerp(b2[j2 + 1], k2);
-    return tmp3;
-  }
-  function daylight(t = G.timeOfDay ?? 0.4) {
-    const e = Math.sin((t - 0.25) * Math.PI * 2);
-    return Math.min(1, Math.max(0, (e + 0.12) / 0.4));
-  }
-  function clockText(t = G.timeOfDay ?? 0.4) {
-    const m3 = Math.floor(t * 24 * 60);
-    const hh = Math.floor(m3 / 60), mm = m3 % 60;
-    const night = daylight(t) < 0.3;
-    return `${night ? "\u263E" : "\u2600"} ${String(hh).padStart(2, "0")}:${String(mm - mm % 5).padStart(2, "0")} \xB7 ${t < 0.22 || t > 0.82 ? "Night" : t < 0.32 ? "Dawn" : t < 0.7 ? "Day" : "Dusk"}`;
-  }
-  var Sky = class {
-    constructor(scene2) {
-      this.scene = scene2;
-      const n = 1400, pos = new Float32Array(n * 3), col2 = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) {
-        const u2 = Math.random(), v2 = Math.random() * 0.9;
-        const th = u2 * Math.PI * 2, ph = Math.acos(1 - v2);
-        const r = 260;
-        pos[i * 3] = Math.cos(th) * Math.sin(ph) * r;
-        pos[i * 3 + 1] = Math.cos(ph) * r;
-        pos[i * 3 + 2] = Math.sin(th) * Math.sin(ph) * r;
-        const w2 = 0.6 + Math.random() * 0.4, tint = Math.random();
-        col2[i * 3] = w2 * (tint < 0.15 ? 0.8 : 1);
-        col2[i * 3 + 1] = w2 * 0.95;
-        col2[i * 3 + 2] = w2 * (tint > 0.85 ? 0.8 : 1);
-      }
-      const g2 = new BufferGeometry();
-      g2.setAttribute("position", new BufferAttribute(pos, 3));
-      g2.setAttribute("color", new BufferAttribute(col2, 3));
-      this.stars = new Points(g2, new PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false }));
-      this.stars.frustumCulled = false;
-      this.stars.renderOrder = -1;
-      const mc = document.createElement("canvas");
-      mc.width = mc.height = 128;
-      const x2 = mc.getContext("2d");
-      const gr = x2.createRadialGradient(64, 64, 10, 64, 64, 64);
-      gr.addColorStop(0, "#fffbe8");
-      gr.addColorStop(0.32, "#f4eed8");
-      gr.addColorStop(0.36, "rgba(200,210,255,0.35)");
-      gr.addColorStop(1, "rgba(120,140,255,0)");
-      x2.fillStyle = gr;
-      x2.fillRect(0, 0, 128, 128);
-      x2.fillStyle = "rgba(180,170,150,0.35)";
-      for (const [a, b2, r] of [[54, 56, 7], [72, 70, 5], [62, 76, 4], [70, 52, 3]]) {
-        x2.beginPath();
-        x2.arc(a, b2, r, 0, 7);
-        x2.fill();
-      }
-      const mt = new CanvasTexture(mc);
-      mt.colorSpace = SRGBColorSpace;
-      this.moon = new Sprite(new SpriteMaterial({ map: mt, transparent: true, depthWrite: false, fog: false, opacity: 0 }));
-      this.moon.scale.setScalar(46);
-      this.group = new Group();
-      this.group.add(this.stars, this.moon);
-      scene2.add(this.group);
-      this.firefly = 0;
-    }
-    dispose() {
-      this.scene.remove(this.group);
-      this.stars.geometry.dispose();
-    }
-    // apply lighting for the current time; focus = where the camera looks
-    update(dt, L3, focus, fx, playing) {
-      if (playing) G.timeOfDay = ((G.timeOfDay ?? 0.4) + dt / DAY_SECONDS) % 1;
-      const t = G.timeOfDay ?? 0.4;
-      const d2 = daylight(t);
-      const [sky, hs, hg, sc] = sample(t);
-      this.scene.background.copy(sky);
-      this.scene.fog.color.copy(sky);
-      L3.ambient.color.copy(hs);
-      L3.ambient.groundColor.copy(hg);
-      L3.ambient.intensity = 0.55 + 0.85 * d2;
-      const ang = (t - 0.25) * Math.PI * 2;
-      const sunUp = Math.sin(ang) > -0.05;
-      const dir = sunUp ? new Vector3(Math.cos(ang) * 22, Math.max(8, Math.sin(ang) * 30), 10) : new Vector3(-Math.cos(ang) * 18, Math.max(10, -Math.sin(ang) * 26), 12);
-      L3.sun.color.copy(sc);
-      L3.sun.intensity = sunUp ? 0.5 + 2.1 * d2 : 0.55;
-      L3.sun.position.copy(focus).add(dir);
-      L3.sun.target.position.copy(focus);
-      this.scene.environmentIntensity = 0.1 + 0.2 * d2;
-      this.group.position.set(focus.x, 0, focus.z);
-      this.stars.material.opacity = Math.max(0, 1 - d2 * 1.6);
-      this.stars.rotation.y = t * Math.PI * 2 * 0.25;
-      this.moon.material.opacity = Math.max(0, 1 - d2 * 1.4);
-      this.moon.position.set(-Math.cos(ang) * 150, 60 + Math.max(0, -Math.sin(ang)) * 110, -120);
-      const night = 1 - d2;
-      if (L3.lamps) L3.lamps.forEach((l2, i) => {
-        l2.intensity = 1.5 + night * 9 + Math.sin(performance.now() / 200 + i) * 0.5 * night;
-      });
-      if (L3.lampBulbs) for (const b2 of L3.lampBulbs) b2.material.emissiveIntensity = 0.4 + night * 3;
-      if (L3.windowGlow) L3.windowGlow.material.opacity = night * 0.9;
-      if (night > 0.5 && fx) {
-        this.firefly += dt * 18 * night;
-        while (this.firefly > 1) {
-          this.firefly--;
-          const p2 = focus.clone().add(new Vector3((Math.random() - 0.5) * 34, 0.4 + Math.random() * 1.6, (Math.random() - 0.5) * 26));
-          fx.emit(p2, { count: 1, color: Math.random() < 0.7 ? 14221162 : 16769162, speed: 0.25, up: 0.2, life: 2.2, size: 0.28, drag: 0.5 });
-        }
-      }
-      return d2;
-    }
-  };
-
   // src/water.js
   var TIME = { value: 0 };
   function makeWater(deep) {
@@ -47642,6 +48309,416 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     mesh.onBeforeRender = () => {
       TIME.value = performance.now() / 1e3;
     };
+  }
+
+  // src/interior.js
+  var CELL = 2;
+  var rng = (seed) => () => {
+    seed |= 0;
+    seed = seed + 1831565813 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+  function interiorType(name) {
+    if (/tavern/.test(name)) return "tavern";
+    if (/market/.test(name)) return "shop";
+    if (/blacksmith/.test(name)) return "smithy";
+    if (/church/.test(name)) return "temple";
+    if (/castle/.test(name)) return "hall";
+    if (/barracks/.test(name)) return "barracks";
+    if (/tower/.test(name)) return "study";
+    if (/mine/.test(name)) return "mine";
+    if (/mill|grain/.test(name)) return "mill";
+    return "home";
+  }
+  var SIZE2 = { home: [7, 6], tavern: [11, 8], shop: [8, 6], smithy: [8, 7], temple: [8, 10], hall: [12, 9], barracks: [10, 7], study: [6, 6], mill: [8, 7], mine: [9, 7] };
+  var FIRST = ["Alda", "Bram", "Cedric", "Dora", "Edwin", "Fenna", "Garret", "Hilde", "Ivo", "Jessa", "Kell", "Lorna", "Mags", "Nyle", "Orla", "Piet", "Quill", "Rosa", "Silas", "Tilda", "Ulric", "Vera", "Wim", "Yara", "Bess", "Cole", "Dunn", "Elsie", "Finch", "Greta", "Hob", "Inga", "Jory", "Kit", "Lark", "Milo", "Nell", "Osk", "Perrin", "Ruth"];
+  var SURN = ["Ashby", "Bramble", "Cobb", "Dunmore", "Fallow", "Gristle", "Hearth", "Ivywood", "Kettle", "Larkspur", "Millward", "Nettle", "Oakes", "Pennywhistle", "Quarry", "Reed", "Stokes", "Thatcher", "Underhill", "Wicke"];
+  var TAVERNS = ["The Drowned Lantern", "The Thirsty Well", "The Sleeping Fox", "The Copper Kettle", "The Last Candle"];
+  var TEMPLES = ["Chapel of the Wells", "Shrine of the Morning Lamp", "Chapel of Still Water", "House of the Ember Saint"];
+  var SHOPS = ["General Goods", "Curios and Cloth", "Spice and Sundries", "Odds and Ends"];
+  var SMITHS = ["Anvil and Ash", "The Red Forge", "Hammerfall Smithy", "Coldiron Works"];
+  var TOWERS = ["Scholar's Tower", "Lamplighter's Tower", "Old Watchtower", "Astronomer's Tower"];
+  var nameAt = (arr, i) => arr[i % arr.length];
+  function buildingTitle(b2) {
+    const i = b2.index || 0, t = interiorType(b2.name);
+    const owner = `${nameAt(FIRST, i * 7 + 3)} ${nameAt(SURN, i * 3 + 1)}`;
+    switch (t) {
+      case "tavern":
+        return nameAt(TAVERNS, i);
+      case "temple":
+        return nameAt(TEMPLES, i);
+      case "shop":
+        return `${nameAt(SURN, i * 5)}'s ${nameAt(SHOPS, i)}`;
+      case "smithy":
+        return nameAt(SMITHS, i);
+      case "hall":
+        return "The Keep of Hollowmere";
+      case "barracks":
+        return "Town Barracks";
+      case "study":
+        return nameAt(TOWERS, i);
+      case "mine":
+        return "Glowstone Mine";
+      case "mill":
+        return /windmill/.test(b2.name) ? "The Windmill" : /watermill/.test(b2.name) ? "The Watermill" : /lumber/.test(b2.name) ? "Lumber Mill" : "Granary";
+      default:
+        return `${owner.split(" ")[0]}'s House`;
+    }
+  }
+  var LINES = {
+    home: ["Wipe your boots, hero.", "Make yourself at home. Not too much at home.", "The kettle is on if you want some.", "We hear the Well at night through the floorboards.", "My grandmother swore the town was built on a giant's back.", "Close the door, you are letting the cold in."],
+    tavern: ["Another round for the Well-diver!", "Ale is cheap, stories are free.", "I saw a skeleton dance once. Or I had too much cider.", "Sit, drink, forget the deep for a while.", "Mind the floor, it is sticky with heroics.", "Have you tried the stew? Nobody knows what is in it."],
+    shop: ["Browse all you like. Break it, buy it.", "Fresh stock from the coast every week.", "Looking for something shiny?", "Prices are fair. Mostly."],
+    smithy: ["Hot iron waits for no one.", "A blade is only as good as its edge.", "Bring me ore from the deep and I will make you something wicked.", "Careful, the anvil bites."],
+    temple: ["Peace be on your lantern.", "Light a candle for those still below.", "The Wells take, the light gives back.", "Speak softly here."],
+    hall: ["The Keep welcomes you, adventurer.", "The council meets at dusk.", "Kneel? No need. You are more use standing.", "These banners have seen three hundred winters."],
+    barracks: ["Lights out at the tenth bell.", "Sharpen, polish, repeat.", "Recruits snore like trolls.", "You want to spar? Maybe later."],
+    study: ["Do not touch the star charts.", "I am writing a history of the Wells. Volume nine.", "The deep floors glow with old magic.", "Knowledge is a lantern too."],
+    mill: ["Flour in your hair is a mark of honest work.", "The stones never stop turning.", "Mind the sacks, they are heavier than they look.", "Bread for the whole town starts here."],
+    mine: ["Glowstone, iron and the odd old bone.", "Watch your head.", "We stopped digging east. Something knocked back.", "Bring a lantern, always."]
+  };
+  var WHO = { home: 2, tavern: 6, shop: 2, smithy: 2, temple: 3, hall: 4, barracks: 4, study: 1, mill: 2, mine: 3 };
+  var MODELS = ["Knight", "Mage", "Rogue", "Barbarian", "Rogue_Hooded"];
+  var SPECS = ["v_m1", "v_f1", "v_m2", "v_f2", "v_m3", "v_f3", "v_m4", "v_m5", "v_f4", "v_m6", "v_f5"];
+  var ROLE = { tavern: ["Barkeep", "Patron", "Patron", "Patron", "Patron", "Bard"], shop: ["Shopkeeper", "Customer"], smithy: ["Smith", "Apprentice"], temple: ["Priest", "Pilgrim", "Pilgrim"], hall: ["Steward", "Guard", "Guard", "Councillor"], barracks: ["Sergeant", "Guard", "Guard", "Recruit"], study: ["Scholar"], mill: ["Miller", "Porter"], mine: ["Foreman", "Miner", "Miner"], home: ["", ""] };
+  function genInterior(L3, b2) {
+    const type = interiorType(b2.name);
+    const [rw, rh] = SIZE2[type];
+    L3.itype = type;
+    L3.building = b2;
+    L3.title = buildingTitle(b2);
+    L3.alloc(rw + 4, rh + 4);
+    L3.room = { x: 2, y: 2, w: rw, h: rh };
+    L3.carve(2, 2, rw, rh);
+    const dx = 2 + Math.floor(rw / 2);
+    L3.carve(dx, 2 + rh, 1, 1);
+    L3.doorCell = [dx, 2 + rh];
+    L3.startPos = L3.toWorld(dx, 1 + rh);
+    L3.rooms = [L3.room];
+  }
+  function buildInteriorEnv(L3) {
+    const warm = L3.itype === "mine" ? 9075306 : 16767144;
+    L3.scene.background = new Color(394243);
+    L3.scene.fog = new Fog(394243, 40, 90);
+    L3.ambient = new HemisphereLight(warm, 2759696, Settings.grit === "classic" ? 1.6 : 1.25);
+    L3.sun.color.set(16769200);
+    L3.sun.intensity = 0.9;
+    L3.scene.environmentIntensity = 0.18;
+  }
+  function buildInterior(L3) {
+    const R5 = rng(1e3 + (L3.building.index || 0) * 7919);
+    const pick2 = (a) => a[Math.floor(R5() * a.length)];
+    const { x: rx, y: ry, w: rw, h: rh } = L3.room;
+    const t = L3.itype;
+    const stone = t === "temple" || t === "hall" || t === "barracks";
+    const W = (cx, cy) => L3.toWorld(cx, cy);
+    const put = (name, cx, cy, s2 = 0.5, rot = 0, block = true, y2 = 0) => {
+      const o2 = L3.placeProp(name, W(cx, cy).setY(y2), s2, rot);
+      if (block) {
+        for (const [bx, by] of Array.isArray(block) ? block : [[Math.round(cx), Math.round(cy)]]) if (L3.isFloor(bx, by)) L3.cells[L3.idx(bx, by)] = 2;
+      }
+      return o2;
+    };
+    for (let y2 = ry; y2 < ry + rh; y2++) for (let x2 = rx; x2 < rx + rw; x2++) {
+      const f2 = t === "mine" ? R5() < 0.7 ? "floor_dirt_large" : "floor_tile_large_rocks" : stone ? "floor_tile_large" : R5() < 0.85 ? "floor_wood_large" : "floor_wood_large_dark";
+      L3.placeProp(f2, W(x2, y2), 0.5, Math.floor(R5() * 4) * Math.PI / 2);
+    }
+    const [dcx, dcy] = L3.doorCell;
+    L3.placeProp(stone ? "floor_tile_large" : "floor_wood_large_dark", W(dcx, dcy), 0.5, 0);
+    if (t === "home" || t === "temple" || t === "hall" || t === "tavern") {
+      const col2 = [8006180, 2767466, 5913114, 2775610][(L3.building.index || 0) % 4];
+      const rug = new Mesh(new PlaneGeometry(1, 1), new MeshStandardMaterial({ color: col2, roughness: 0.95 }));
+      rug.rotation.x = -Math.PI / 2;
+      rug.receiveShadow = true;
+      const long = t === "temple" || t === "hall";
+      rug.scale.set(long ? 2.2 : rw * 0.9, long ? rh * CELL * 0.8 : rh * 0.7, 1);
+      rug.position.copy(W(rx + (rw - 1) / 2, ry + (rh - 1) / 2 + (long ? 0.5 : 0.3))).setY(0.03);
+      L3.root.add(rug);
+      const edge = rug.clone();
+      edge.material = new MeshStandardMaterial({ color: 13148240, roughness: 0.9 });
+      edge.scale.x += 0.25;
+      edge.scale.y += 0.25;
+      edge.position.y = 0.025;
+      L3.root.add(edge);
+    }
+    const tall = new Vector3(0.5, 0.72, 0.5), low = new Vector3(0.5, 0.16, 0.5);
+    const wallFor = (side) => {
+      const r = R5();
+      if (t === "mine") return r < 0.3 ? "wall_cracked" : "wall";
+      if (side !== "S" && r < 0.22) return stone ? "wall_archedwindow_open" : "wall_window_open";
+      if (side !== "S" && r < 0.3) return "wall_window_closed";
+      return "wall";
+    };
+    L3.northWalls = [];
+    const dirs = [[0, -1, 0, "N"], [0, 1, Math.PI, "S"], [-1, 0, Math.PI / 2, "W"], [1, 0, -Math.PI / 2, "E"]];
+    for (let y2 = ry; y2 < ry + rh; y2++) for (let x2 = rx; x2 < rx + rw; x2++) {
+      for (const [dx, dy, rot, side] of dirs) {
+        if (L3.isFloor(x2 + dx, y2 + dy)) continue;
+        const p2 = new Vector3(x2 * CELL + dx * (CELL / 2 + 0.25), 0, y2 * CELL + dy * (CELL / 2 + 0.25));
+        const o2 = L3.placeProp(side === "S" ? "wall" : wallFor(side), p2, 0.5, rot);
+        o2.scale.copy(side === "S" ? low : tall);
+      }
+    }
+    for (const [cx, cz] of [[rx - 0.5, ry - 0.5], [rx + rw - 0.5, ry - 0.5], [rx - 0.5, ry + rh - 0.5], [rx + rw - 0.5, ry + rh - 0.5]]) {
+      const pl = L3.placeProp(t === "temple" || t === "hall" ? "pillar_decorated" : "pillar", new Vector3(cx * CELL, 0, cz * CELL), 0.4, 0);
+      pl.scale.y = cz > ry + 1 ? 0.12 : 0.55;
+    }
+    L3.torches = [];
+    L3.flames = [];
+    const light = (p2, color = 16755285, inten = 9, dist = 9) => {
+      if (L3.torches.length >= 4) return null;
+      const l2 = new PointLight(color, inten, dist, 1.4);
+      l2.position.copy(p2);
+      L3.root.add(l2);
+      L3.torches.push(l2);
+      return l2;
+    };
+    const hearth = (cx, cy) => {
+      const base = W(cx, cy);
+      const hb = box(1.9, 1.3, 0.9, 5918792);
+      hb.position.copy(base).add(new Vector3(0, 0.65, -0.35));
+      L3.root.add(hb);
+      const mouth = box(1.1, 0.75, 0.4, 1181700);
+      mouth.position.copy(base).add(new Vector3(0, 0.45, 0.02));
+      L3.root.add(mouth);
+      const fire = box(0.7, 0.28, 0.25, 16742944, 3);
+      fire.position.copy(base).add(new Vector3(0, 0.2, 0.12));
+      L3.root.add(fire);
+      const chim = box(1.1, 1.6, 0.6, 4866104);
+      chim.position.copy(base).add(new Vector3(0, 2, -0.5));
+      L3.root.add(chim);
+      light(base.clone().add(new Vector3(0, 0.8, 0.9)), 16747066, 14, 10);
+      L3.flames.push(base.clone().add(new Vector3(0, 0.35, 0.15)));
+      L3.cells[L3.idx(cx, cy)] = 2;
+    };
+    const sconce = (cx, cy) => {
+      const p2 = W(cx, cy).add(new Vector3(0, 1.4, -0.75));
+      L3.placeProp("torch_mounted", p2, 0.5, 0);
+      light(p2.clone().add(new Vector3(0, 0.4, 0.6)), 16752720, 8, 8);
+      L3.flames.push(p2.clone().add(new Vector3(0, 0.45, 0.3)));
+    };
+    const candleOn = (o2, dx = 0, dz = 0, h2 = 0.52) => {
+      const c2 = L3.placeProp(R5() < 0.5 ? "candle_lit" : "candle_thin_lit", o2.position.clone().add(new Vector3(dx, h2, dz)), 0.5, 0);
+      return c2;
+    };
+    const midX = rx + Math.floor(rw / 2);
+    const banners = ["banner_patternB_red", "banner_shield_blue", "banner_triple_yellow", "banner_patternC_green"];
+    const onNorth = (name, cx, s2 = 0.5, y2 = 0) => L3.placeProp(name, new Vector3(cx * CELL, y2, (ry - 0.5) * CELL + 0.3), s2, 0);
+    switch (t) {
+      case "home": {
+        put("bed_decorated", rx + 0.5, ry + 0.5, 0.5, 0, [[rx, ry], [rx + 1, ry], [rx, ry + 1], [rx + 1, ry + 1]]);
+        put(pick2(["trunk_medium_A", "trunk_small_B"]), rx + 0.5, ry + 2, 0.5, 0);
+        hearth(rx + rw - 2, ry);
+        const tb = put("table_medium", midX - 0.5, ry + 2.6, 0.5, Math.PI / 2, [[midX - 1, ry + 2], [midX, ry + 2], [midX - 1, ry + 3], [midX, ry + 3]]);
+        put("chair", midX - 1.6, ry + 2.6, 0.5, Math.PI / 2, false);
+        put("chair", midX + 0.6, ry + 2.6, 0.5, -Math.PI / 2, false);
+        L3.placeProp(pick2(["plate_food_A", "plate_food_B"]), tb.position.clone().setY(0.5), 0.5, R5() * 6);
+        candleOn(tb, 0.4, 0.1);
+        put("shelf_large", midX - 1, ry, 0.5, 0);
+        put("wall_shelves", rx + rw - 1, ry + rh - 2, 0.5, -Math.PI / 2);
+        put("barrel_large_decorated", rx + rw - 1, ry + rh - 1, 0.45, R5() * 6);
+        put("keg_decorated", rx, ry + rh - 1, 0.45, R5() * 6);
+        put("stool", rx + rw - 2, ry + 1.6, 0.5, R5() * 6, false);
+        break;
+      }
+      case "tavern": {
+        for (let x2 = rx + 2; x2 < rx + rw - 3; x2 += 2) {
+          const bar = put("table_long", x2 + 0.5, ry + 2, 0.5, 0, [[x2, ry + 2], [x2 + 1, ry + 2]]);
+          for (let k2 = 0; k2 < 2; k2++) L3.placeProp(pick2(["bottle_A_green", "bottle_B_brown", "bottle_C_green", "plate_stack"]), bar.position.clone().add(new Vector3(R5() * 1.6 - 0.8, 0.52, 0)), 0.5, R5() * 6);
+        }
+        for (let x2 = rx + 2; x2 < rx + rw - 3; x2 += 1.5) put(pick2(["keg_decorated", "barrel_small_stack"]), x2, ry, 0.45, 0);
+        put("shelves", rx + rw - 2, ry, 0.5, 0);
+        hearth(rx, ry);
+        for (const [cx, cy] of [[rx + 2, ry + 4], [rx + 5, ry + 4], [rx + 2, ry + 6], [rx + 8, ry + 6], [rx + 9, ry + 4]]) {
+          const tb = put(pick2(["table_medium", "table_medium_tablecloth", "table_small_decorated_A"]), cx, cy, 0.5, R5() * 0.4, [[Math.round(cx), Math.round(cy)]]);
+          for (const [sx, sz] of [[-1.1, 0], [1.1, 0], [0, 1.1]]) L3.placeProp("stool", tb.position.clone().add(new Vector3(sx, 0, sz)), 0.5, R5() * 6);
+          L3.placeProp(pick2(["plate_food_A", "plate_food_B", "bottle_A_green"]), tb.position.clone().setY(0.5), 0.5, R5() * 6);
+          if (R5() < 0.6) candleOn(tb, 0.3, -0.2);
+        }
+        put("barrel_large_decorated", rx + rw - 1, ry + rh - 1, 0.45, 0);
+        onNorth(banners[0], rx + 1, 0.5);
+        sconce(rx + rw - 1, ry);
+        break;
+      }
+      case "shop": {
+        for (let x2 = rx; x2 < rx + rw; x2 += 2) put(R5() < 0.5 ? "shelf_large" : "shelves", x2 + 0.5, ry, 0.5, 0, [[x2, ry], [x2 + 1, ry]]);
+        const ct = put("table_long_decorated_A", midX, ry + 2, 0.5, 0, [[midX - 1, ry + 2], [midX, ry + 2], [midX + 1, ry + 2]]);
+        L3.placeProp("coin_stack_large", ct.position.clone().add(new Vector3(0.6, 0.52, 0)), 0.5, 0);
+        candleOn(ct, -0.7, 0);
+        for (const [cx, cy] of [[rx, ry + 3], [rx, ry + 4], [rx + rw - 1, ry + 3], [rx + rw - 1, ry + 4]]) put(pick2(["crate_A_small", "barrel", "sack", "crate_B_small"]), cx, cy, 5, R5() * 6);
+        put("box_small_decorated", rx + 1, ry + rh - 1, 0.5, 0);
+        put("trunk_small_B", rx + rw - 2, ry + rh - 1, 0.5, 0);
+        sconce(rx + 1, ry);
+        sconce(rx + rw - 2, ry);
+        break;
+      }
+      case "smithy": {
+        hearth(rx + 1, ry);
+        hearth(rx + 2, ry);
+        const anvil = box(0.9, 0.5, 0.4, 2763312);
+        anvil.position.copy(W(rx + 2, ry + 2)).setY(0.55);
+        L3.root.add(anvil);
+        const block = cyl(0.3, 0.35, 0.3, 5913114);
+        block.position.copy(W(rx + 2, ry + 2)).setY(0.15);
+        L3.root.add(block);
+        L3.cells[L3.idx(rx + 2, ry + 2)] = 2;
+        put("weaponrack", rx + rw - 1, ry + 1, 2.6, -Math.PI / 2);
+        put("weaponrack", rx + rw - 1, ry + 3, 2.6, -Math.PI / 2);
+        onNorth("sword_shield", rx + rw - 3, 0.5, 0.8);
+        onNorth("sword_shield_gold", rx + rw - 2, 0.5, 0.8);
+        put("barrel_large_decorated", rx, ry + rh - 1, 0.45, 0);
+        put("resource_stone", rx + rw - 1, ry + rh - 1, 4, R5() * 6);
+        put("crate_open", rx + 4, ry, 4, 0);
+        break;
+      }
+      case "temple": {
+        const alt = put("table_long_tablecloth_decorated_A", midX, ry + 1, 0.5, 0, [[midX - 1, ry + 1], [midX, ry + 1], [midX + 1, ry + 1]]);
+        for (const dx of [-0.8, -0.3, 0.3, 0.8]) candleOn(alt, dx, -0.1);
+        for (let y2 = ry + 3; y2 < ry + rh - 2; y2 += 1.5) for (const x2 of [rx + 1.5, rx + rw - 2.5]) put("table_long", x2, y2, 0.5, 0, [[Math.floor(x2), Math.round(y2)], [Math.ceil(x2), Math.round(y2)]]);
+        for (const x2 of [rx + 0.2, rx + rw - 1.2]) for (let y2 = ry + 2; y2 < ry + rh - 1; y2 += 3) L3.placeProp("pillar_decorated", W(x2, y2), 0.4, 0);
+        onNorth(banners[1], midX - 2);
+        onNorth(banners[2], midX + 2);
+        sconce(rx, ry);
+        sconce(rx + rw - 1, ry);
+        break;
+      }
+      case "hall": {
+        const tl = put("table_long_tablecloth_decorated_A", midX, ry + 4, 0.5, Math.PI / 2, [[midX, ry + 3], [midX, ry + 4], [midX, ry + 5]]);
+        for (const dz of [-1.6, 0, 1.6]) {
+          L3.placeProp("chair", tl.position.clone().add(new Vector3(-1.1, 0, dz)), 0.5, Math.PI / 2);
+          L3.placeProp("chair", tl.position.clone().add(new Vector3(1.1, 0, dz)), 0.5, -Math.PI / 2);
+          L3.placeProp(pick2(["plate_food_A", "plate_food_B"]), tl.position.clone().add(new Vector3(0, 0.52, dz)), 0.5, 0);
+        }
+        const throne = put("chair", midX, ry + 0.6, 0.85, 0);
+        throne.traverse((o2) => {
+          if (o2.isMesh) {
+            o2.material = o2.material.clone();
+            o2.material.color.multiplyScalar(1.2).add(new Color(3153920));
+          }
+        });
+        banners.forEach((bn, i) => onNorth(bn, rx + 1 + i * (rw - 2) / 3));
+        for (const x2 of [rx + 1, rx + rw - 2]) for (let y2 = ry + 2; y2 < ry + rh - 1; y2 += 3) put("pillar_decorated", x2, y2, 0.4, 0);
+        put("trunk_medium_A", rx, ry + rh - 1, 0.5, 0);
+        put("coin_stack_large", rx + rw - 1, ry + rh - 1, 0.6, 0);
+        sconce(rx + 2, ry);
+        sconce(rx + rw - 3, ry);
+        break;
+      }
+      case "barracks": {
+        for (let x2 = rx; x2 < rx + rw - 1; x2 += 2) {
+          put("bed_frame", x2 + 0.5, ry + 0.6, 0.5, 0, [[x2, ry], [x2 + 1, ry]]);
+          put("trunk_small_B", x2 + 0.5, ry + 1.7, 0.5, 0);
+        }
+        put("weaponrack", rx, ry + 4, 2.6, Math.PI / 2);
+        put("weaponrack", rx + rw - 1, ry + 4, 2.6, -Math.PI / 2);
+        const tb = put("table_long", midX, ry + 4, 0.5, 0, [[midX - 1, ry + 4], [midX, ry + 4]]);
+        candleOn(tb, 0, 0);
+        put("stool", midX - 1, ry + 5, 0.5, 0, false);
+        put("stool", midX + 1, ry + 5, 0.5, 0, false);
+        put("sword_shield", rx + 2, ry + rh - 1, 0.5, Math.PI);
+        sconce(midX, ry);
+        break;
+      }
+      case "study": {
+        for (let x2 = rx; x2 < rx + rw; x2 += 2) put("shelves", x2 + 0.5, ry, 0.5, 0, [[x2, ry], [x2 + 1, ry]]);
+        put("wall_shelves", rx, ry + 2, 0.5, Math.PI / 2);
+        put("shelf_small", rx + rw - 1, ry + 2, 0.5, -Math.PI / 2);
+        const tb = put("table_small_decorated_B", midX, ry + 2.5, 0.5, 0);
+        candleOn(tb, 0.2, 0);
+        put("chair", midX, ry + 3.4, 0.5, Math.PI, false);
+        put("stairs_wood", rx + rw - 1, ry + rh - 2, 0.5, -Math.PI / 2, [[rx + rw - 1, ry + rh - 2], [rx + rw - 1, ry + rh - 1]]);
+        put("trunk_small_B", rx, ry + rh - 1, 0.5, 0);
+        sconce(rx + 1, ry);
+        break;
+      }
+      case "mill": {
+        const stoneW = cyl(0.9, 0.9, 0.35, 9077880);
+        stoneW.position.copy(W(midX, ry + 2)).setY(0.6);
+        L3.root.add(stoneW);
+        const stoneB = cyl(1, 1.1, 0.45, 6972506);
+        stoneB.position.copy(W(midX, ry + 2)).setY(0.22);
+        L3.root.add(stoneB);
+        L3.cells[L3.idx(midX, ry + 2)] = 2;
+        L3.mill = stoneW;
+        for (let i = 0; i < 9; i++) put(pick2(["sack", "sack", "crate_A_small", "barrel", "resource_lumber"]), rx + (i % 3 === 0 ? 0 : rw - 1), ry + i % (rh - 1), i % 5 === 4 ? 4 : 6, R5() * 6);
+        put("pallet", rx + 2, ry + rh - 1, 5, 0);
+        put("wheelbarrow", rx + rw - 3, ry + rh - 1, 5, R5() * 6);
+        sconce(rx + 1, ry);
+        break;
+      }
+      case "mine": {
+        for (let x2 = rx; x2 < rx + rw; x2 += 3) put(pick2(["crates_stacked", "box_stacked", "barrel_large"]), x2, ry, 0.45, R5() * 6);
+        for (let i = 0; i < 5; i++) put(pick2(["rubble_half", "rubble_large", "resource_stone"]), rx + Math.floor(R5() * rw), ry + 1 + Math.floor(R5() * (rh - 3)), R5() < 0.5 ? 0.4 : 4, R5() * 6);
+        const mouth = box(1.6, 2.1, 0.1, 328707);
+        mouth.position.copy(W(midX, ry)).add(new Vector3(0, 1.05, -0.8));
+        L3.root.add(mouth);
+        for (const dx of [-0.9, 0.9]) {
+          const post = box(0.2, 2.3, 0.2, 5913114);
+          post.position.copy(W(midX, ry)).add(new Vector3(dx, 1.15, -0.7));
+          L3.root.add(post);
+        }
+        const lintel = box(2.1, 0.22, 0.22, 5913114);
+        lintel.position.copy(W(midX, ry)).add(new Vector3(0, 2.3, -0.7));
+        L3.root.add(lintel);
+        light(W(midX, ry).add(new Vector3(0, 0.8, 0)), 6737151, 6, 6);
+        sconce(rx + 1, ry);
+        sconce(rx + rw - 2, ry);
+        break;
+      }
+    }
+    if (L3.torches.length < 2) sconce(rx + rw - 1, ry);
+    const fill2 = new PointLight(13162751, 4, 18, 1.2);
+    fill2.position.copy(W(rx + rw / 2, ry + rh)).setY(4.5);
+    L3.root.add(fill2);
+  }
+  function interiorPeople(L3) {
+    const t = L3.itype, b2 = L3.building, i0 = (b2.index || 0) * 13;
+    const R5 = rng(5e3 + i0);
+    const { x: rx, y: ry, w: rw, h: rh } = L3.room;
+    const out2 = [];
+    const roles = ROLE[t];
+    const n = WHO[t];
+    const station = { shop: "merchant", smithy: "blacksmith", temple: "healer" }[t];
+    for (let k2 = station ? 1 : 0; k2 < n; k2++) {
+      const first = nameAt(FIRST, i0 + k2 * 11 + 5);
+      const role = roles[k2 % roles.length];
+      const name = role ? `${first} the ${role}` : t === "home" && k2 === 0 ? `${buildingTitle(b2).replace("'s House", "")} ${nameAt(SURN, (b2.index || 0) * 3 + 1)}` : `${first} ${nameAt(SURN, (b2.index || 0) * 3 + 1)}`;
+      let at = null;
+      for (let tries = 0; tries < 30 && !at; tries++) {
+        const cx = rx + 1 + Math.floor(R5() * (rw - 2)), cy = ry + 1 + Math.floor(R5() * (rh - 2));
+        if (L3.isFloor(cx, cy) && !(cx === L3.doorCell[0] && cy >= L3.doorCell[1] - 1)) at = [cx, cy];
+      }
+      if (!at) continue;
+      const guard = role === "Guard" || role === "Sergeant";
+      const d2 = {
+        name,
+        model: guard ? "Knight" : MODELS[(i0 + k2) % MODELS.length],
+        at,
+        roam: role === "Barkeep" || role === "Shopkeeper" || role === "Smith" || role === "Priest" ? 1.5 : 3.5,
+        lines: LINES[t],
+        indoor: true,
+        spec: guard ? "guard" : SPECS[(i0 + k2 * 3) % SPECS.length],
+        scale: role === "" && k2 === 1 && t === "home" && R5() < 0.5 ? 0.62 : 1
+      };
+      if (guard) Object.assign(d2, { mode: "guard", helm: true, headgear: "Knight_Helmet", gear: { weapon: ["1H_Sword"], offhand: [] }, cape: "#1f3f8c" });
+      if (role === "Bard") d2.mode = "perform";
+      if (role === "Barkeep") {
+        d2.at = [rx + 4, ry + 1];
+        d2.mode = "stand";
+      }
+      out2.push(d2);
+    }
+    return out2;
+  }
+  function interiorStation(L3) {
+    const t = L3.itype, { x: rx, y: ry, w: rw } = L3.room, i0 = (L3.building.index || 0) * 13;
+    const first = nameAt(FIRST, i0 + 5);
+    if (t === "shop") return { kind: "merchant", at: [rx + Math.floor(rw / 2), ry + 1], name: `${first}, Shopkeeper` };
+    if (t === "smithy") return { kind: "blacksmith", at: [rx + 3, ry + 2], name: `${first}, Smith` };
+    if (t === "temple") return { kind: "healer", at: [rx + Math.floor(rw / 2), ry + 2], name: `${first}, Priest` };
+    return null;
   }
 
   // src/textures.js
@@ -47722,16 +48799,16 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     cache4.ground = { albedo, normal };
     return cache4.ground;
   }
-  function addDetail(mat4, detailTex, repeat, strength = 0.55) {
-    mat4.onBeforeCompile = (sh) => {
+  function addDetail(mat5, detailTex, repeat, strength = 0.55) {
+    mat5.onBeforeCompile = (sh) => {
       sh.uniforms.detailMap = { value: detailTex };
       sh.uniforms.detailRepeat = { value: repeat };
       sh.uniforms.detailStrength = { value: strength };
       sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec2 vDetailUv;").replace("#include <uv_vertex>", "#include <uv_vertex>\nvDetailUv = uv;");
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform sampler2D detailMap; uniform float detailRepeat; uniform float detailStrength; varying vec2 vDetailUv;").replace("#include <map_fragment>", "#include <map_fragment>\nfloat dt = texture2D(detailMap, vDetailUv * detailRepeat).r;\ndiffuseColor.rgb *= mix(1.0, dt * 2.0, detailStrength);");
     };
-    mat4.customProgramCacheKey = () => "detail" + repeat;
-    return mat4;
+    mat5.customProgramCacheKey = () => "detail" + repeat;
+    return mat5;
   }
   function grassCard() {
     if (cache4.card) return cache4.card;
@@ -47766,8 +48843,8 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     geo2.setAttribute("uv", new Float32BufferAttribute(U, 2));
     geo2.setAttribute("normal", new Float32BufferAttribute(new Array(24).fill(0).map((_2, i) => i % 3 === 1 ? 1 : 0), 3));
     geo2.setIndex(I2);
-    const mat4 = new MeshStandardMaterial({ map: grassCard(), alphaTest: 0.45, side: DoubleSide, roughness: 0.9 });
-    mat4.onBeforeCompile = (sh) => {
+    const mat5 = new MeshStandardMaterial({ map: grassCard(), alphaTest: 0.45, side: DoubleSide, roughness: 0.9 });
+    mat5.onBeforeCompile = (sh) => {
       sh.uniforms.uTime = timeRef;
       sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nuniform float uTime;").replace("#include <begin_vertex>", `#include <begin_vertex>
         vec4 wp = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
@@ -47775,7 +48852,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         transformed.x += sway * position.y;
         transformed.z += sway * 0.5 * position.y;`);
     };
-    const im = new InstancedMesh(geo2, mat4, count);
+    const im = new InstancedMesh(geo2, mat5, count);
     const m4 = new Matrix4(), q = new Quaternion(), s2 = new Vector3(), p2 = new Vector3();
     const col2 = new Color();
     let n = 0;
@@ -47797,8 +48874,8 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   }
   function flowers(count, area2, isGrass) {
     const geo2 = new IcosahedronGeometry(0.09, 0);
-    const mat4 = new MeshStandardMaterial({ roughness: 0.6, emissive: 1118481 });
-    const im = new InstancedMesh(geo2, mat4, count);
+    const mat5 = new MeshStandardMaterial({ roughness: 0.6, emissive: 1118481 });
+    const im = new InstancedMesh(geo2, mat5, count);
     const m4 = new Matrix4();
     const cols = [16777215, 16769357, 16740264, 10124543, 16747066];
     let n = 0;
@@ -47867,7 +48944,89 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   }
 
   // src/level.js
-  var CELL = 2;
+  var CELL2 = 2;
+  var TOWN_W = 84;
+  var TOWN_H = 80;
+  var HOMES = ["building_home_A_red", "building_home_B_green", "building_home_A_yellow", "building_home_B_blue", "building_home_A_green", "building_home_B_red", "building_home_A_blue", "building_home_B_yellow"];
+  var BIG = { tavern: 3.9, market: 4.9, church: 3.4, blacksmith: 3.6, lumbermill: 3.9, tower: 2.6, barracks: 4.6, mine: 5.4 };
+  function row(axis, fixed, from, to, ry, specials, skip = [], seed = 0) {
+    const out2 = [];
+    let cur = from, k2 = seed, si = 0;
+    while (cur < to) {
+      const special = specials[si] && specials[si][1] <= cur ? specials[si++][0] : null;
+      const name = special || HOMES[k2++ % HOMES.length];
+      const kind = Object.keys(BIG).find((n) => name.includes(n));
+      const w2 = kind ? BIG[kind] : 2.6;
+      if (cur + w2 > to) break;
+      const c2 = cur + w2 / 2;
+      const hit = skip.find(([a, b2]) => c2 + w2 / 2 > a && c2 - w2 / 2 < b2);
+      if (hit) {
+        if (special) si--;
+        else k2--;
+        cur = hit[1] + 0.3;
+        continue;
+      }
+      out2.push({ name, c: axis === "y" ? [fixed, c2] : [c2, fixed], s: kind ? 5.6 : 5.3, ry });
+      cur += w2 + 0.75;
+    }
+    return out2;
+  }
+  var LANTERN_ROW = [
+    ...row("y", 67, 3, 59, Math.PI / 2, [["building_tavern_green", 14], ["building_market_green", 24], ["building_tower_B_green", 40], ["building_blacksmith_blue", 44]], [[10.5, 13.5], [29.5, 32.5], [50.5, 53.5]], 0),
+    ...row("y", 75, 3, 59, -Math.PI / 2, [["building_church_red", 14], ["building_market_red", 30], ["building_lumbermill_red", 44]], [], 3),
+    ...row("y", 62.6, 3, 59, -Math.PI / 2, [["building_tower_A_green", 20], ["building_barracks_blue", 36]], [[10.5, 13.5], [29, 33], [50.5, 53.5]], 5)
+  ];
+  var LOW_MARKET = [
+    ...row("x", 72.6, 2.5, 82, Math.PI, [["building_tavern_yellow", 8], ["building_market_blue", 20], ["building_blacksmith_yellow", 52], ["building_church_green", 64], ["building_tower_A_red", 74]], [[33.5, 50]], 1),
+    ...row("x", 63.2, 2.5, 82, 0, [["building_market_green", 22], ["building_tavern_blue", 56]], [[32.5, 35.5], [33.5, 50.5], [69, 73]], 6),
+    { name: "building_well_red", c: [41.5, 70.5], s: 4, ry: 0 }
+  ];
+  var enterable = (b2) => !/stage|scaffolding|archery|catapult|well|bridge/.test(b2.name);
+  function townBuildings() {
+    return [
+      { name: "building_market_red", c: [8, 6.5], s: 6, ry: 0, npc: "merchant" },
+      { name: "building_tavern_blue", c: [26, 6.5], s: 6.5, ry: 0 },
+      { name: "building_church_blue", c: [27, 25], s: 6, ry: 0 },
+      { name: "building_blacksmith_green", c: [6, 15.5], s: 5.5, ry: Math.PI / 2 },
+      { name: "building_home_A_yellow", c: [15, 5], s: 6, ry: 0 },
+      { name: "building_home_B_red", c: [19.5, 26.5], s: 5.5, ry: Math.PI },
+      { name: "building_home_A_blue", c: [28.5, 15.5], s: 6, ry: -Math.PI / 2 },
+      { name: "building_tower_A_blue", c: [13, 27], s: 4.5, ry: 0 },
+      // east lane
+      { name: "building_home_B_blue", c: [37.5, 5], s: 5.5, ry: 0 },
+      { name: "building_home_A_red", c: [44, 5], s: 5.5, ry: 0 },
+      { name: "building_lumbermill_yellow", c: [43.5, 15], s: 5.5, ry: -Math.PI / 2 },
+      { name: "building_home_A_green", c: [37, 22], s: 5.5, ry: Math.PI / 2 },
+      { name: "building_home_B_green", c: [44, 26], s: 5.5, ry: -Math.PI / 2 },
+      { name: "building_archeryrange_green", c: [43.5, 35.5], s: 5, ry: -Math.PI / 2 },
+      // south lane
+      { name: "building_grain", c: [4.5, 43], s: 5.5, ry: 0 },
+      { name: "building_home_B_yellow", c: [12, 44], s: 5.5, ry: 0 },
+      { name: "building_home_A_blue", c: [19, 44], s: 5.5, ry: 0 },
+      { name: "building_stage_A", c: [28, 43.5], s: 5, ry: 0 },
+      { name: "building_market_yellow", c: [35.5, 44], s: 5.5, ry: 0 },
+      { name: "building_tower_B_red", c: [44, 44.5], s: 4.5, ry: 0 },
+      // the keep district (east)
+      { name: "building_castle_blue", c: [54, 7.5], s: 7, ry: 0 },
+      { name: "building_barracks_red", c: [54.5, 18], s: 6, ry: -Math.PI / 2 },
+      { name: "building_tower_catapult_red", c: [57, 25.5], s: 4.2, ry: -Math.PI / 2 },
+      { name: "building_tavern_red", c: [54.5, 31], s: 6, ry: -Math.PI / 2 },
+      { name: "building_home_A_red", c: [53, 38], s: 5.5, ry: -Math.PI / 2 },
+      { name: "building_mine_yellow", c: [55, 47.5], s: 6, ry: -Math.PI / 2 },
+      // the mill road (south)
+      { name: "building_watermill_green", c: [6, 54], s: 6, ry: 0 },
+      { name: "building_windmill_red", c: [14, 54.5], s: 6, ry: 0 },
+      { name: "building_market_blue", c: [22, 54], s: 5.5, ry: 0 },
+      { name: "building_blacksmith_red", c: [30, 54], s: 5.5, ry: 0 },
+      { name: "building_church_yellow", c: [38, 54], s: 5.5, ry: 0 },
+      { name: "building_scaffolding", c: [45.5, 54.5], s: 5, ry: 0 },
+      { name: "building_tower_A_yellow", c: [52, 55], s: 4.5, ry: 0 },
+      // Lantern Row (new east quarter): homes and shops either side of a long street
+      ...LANTERN_ROW,
+      // Low Market (new south quarter)
+      ...LOW_MARKET
+    ].map((b2) => ({ ...b2 }));
+  }
   var VILLAGERS = [
     { name: "Marta the Baker", model: "Mage", tint: 16769216, at: [22, 16], lines: ["Fresh bread at dawn, if the Wells stay quiet.", "My oven has been warmer since you came to town.", "Bring me wheat from the farm and I will bake you something grand. Someday."] },
     { name: "Old Tobin", model: "Knight", tint: 11579568, scale: 0.95, at: [12, 18], lines: ["I went down the Well once. Once.", "Back in my day the skeletons had manners.", "Mind the third floor. It hums."] },
@@ -47892,6 +49051,78 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     { name: "Night Watchman Corwin", model: "Rogue_Hooded", tint: 10528960, cape: "#1a1a2a", at: [32, 49.5], roam: 14, lines: ["I keep the lamps lit after dark.", "The stars look different over the Well.", "Odd sounds at midnight. Always at midnight."] },
     { name: "Ivy", model: "Rogue", tint: 16769184, scale: 0.62, speed: 2.4, roam: 10, at: [40, 9], lines: ["Tag, you are it!", "I can climb the windmill. Almost.", "Is your sword heavy?"] }
   ];
+  var CROWD_NAMES = [
+    "Abel Thatcher",
+    "Bryn Cobb",
+    "Cora Reed",
+    "Dell Millward",
+    "Effie Stokes",
+    "Fitz Oakes",
+    "Gwen Kettle",
+    "Hal Underhill",
+    "Isla Fallow",
+    "Jem Nettle",
+    "Kara Ashby",
+    "Lew Bramble",
+    "Maud Hearth",
+    "Ned Quarry",
+    "Opal Wicke",
+    "Pim Larkspur",
+    "Rhea Dunmore",
+    "Sam Gristle",
+    "Tess Ivywood",
+    "Ugo Pennywhistle",
+    "Vin Cobb",
+    "Wynn Reed",
+    "Ada Stokes",
+    "Bert Oakes",
+    "Clem Fallow",
+    "Dot Kettle"
+  ];
+  var CROWD_LINES = [
+    "Busy day at the Low Market.",
+    "Have you seen the new houses on Lantern Row?",
+    "Morning! Or is it afternoon already?",
+    "My feet ache. Too many errands.",
+    "The well-water tastes of iron lately.",
+    "I am off to the tavern. Purely for medicinal reasons.",
+    "The Keep doubled the night watch.",
+    "They say you can hear singing from the Old Well.",
+    "Prices at the stalls keep going up.",
+    "Lovely weather for not being in a dungeon.",
+    "Mind the cart!",
+    "If you see my cat, she is called Biscuit.",
+    "Back home before dark, that is my rule.",
+    "Hollowmere grows every year."
+  ];
+  var HUBS = [[17, 19], [41.5, 68], [71, 30], [71, 12], [30, 39.5], [50, 31], [26, 12], [71, 60], [20, 67], [60, 67], [40, 20], [48, 49.5], [8, 22]];
+  var CROWD_SPECS = ["v_m1", "v_f1", "v_m2", "v_f2", "v_m3", "v_f3", "v_m4", "v_m5", "v_f4", "v_m6", "v_f5"];
+  function crowd(L3) {
+    const homes = L3.doors.filter((b2) => /home/.test(b2.name));
+    const work = L3.doors.filter((b2) => /tavern|market|church|blacksmith/.test(b2.name));
+    const W = (c2) => L3.toWorld(...L3.nearestFloor(Math.round(c2[0]), Math.round(c2[1])));
+    const n = Settings.quality === "low" ? 16 : 26;
+    const out2 = [];
+    for (let k2 = 0; k2 < n; k2++) {
+      const home = homes[k2 * 7 % homes.length];
+      const stops = [W(HUBS[k2 % HUBS.length]), W(HUBS[(k2 * 5 + 3) % HUBS.length]), W(HUBS[(k2 * 3 + 7) % HUBS.length]), work[k2 * 3 % work.length].door.clone(), home.door.clone()];
+      const kid = k2 % 9 === 4;
+      out2.push({
+        name: CROWD_NAMES[k2 % CROWD_NAMES.length],
+        model: ["Knight", "Mage", "Rogue", "Barbarian", "Rogue_Hooded"][k2 % 5],
+        tint: [16769216, 13687039, 16765136, 13696976, 16773296][k2 % 5],
+        mode: "routine",
+        at: HUBS[k2 % HUBS.length],
+        stops,
+        homeDoor: home.door.clone(),
+        speed: kid ? 2.6 : rand(1.6, 2.2),
+        scale: kid ? 0.62 : 1,
+        spec: CROWD_SPECS[k2 % CROWD_SPECS.length],
+        lines: CROWD_LINES
+      });
+    }
+    return out2;
+  }
   var Level = class {
     constructor(scene2, kind, floor) {
       this.scene = scene2;
@@ -47902,8 +49133,15 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.rooms = [];
       this.entities = [];
       this.blocked = [];
+      this.safe = kind !== "dungeon";
+      resetRealNpcBudget();
       if (kind === "town") this.genTown();
-      else this.genDungeon();
+      else if (kind === "interior") {
+        const all = townBuildings();
+        const b2 = all[floor] || all[4];
+        b2.index = all.indexOf(b2);
+        genInterior(this, b2);
+      } else this.genDungeon();
       this.explored = new Uint8Array(this.w * this.h);
       this.timeU = { value: 0 };
       this.noAO = [];
@@ -47911,6 +49149,9 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (kind === "town") {
         this.buildTownVisuals();
         this.populateTown();
+      } else if (kind === "interior") {
+        buildInterior(this);
+        this.populateInterior();
       } else {
         this.buildDungeonVisuals();
         this.addDungeonDetail();
@@ -47941,10 +49182,10 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       return x2 >= 0 && y2 >= 0 && x2 < this.w && y2 < this.h && this.cells[y2 * this.w + x2] === 1;
     }
     cellOf(p2) {
-      return [Math.floor(p2.x / CELL + 0.5), Math.floor(p2.z / CELL + 0.5)];
+      return [Math.floor(p2.x / CELL2 + 0.5), Math.floor(p2.z / CELL2 + 0.5)];
     }
     toWorld(x2, y2) {
-      return new Vector3(x2 * CELL, 0, y2 * CELL);
+      return new Vector3(x2 * CELL2, 0, y2 * CELL2);
     }
     walkable(p2) {
       const [x2, y2] = this.cellOf(p2);
@@ -48017,63 +49258,36 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.carve(x2, y2, 2, 2);
     }
     genTown() {
-      this.alloc(60, 60);
-      this.carve(1, 1, 58, 58);
-      this.buildings = [
-        { name: "building_market_red", c: [8, 6.5], s: 6, ry: 0, npc: "merchant" },
-        { name: "building_tavern_blue", c: [26, 6.5], s: 6.5, ry: 0 },
-        { name: "building_church_blue", c: [27, 25], s: 6, ry: 0 },
-        { name: "building_blacksmith_green", c: [6, 15.5], s: 5.5, ry: Math.PI / 2 },
-        { name: "building_home_A_yellow", c: [15, 5], s: 6, ry: 0 },
-        { name: "building_home_B_red", c: [19.5, 26.5], s: 5.5, ry: Math.PI },
-        { name: "building_home_A_blue", c: [28.5, 15.5], s: 6, ry: -Math.PI / 2 },
-        { name: "building_tower_A_blue", c: [13, 27], s: 4.5, ry: 0 },
-        // east lane
-        { name: "building_home_B_blue", c: [37.5, 5], s: 5.5, ry: 0 },
-        { name: "building_home_A_red", c: [44, 5], s: 5.5, ry: 0 },
-        { name: "building_lumbermill_yellow", c: [43.5, 15], s: 5.5, ry: -Math.PI / 2 },
-        { name: "building_home_A_green", c: [37, 22], s: 5.5, ry: Math.PI / 2 },
-        { name: "building_home_B_green", c: [44, 26], s: 5.5, ry: -Math.PI / 2 },
-        { name: "building_archeryrange_green", c: [43.5, 35.5], s: 5, ry: -Math.PI / 2 },
-        // south lane
-        { name: "building_grain", c: [4.5, 43], s: 5.5, ry: 0 },
-        { name: "building_home_B_yellow", c: [12, 44], s: 5.5, ry: 0 },
-        { name: "building_home_A_blue", c: [19, 44], s: 5.5, ry: 0 },
-        { name: "building_stage_A", c: [28, 43.5], s: 5, ry: 0 },
-        { name: "building_market_yellow", c: [35.5, 44], s: 5.5, ry: 0 },
-        { name: "building_tower_B_red", c: [44, 44.5], s: 4.5, ry: 0 },
-        // the keep district (east)
-        { name: "building_castle_blue", c: [54, 7.5], s: 7, ry: 0 },
-        { name: "building_barracks_red", c: [54.5, 18], s: 6, ry: -Math.PI / 2 },
-        { name: "building_tower_catapult_red", c: [57, 25.5], s: 4.2, ry: -Math.PI / 2 },
-        { name: "building_tavern_red", c: [54.5, 31], s: 6, ry: -Math.PI / 2 },
-        { name: "building_home_A_red", c: [53, 38], s: 5.5, ry: -Math.PI / 2 },
-        { name: "building_mine_yellow", c: [55, 47.5], s: 6, ry: -Math.PI / 2 },
-        // the mill road (south)
-        { name: "building_watermill_green", c: [6, 54], s: 6, ry: 0 },
-        { name: "building_windmill_red", c: [14, 54.5], s: 6, ry: 0 },
-        { name: "building_market_blue", c: [22, 54], s: 5.5, ry: 0 },
-        { name: "building_blacksmith_red", c: [30, 54], s: 5.5, ry: 0 },
-        { name: "building_church_yellow", c: [38, 54], s: 5.5, ry: 0 },
-        { name: "building_scaffolding", c: [45.5, 54.5], s: 5, ry: 0 },
-        { name: "building_tower_A_yellow", c: [52, 55], s: 4.5, ry: 0 }
-      ];
-      this.blocked = [{ x: 4, y: 23, w: 7, h: 5, type: "pond" }, { x: 8, y: 54, w: 5, h: 4, type: "pond", deep: true }, { x: 16, y: 16, w: 2, h: 2, type: "well" }];
+      this.alloc(TOWN_W, TOWN_H);
+      this.carve(1, 1, TOWN_W - 2, TOWN_H - 2);
+      this.buildings = townBuildings();
+      this.blocked = [{ x: 4, y: 23, w: 7, h: 5, type: "pond" }, { x: 8, y: 54, w: 5, h: 4, type: "pond", deep: true }, { x: 16, y: 16, w: 2, h: 2, type: "well" }, { x: 41, y: 70, w: 2, h: 2, type: "well" }];
       this.buildingObjs = [];
-      for (const b2 of this.buildings) {
+      this.doors = [];
+      this.buildings.forEach((b2, i) => {
         const o2 = prop(b2.name);
         o2.scale.setScalar(b2.s);
         o2.rotation.y = b2.ry;
-        o2.position.set(b2.c[0] * CELL, 0, b2.c[1] * CELL);
+        o2.position.set(b2.c[0] * CELL2, 0, b2.c[1] * CELL2);
         o2.updateMatrixWorld(true);
         const bb = new Box3().setFromObject(o2);
-        const x0 = Math.floor(bb.min.x / CELL + 0.5 + 0.25), x1 = Math.floor(bb.max.x / CELL + 0.5 - 0.25);
-        const y0 = Math.floor(bb.min.z / CELL + 0.5 + 0.25), y1 = Math.floor(bb.max.z / CELL + 0.5 - 0.25);
+        const x0 = Math.floor(bb.min.x / CELL2 + 0.5 + 0.25), x1 = Math.floor(bb.max.x / CELL2 + 0.5 - 0.25);
+        const y0 = Math.floor(bb.min.z / CELL2 + 0.5 + 0.25), y1 = Math.floor(bb.max.z / CELL2 + 0.5 - 0.25);
         this.carve(x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0);
-        b2.front = Math.round(bb.max.z / CELL) + 1;
+        b2.front = Math.round(bb.max.z / CELL2) + 1;
+        const dx = Math.round(Math.sin(b2.ry)), dz = Math.round(Math.cos(b2.ry));
+        const ext = Math.abs(dx) * (bb.max.x - bb.min.x) / 2 + Math.abs(dz) * (bb.max.z - bb.min.z) / 2;
+        b2.dir = [dx, dz];
+        b2.door = new Vector3(b2.c[0] * CELL2 + dx * (ext + 0.9), 0, b2.c[1] * CELL2 + dz * (ext + 0.9));
+        b2.index = i;
+        if (enterable(b2)) this.doors.push(b2);
         this.buildingObjs.push(o2);
-      }
+      });
       for (const b2 of this.blocked) this.carve(b2.x, b2.y, b2.w, b2.h, 0);
+      for (const b2 of this.doors) {
+        const [cx, cy] = this.cellOf(b2.door);
+        this.carve(cx, cy, 1, 1, 1);
+      }
       this.trees = [
         [3, 9],
         [30, 10],
@@ -48105,12 +49319,17 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         [10, 47],
         [26, 47],
         [36, 47],
-        [58, 52],
         [19, 58],
         [34, 58],
-        [2, 57]
+        [2, 57],
+        [82, 3],
+        [82, 58],
+        [2, 77],
+        [82, 77],
+        [34, 77],
+        [50, 77]
       ];
-      for (const [x2, y2] of this.trees) this.cells[this.idx(x2, y2)] = 0;
+      for (const [x2, y2] of this.trees) if (this.isFloor(x2, y2)) this.cells[this.idx(x2, y2)] = 0;
       this.startPos = this.toWorld(17, 21);
       this.portalPos = this.toWorld(20, 19);
     }
@@ -48244,10 +49463,10 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     instanced(geo2, list) {
       const m3 = new MeshStandardMaterial({ color: 16777215, roughness: 0.9 });
       const im = new InstancedMesh(geo2, m3, list.length);
-      const mat4 = new Matrix4();
+      const mat42 = new Matrix4();
       list.forEach((it, i) => {
-        mat4.compose(it.p, it.q || new Quaternion(), it.s || new Vector3(1, 1, 1));
-        im.setMatrixAt(i, mat4);
+        mat42.compose(it.p, it.q || new Quaternion(), it.s || new Vector3(1, 1, 1));
+        im.setMatrixAt(i, mat42);
         im.setColorAt(i, new Color(it.c));
       });
       im.instanceMatrix.needsUpdate = true;
@@ -48271,7 +49490,8 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.sun.shadow.bias = -6e-4;
       this.sun.shadow.normalBias = 0.03;
       this.root.add(this.sun, this.sun.target);
-      if (this.kind === "town") {
+      if (this.kind === "interior") buildInteriorEnv(this);
+      else if (this.kind === "town") {
         this.scene.background = new Color(10467544);
         this.scene.fog = new Fog(10467544, 55, 120);
         this.ambient = new HemisphereLight(14214399, 5925440, Settings.grit === "classic" ? 1.4 : 1.1);
@@ -48327,7 +49547,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       for (let y2 = 0; y2 < this.h; y2++) for (let x2 = 0; x2 < this.w; x2++) {
         if (!this.isFloor(x2, y2)) continue;
         const r = Math.random();
-        const p2 = new Vector3(x2 * CELL, 0, y2 * CELL);
+        const p2 = new Vector3(x2 * CELL2, 0, y2 * CELL2);
         const q = new Quaternion().setFromAxisAngle(Y2, Math.floor(Math.random() * 4) * Math.PI / 2);
         if (r < 0.74) floors.floor_tile_large.push({ p: p2, q, s: half, c: tint });
         else if (r < 0.84) floors.floor_dirt_large.push({ p: p2, q, s: half, c: tint });
@@ -48344,7 +49564,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         if (!this.isFloor(x2, y2)) continue;
         for (const [dx, dy, ry] of dirs) {
           if (this.isFloor(x2 + dx, y2 + dy)) continue;
-          const p2 = new Vector3(x2 * CELL + dx * (CELL / 2 + 0.25), 0, y2 * CELL + dy * (CELL / 2 + 0.25));
+          const p2 = new Vector3(x2 * CELL2 + dx * (CELL2 / 2 + 0.25), 0, y2 * CELL2 + dy * (CELL2 / 2 + 0.25));
           const q = new Quaternion().setFromAxisAngle(Y2, ry);
           const south = dy === 1;
           if (south) low.push({ p: p2, q, s: new Vector3(0.5, 0.18, 0.5), c: tint });
@@ -48353,7 +49573,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
             (r < 0.8 ? walls.wall : r < 0.93 ? walls.wall_cracked : walls.wall_broken).push({ p: p2, q, s: half, c: tint });
             if (dy === -1) this.northWalls.push({ p: p2.clone(), x: x2, y: y2 });
           }
-          const ends = dx === 0 ? [[x2 * CELL - 1, y2 * CELL + dy], [x2 * CELL + 1, y2 * CELL + dy]] : [[x2 * CELL + dx, y2 * CELL - 1], [x2 * CELL + dx, y2 * CELL + 1]];
+          const ends = dx === 0 ? [[x2 * CELL2 - 1, y2 * CELL2 + dy], [x2 * CELL2 + 1, y2 * CELL2 + dy]] : [[x2 * CELL2 + dx, y2 * CELL2 - 1], [x2 * CELL2 + dx, y2 * CELL2 + 1]];
           for (const [vx, vz] of ends) {
             const key = vx + "," + vz;
             const prev = verts.get(key);
@@ -48438,11 +49658,11 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       const moss = ["rgba(70,110,60,0.35)", "rgba(120,60,30,0.35)", "rgba(60,120,70,0.4)", "rgba(90,60,120,0.35)"][theme];
       const isF = (x2, y2) => x2 >= 0 && y2 >= 0 && x2 < this.w && y2 < this.h && this.cells[this.idx(x2, y2)] > 0;
       const t = grimeTexture(this.w * cellPx, cellPx, isF, this.w, this.h, moss);
-      const W = this.w * CELL;
+      const W = this.w * CELL2;
       const m3 = new MeshBasicMaterial({ map: t, transparent: true, blending: MultiplyBlending, premultipliedAlpha: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       const plane = new Mesh(new PlaneGeometry(W, W), m3);
       plane.rotation.x = -Math.PI / 2;
-      plane.position.set(W / 2 - CELL / 2, 0.025, W / 2 - CELL / 2);
+      plane.position.set(W / 2 - CELL2 / 2, 0.025, W / 2 - CELL2 / 2);
       plane.renderOrder = 1;
       this.root.add(plane);
       this.noAO.push(plane);
@@ -48464,7 +49684,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       const S3 = 2048, c2 = document.createElement("canvas");
       c2.width = c2.height = S3;
       const g2 = c2.getContext("2d");
-      const span = (this.w + 16) * CELL;
+      const span = (this.w + 16) * CELL2;
       const toPx = (wx) => (wx + 16) / span * S3;
       g2.fillStyle = "#4f7a36";
       g2.fillRect(0, 0, S3, S3);
@@ -48482,11 +49702,11 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
           g2.strokeStyle = col2;
           g2.lineWidth = ww;
           g2.beginPath();
-          pts.forEach(([x2, z2], i) => i ? g2.lineTo(toPx(x2 * CELL), toPx(z2 * CELL)) : g2.moveTo(toPx(x2 * CELL), toPx(z2 * CELL)));
+          pts.forEach(([x2, z2], i) => i ? g2.lineTo(toPx(x2 * CELL2), toPx(z2 * CELL2)) : g2.moveTo(toPx(x2 * CELL2), toPx(z2 * CELL2)));
           g2.stroke();
         }
       };
-      const pw = 3.2 / span * S3 * CELL / 2;
+      const pw = 3.2 / span * S3 * CELL2 / 2;
       path([[17, 33], [17, 22], [17, 12]], pw);
       path([[7, 10.5], [12, 12.5], [17, 13], [22, 12.5], [26, 10.5]], pw);
       path([[17, 21], [23, 23], [26.5, 28.5]], pw * 0.8);
@@ -48500,13 +49720,20 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       path([[40, 38.5], [44, 41], [46, 46], [48, 49.5]], pw * 0.8);
       path([[4, 49.5], [14, 49.5], [26, 50], [38, 49.5], [48, 49.5], [54, 50]], pw);
       path([[17, 38.5], [17, 49.5]], pw * 0.8);
+      path([[54, 12], [61, 12], [71, 12]], pw);
+      path([[71, 2], [71, 30], [71, 50], [71, 67]], pw * 1.1);
+      path([[50, 31], [60, 31], [71, 31]], pw * 0.8);
+      path([[2, 67], [20, 67], [41.5, 67], [60, 67], [82, 67]], pw * 1.1);
+      path([[34, 49.5], [34, 58], [34, 67]], pw * 0.8);
+      path([[49, 49.5], [49, 58], [49, 67]], pw * 0.8);
+      path([[54, 50], [60, 52], [71, 52]], pw * 0.8);
       g2.fillStyle = "#6a4e2e";
-      g2.fillRect(toPx(2 * CELL), toPx(33.5 * CELL), toPx(10 * CELL) - toPx(2 * CELL), toPx(37.5 * CELL) - toPx(33.5 * CELL));
+      g2.fillRect(toPx(2 * CELL2), toPx(33.5 * CELL2), toPx(10 * CELL2) - toPx(2 * CELL2), toPx(37.5 * CELL2) - toPx(33.5 * CELL2));
       for (let r = 0; r < 9; r++) {
         g2.fillStyle = r % 2 ? "#5a4024" : "#7a9a3a";
-        g2.fillRect(toPx(2.2 * CELL), toPx((33.8 + r * 0.42) * CELL), toPx(9.8 * CELL) - toPx(2.2 * CELL), 5);
+        g2.fillRect(toPx(2.2 * CELL2), toPx((33.8 + r * 0.42) * CELL2), toPx(9.8 * CELL2) - toPx(2.2 * CELL2), 5);
       }
-      const cx = toPx(17 * CELL), cz = toPx(17 * CELL), pr = 7.5 / span * S3 * CELL;
+      const cx = toPx(17 * CELL2), cz = toPx(17 * CELL2), pr = 7.5 / span * S3 * CELL2;
       g2.fillStyle = "#5e574e";
       g2.beginPath();
       g2.arc(cx, cz, pr, 0, 7);
@@ -48538,6 +49765,21 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       g2.beginPath();
       g2.arc(cx, cz, pr, 0, 7);
       g2.stroke();
+      {
+        const x0 = toPx(35 * CELL2), z0 = toPx(66 * CELL2), x1 = toPx(48.5 * CELL2), z1 = toPx(76 * CELL2), st = 10 * S3 / 1024;
+        g2.fillStyle = "#5e574e";
+        g2.fillRect(x0, z0, x1 - x0, z1 - z0);
+        for (let zz = z0; zz < z1; zz += st) for (let xx = x0 + zz / st % 2 * st * 0.5; xx < x1; xx += st * 1.3) {
+          const l2 = 100 + Math.random() * 40;
+          g2.fillStyle = `rgb(${l2 + 8},${l2 + 2},${l2 - 8})`;
+          g2.beginPath();
+          g2.roundRect(xx + 1, zz + 1, st * 1.2, st * 0.9, 2);
+          g2.fill();
+        }
+        g2.strokeStyle = "rgba(60,55,50,0.8)";
+        g2.lineWidth = 4;
+        g2.strokeRect(x0, z0, x1 - x0, z1 - z0);
+      }
       const t = new CanvasTexture(c2);
       t.colorSpace = SRGBColorSpace;
       t.anisotropy = 8;
@@ -48559,7 +49801,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.root.add(ground);
       const outer = new Mesh(new PlaneGeometry(400, 400), addDetail(new MeshStandardMaterial({ color: 4878898, roughness: 1 }), det.albedo, 120, 0.45));
       outer.rotation.x = -Math.PI / 2;
-      outer.position.set(47, -0.05, 47);
+      outer.position.set(this.w, -0.05, this.h);
       outer.receiveShadow = true;
       this.root.add(outer);
       for (const o2 of this.buildingObjs) this.root.add(o2);
@@ -48567,7 +49809,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       for (const b2 of this.buildings) {
         if (/stage|scaffolding|well|bridge|archery|grain|tower_catapult/.test(b2.name)) continue;
         const dx = Math.sin(b2.ry), dz = Math.cos(b2.ry);
-        const c2 = new Vector3(b2.c[0] * CELL, 0, b2.c[1] * CELL);
+        const c2 = new Vector3(b2.c[0] * CELL2, 0, b2.c[1] * CELL2);
         for (const [off, h2] of [[0, 1.2], [-1.1, 2.3], [1.1, 2.3]]) gpos.push(c2.x + dx * 2.6 + dz * off, h2, c2.z + dz * 2.6 - dx * off);
       }
       const gg = new BufferGeometry();
@@ -48595,24 +49837,27 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         const [cx, cy] = this.cellOf(new Vector3(x2, 0, z2));
         return !(cx >= 0 && cy >= 0 && cx < this.w && cy < this.h) || this.cells[this.idx(cx, cy)] !== 0;
       };
-      const area2 = { x0: -12, z0: -12, x1: (this.w + 5) * CELL, z1: (this.h + 5) * CELL };
-      const gf = grassField(9e3, area2, isGrass, this.timeU), fl = flowers(500, area2, isGrass);
+      const area2 = { x0: -12, z0: -12, x1: (this.w + 5) * CELL2, z1: (this.h + 5) * CELL2 };
+      const gf = grassField(Settings.quality === "low" ? 7e3 : 12e3, area2, isGrass, this.timeU), fl = flowers(800, area2, isGrass);
       this.root.add(gf, fl);
       this.noAO.push(gf, fl);
-      const W = (this.w - 1) * CELL;
+      const W = (this.w - 1) * CELL2, H = (this.h - 1) * CELL2;
       for (let i = 0; i < Math.ceil(W / 4); i++) {
         const a = i * 4 + 2;
         this.placeProp("wall_straight", new Vector3(a, 0, -0.6), 2, 0);
-        this.placeProp("wall_straight", new Vector3(a, 0, W + 0.6), 2, 0);
+        this.placeProp("wall_straight", new Vector3(a, 0, H + 0.6), 2, 0);
+      }
+      for (let i = 0; i < Math.ceil(H / 4); i++) {
+        const a = i * 4 + 2;
         this.placeProp("wall_straight", new Vector3(-0.6, 0, a), 2, Math.PI / 2);
         this.placeProp("wall_straight", new Vector3(W + 0.6, 0, a), 2, Math.PI / 2);
       }
       this.waters = [];
       for (const pond of this.blocked.filter((b2) => b2.type === "pond")) {
-        const pcx = (pond.x + (pond.w - 1) / 2) * CELL, pcz = (pond.y + (pond.h - 1) / 2) * CELL;
+        const pcx = (pond.x + (pond.w - 1) / 2) * CELL2, pcz = (pond.y + (pond.h - 1) / 2) * CELL2;
         const water = new Mesh(new CircleGeometry(1, 48), makeWater(pond.deep));
         water.rotation.x = -Math.PI / 2;
-        water.scale.set(pond.w * CELL / 2, pond.h * CELL / 2, 1);
+        water.scale.set(pond.w * CELL2 / 2, pond.h * CELL2 / 2, 1);
         water.position.set(pcx, 0.06, pcz);
         tickWater(water);
         this.root.add(water);
@@ -48620,7 +49865,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         this.noAO.push(water);
         const bank = new Mesh(new CircleGeometry(1, 48), new MeshStandardMaterial({ color: 7036229, roughness: 1 }));
         bank.rotation.x = -Math.PI / 2;
-        bank.scale.set(pond.w * CELL / 2 + 0.8, pond.h * CELL / 2 + 0.8, 1);
+        bank.scale.set(pond.w * CELL2 / 2 + 0.8, pond.h * CELL2 / 2 + 0.8, 1);
         bank.position.set(pcx, 0.03, pcz);
         this.root.add(bank);
         const sx = pond.w * 0.6, sz = pond.h * 0.5;
@@ -48631,7 +49876,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         }
         if (pond.deep) {
           const wood = 8016946, dark = 4862492;
-          const jx = pcx, z0 = pond.y * CELL - 1.6;
+          const jx = pcx, z0 = pond.y * CELL2 - 1.6;
           for (let k2 = 0; k2 < 6; k2++) {
             const pl = box(1.5, 0.08, 0.36, k2 % 2 ? wood : 8806458);
             pl.position.set(jx, 0.32, z0 + k2 * 0.42);
@@ -48656,16 +49901,18 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       glow.position.copy(this.toWorld(16.5, 16.5)).setY(0.8);
       this.root.add(glow);
       for (const [x2, y2] of this.trees) this.placeProp(pick(["tree_single_A", "tree_single_B"]), this.toWorld(x2, y2), rand(4.5, 6), rand(0, 6));
-      for (let i = 0; i < 70; i++) {
-        const a = rand(0, Math.PI * 2), r = rand(42, 75);
-        const C3 = (this.w - 1) * CELL / 2;
-        const p2 = new Vector3(C3 + Math.cos(a) * (r + 14), 0, C3 + Math.sin(a) * (r + 14));
+      const CX = W / 2, CZ = H / 2, outside = (p2, m3) => p2.x < -m3 || p2.z < -m3 || p2.x > W + m3 || p2.z > H + m3;
+      for (let i = 0, n = 0; i < 400 && n < 80; i++) {
+        const a = rand(0, Math.PI * 2), r = rand(0.75, 1.25) * Math.hypot(CX, CZ);
+        const p2 = new Vector3(CX + Math.cos(a) * r, 0, CZ + Math.sin(a) * r);
+        if (!outside(p2, 8)) continue;
+        n++;
         this.placeProp(pick(["trees_A_medium", "trees_B_medium", "tree_single_A", "tree_single_B", "hills_A_trees"]), p2, rand(6, 9), rand(0, 6));
       }
-      for (let i = 0; i < 10; i++) {
-        const a = rand(0, Math.PI * 2);
-        const C3 = (this.w - 1) * CELL / 2;
-        this.placeProp(pick(["mountain_A_grass_trees", "hills_B_trees"]), new Vector3(C3 + Math.cos(a) * 105, 0, C3 + Math.sin(a) * 105), rand(18, 26), rand(0, 6));
+      for (let i = 0; i < 12; i++) {
+        const a = i / 12 * Math.PI * 2 + rand(-0.2, 0.2);
+        const r = Math.hypot(CX, CZ) + 40;
+        this.placeProp(pick(["mountain_A_grass_trees", "hills_B_trees"]), new Vector3(CX + Math.cos(a) * r, 0, CZ + Math.sin(a) * r), rand(18, 26), rand(0, 6));
       }
       this.placeProp("building_windmill_yellow", new Vector3(-14, 3, 40), 7, 1);
       const deco = [
@@ -48716,7 +49963,43 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         ["bucket_water", [8.5, 51], 7],
         ["tent", [26, 46], 5]
       );
+      for (let y2 = 5; y2 < 58; y2 += 4.3) {
+        deco.push([pick(["barrel", "crate_A_small", "sack", "crate_B_small", "bucket_empty"]), [69.6, y2], 6], [pick(["barrel", "crate_A_big", "sack", "crate_long_B", "pallet"]), [72.4, y2 + 2.1], 6]);
+        if (Math.round(y2) % 3 === 0) deco.push(["wheelbarrow", [70.2, y2 + 1.2], 6]);
+      }
+      deco.push(["flag_green", [69, 3], 7], ["flag_red", [73, 3], 7], ["resource_lumber", [74, 56], 5], ["crate_long_C", [67.5, 57], 6], ["tree_single_B_cut", [62, 57], 5]);
+      const stalls = [[36.5, 67.8, 0], [39.5, 67.8, 0], [44, 67.8, 0], [47, 67.8, 0], [36.5, 74.5, Math.PI], [47, 74.5, Math.PI], [36, 71.2, Math.PI / 2], [47.6, 71.2, -Math.PI / 2]];
+      const goods = ["plate_food_A", "plate_food_B", "bottle_A_green", "bottle_B_brown", "coin_stack_large", "box_small_decorated", "plate_stack"];
+      stalls.forEach(([x2, y2, ry], i) => {
+        const p2 = this.toWorld(x2, y2);
+        this.placeProp("tent", p2, 4.2, ry);
+        const t = this.placeProp(i % 2 ? "table_medium_tablecloth" : "table_medium", p2.clone().add(new Vector3(Math.sin(ry) * 0.9, 0, Math.cos(ry) * 0.9)), 0.55, ry + Math.PI / 2);
+        for (let k2 = 0; k2 < 3; k2++) this.placeProp(pick(goods), t.position.clone().add(new Vector3(rand(-0.5, 0.5), 0.52, rand(-0.25, 0.25))), 0.5, rand(0, 6));
+        this.placeProp(pick(["sack", "crate_A_small", "barrel"]), p2.clone().add(new Vector3(Math.cos(ry) * 1.4, 0, -Math.sin(ry) * 1.4)), 6, rand(0, 6));
+        this.cells[this.idx(Math.round(x2), Math.round(y2))] = 2;
+      });
+      deco.push(
+        ["flag_yellow", [35, 66.2], 7],
+        ["flag_blue", [48.5, 66.2], 7],
+        ["flag_green", [35, 75.8], 7],
+        ["flag_red", [48.5, 75.8], 7],
+        ["wheelbarrow", [50, 68.5], 6],
+        ["crate_long_A", [33, 69], 6],
+        ["barrel", [10, 68.2], 6],
+        ["sack", [20, 66], 8],
+        ["crate_open", [56, 68.2], 6],
+        ["resource_stone", [62, 66], 6],
+        ["barrel", [76, 68.2], 6],
+        ["bucket_water", [28.5, 60], 7],
+        ["pallet", [16, 60], 6]
+      );
+      const doorCells = /* @__PURE__ */ new Set();
+      for (const b2 of this.doors) {
+        const [cx, cy] = this.cellOf(b2.door);
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) doorCells.add(cx + dx + "," + (cy + dy));
+      }
       for (const [n, [x2, y2], sc] of deco) {
+        if (doorCells.has(Math.round(x2) + "," + Math.round(y2))) continue;
         this.placeProp(n, this.toWorld(x2, y2), sc, rand(0, 6));
         this.cells[this.idx(Math.round(x2), Math.round(y2))] = 2;
       }
@@ -48756,7 +50039,26 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         [10, 48],
         [24, 48],
         [36, 48],
-        [47, 48.5]
+        [47, 48.5],
+        [69.5, 9],
+        [72.5, 16],
+        [69.5, 23],
+        [72.5, 29],
+        [69.5, 36],
+        [72.5, 43],
+        [69.5, 49],
+        [72.5, 55],
+        [60, 13.5],
+        [8, 66.4],
+        [20, 67.6],
+        [30, 66.4],
+        [37, 66],
+        [46.5, 66],
+        [55, 67.6],
+        [64, 66.4],
+        [74, 67.6],
+        [37, 76.2],
+        [46.5, 76.2]
       ]) {
         const p2 = this.toWorld(x2, y2);
         const post = cyl(0.07, 0.09, 2.6, 2500134);
@@ -48796,15 +50098,31 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.interact("well", this.toWorld(16.5, 16.5), { name: "The Old Well - Enter the Sunken Wells" });
       if (G.portalFloor > 0) this.interact("portal", this.portalPos, { name: `Portal to Floor ${G.portalFloor}` });
       this.interact("blacksmith", this.toWorld(9.6, 15.5), { name: "Hobb Ironhand, Blacksmith" }).root.rotation.y = Math.PI / 2;
-      for (const v2 of VILLAGERS) {
+      for (const b2 of this.doors) {
+        const d2 = this.interact("door", b2.door.clone(), { name: `Enter ${buildingTitle(b2)}`, bi: b2.index });
+        d2.root.rotation.y = Math.atan2(b2.dir[0], b2.dir[1]);
+      }
+      for (const v2 of [...VILLAGERS, ...crowd(this)]) {
         const e = new Villager(v2);
         e.root.position.copy(this.toWorld(...v2.at));
         if (v2.ry !== void 0) e.root.rotation.y = v2.ry;
         this.add(e);
       }
-      for (const e of this.entities) if (e.kind && e.kind !== "well" && e.kind !== "portal") {
+      for (const e of this.entities) if (e.kind && e.kind !== "well" && e.kind !== "portal" && e.kind !== "door") {
         const [x2, y2] = this.cellOf(e.pos);
         if (this.cells[this.idx(x2, y2)] !== 1) e.pos.copy(this.toWorld(...this.nearestFloor(x2, y2)));
+      }
+    }
+    populateInterior() {
+      this.exitPos = this.toWorld(...this.doorCell);
+      this.interact("exit", this.exitPos.clone(), { name: `Leave ${this.title}`, bi: this.building.index });
+      const st = interiorStation(this);
+      if (st) this.interact(st.kind, this.toWorld(...st.at), { name: st.name });
+      for (const d2 of interiorPeople(this)) {
+        const e = new Villager(d2);
+        e.root.position.copy(this.toWorld(...d2.at));
+        e.root.rotation.y = Math.PI;
+        this.add(e);
       }
     }
     populateDungeon() {
@@ -49086,7 +50404,7 @@ void main(){
     }
     signature() {
       const e = G.equipment || {};
-      return [G.cls, JSON.stringify(G.look || {}), Settings.realistic, ...["weapon", "offhand", "helm", "armor", "ring", "amulet"].map((k2) => e[k2] ? (e[k2].name || "") + (e[k2].mat || "") + (e[k2].rarity || 0) : "-")].join("|");
+      return [G.cls, JSON.stringify(G.look || {}), Settings.realistic, ...["weapon", "offhand", "helm", "armor", "ring", "amulet", "shoulders", "gloves", "shirt", "belt", "pants", "boots"].map((k2) => e[k2] ? (e[k2].name || "") + (e[k2].mat || "") + (e[k2].dye || "") + (e[k2].rarity || 0) : "-")].join("|");
     }
     rebuild() {
       const cls = CLASSES[G.cls] || CLASSES.Knight;
@@ -49516,8 +50834,8 @@ void main(){
         this._bk = bk;
         $("#hud-buffs").innerHTML = buffs.map(([ic, t, n]) => `<div class="buff" title="${n}">${skillIcon(ic)}<span>${Math.ceil(t)}</span></div>`).join("");
       }
-      $("#hud-loc").textContent = G.level.kind === "town" ? "Hollowmere" : `Sunken Wells \xB7 Floor ${G.level.floor}`;
-      $("#hud-clock").textContent = G.level.kind === "town" ? clockText() : "";
+      $("#hud-loc").textContent = G.level.kind === "town" ? "Hollowmere" : G.level.kind === "interior" ? G.level.title : `Sunken Wells \xB7 Floor ${G.level.floor}`;
+      $("#hud-clock").textContent = G.level.safe ? clockText() : "";
       this.updateAutoChip();
       const boss = G.level.kind === "dungeon" && G.level.entities.find((e) => e.type === "enemy" && e.boss && !e.dead && e.aggro && flatDist(e.pos, G.player.pos) < 24);
       const bb = $("#boss-bar");
@@ -49598,7 +50916,7 @@ void main(){
       const L3 = G.level;
       ctx3.fillStyle = "#000";
       ctx3.fillRect(0, 0, size, size);
-      const town = L3.kind === "town";
+      const town = L3.safe;
       const s2 = big ? Math.floor(size / Math.max(L3.w, L3.h)) : 6;
       const [pcx, pcy] = L3.cellOf(G.player.pos);
       const ox = big ? 0 : size / 2 - pcx * s2 - s2 / 2, oy = big ? 0 : size / 2 - pcy * s2 - s2 / 2;
@@ -49781,7 +51099,7 @@ void main(){
       const body = this.body("inv", "Inventory", { right: "18px", top: "90px", width: "600px" });
       body.innerHTML = "";
       const eq = el("div", "eqgrid");
-      const layout = { helm: [2, 1], amulet: [3, 1], weapon: [1, 2], armor: [2, 2], offhand: [3, 2], ring: [3, 3] };
+      const layout = { helm: [2, 1], amulet: [3, 1], shoulders: [4, 1], weapon: [1, 2], armor: [2, 2], offhand: [3, 2], gloves: [4, 2], shirt: [2, 3], belt: [3, 3], ring: [4, 3], pants: [2, 4], boots: [3, 4] };
       for (const slot in layout) {
         const it = G.equipment[slot];
         const s2 = this.itemCell(it, () => {
@@ -49807,8 +51125,8 @@ void main(){
       gold.style.gridRow = 3;
       eq.appendChild(gold);
       const petInfo = el("div", "", `<div style="font-size:12px;text-align:center;padding-top:14px;color:#ffb066">${G.petName}<br><span class="muted">${{ golem: "Golem", wyrm: "Wyrm", stag: "Stag" }[G.petForm] || PET_SPECIES[G.petSpecies].stages[petStage()]}</span><br><button class="mini" id="inv-pet">Pet (P)</button></div>`);
-      petInfo.style.gridColumn = 2;
-      petInfo.style.gridRow = 3;
+      petInfo.style.gridColumn = 1;
+      petInfo.style.gridRow = 4;
       eq.appendChild(petInfo);
       const ipb = petInfo.querySelector("#inv-pet");
       if (ipb) ipb.onclick = () => this.show("pet");
@@ -49842,13 +51160,15 @@ void main(){
       };
       btn(selIt?.slot === "fish" ? "Feed Pet" : selIt?.slot === "gem" ? "Socket" : "Equip", () => this.quickUse(this.sel.key, true), !selIt);
       if (this.open.shop) btn("Sell", () => this.sell(this.sel.key), !selIt);
+      const magic = G.backpack.filter((it) => it.rarity === 1 && it.slot !== "gem" && it.slot !== "fish");
+      if (this.open.shop) btn(`Sell all magic (${magic.length})`, () => this.sellAllMagic(), !magic.length);
       btn("Drop", () => {
         const it = G.backpack.splice(this.sel.key, 1)[0];
         this.main.dropItem(it);
         this.sel = null;
       }, !selIt);
       btn("Wardrobe", () => this.show("wardrobe"), false);
-      btn(`Send ${G.petName} to sell commons`, () => petSellCommons(), G.level.kind === "town" && !this.open.shop);
+      btn(`Send ${G.petName} to sell commons`, () => petSellCommons(), G.level.safe && !this.open.shop);
       body.appendChild(bar);
     }
     quickUse(i, viaButton = false) {
@@ -49881,6 +51201,26 @@ void main(){
         }]),
         ["Cancel", null]
       ], targets.length > 3);
+    }
+    sellAllMagic() {
+      const magic = G.backpack.filter((it) => it.rarity === 1 && it.slot !== "gem" && it.slot !== "fish");
+      if (!magic.length) {
+        this.toast("You have no magic items to sell.", true);
+        return;
+      }
+      const total = magic.reduce((a, it) => a + sellPrice(it), 0);
+      this.choice("Sell all magic items", `Sell ${magic.length} magic (blue) item${magic.length > 1 ? "s" : ""} from your backpack for ${total.toLocaleString()} gold? Equipped gear, rares, legendaries, gems and fish are kept.`, [
+        [`Sell ${magic.length} for ${total.toLocaleString()} gold`, () => {
+          G.backpack = G.backpack.filter((it) => !magic.includes(it));
+          G.gold += total;
+          this.sel = null;
+          this.hideTooltip();
+          msg(`Sold ${magic.length} magic items for ${total.toLocaleString()} gold`, "#ffd84d");
+          sfx("gold");
+          this.refresh();
+        }],
+        ["Keep them", null]
+      ]);
     }
     sell(i) {
       const it = G.backpack[i];
@@ -50032,7 +51372,7 @@ void main(){
       G.backpack.forEach((it, i) => {
         if (it.slot in G.equipment) gear.push({ it, where: "bp", key: i });
       });
-      const row = (e, sub, buttons) => {
+      const row2 = (e, sub, buttons) => {
         const r = el("div", "skrow");
         r.innerHTML = `<div class="ic">${itemIcon(e.it, hex(itemColor(e.it)))}</div><div class="bd"><b style="color:${hex(itemColor(e.it))}">${displayName(e.it)}</b><small>${sub}</small></div>`;
         const bx = el("div", "fbtns");
@@ -50064,7 +51404,7 @@ void main(){
         if (!list.length) body.appendChild(el("p", "", "You have no magic, rare or legendary gear to reforge."));
         for (const e of list) {
           const cost = Math.max(60, Math.round(sellPrice(e.it) * 4));
-          row(e, `${where(e)} \xB7 item level ${e.it.ilvl}`, [["Reforge", cost, () => {
+          row2(e, `${where(e)} \xB7 item level ${e.it.ilvl}`, [["Reforge", cost, () => {
             let n = null;
             for (let i = 0; i < 200 && !n; i++) {
               const c2 = generate(e.it.ilvl, 0, e.it.rarity, e.it.type);
@@ -50096,7 +51436,7 @@ void main(){
         for (const k2 of keys) {
           const g2 = groups[k2][0];
           const next = makeGem(g2.gem, g2.tier + 1);
-          row({ it: next }, `3 \xD7 ${g2.name} \u2192 ${next.name} (you have ${groups[k2].length})`, [["Combine", 80 * (g2.tier + 1) * (g2.tier + 1), () => {
+          row2({ it: next }, `3 \xD7 ${g2.name} \u2192 ${next.name} (you have ${groups[k2].length})`, [["Combine", 80 * (g2.tier + 1) * (g2.tier + 1), () => {
             for (const x2 of groups[k2].slice(0, 3)) G.backpack.splice(G.backpack.indexOf(x2), 1);
             G.backpack.push(next);
             sfx("legend");
@@ -50109,7 +51449,7 @@ void main(){
           const it = e.it, ms = maxSockets(it), used = (it.gems || []).filter(Boolean).length;
           const add = Math.round(120 * Math.pow(it.sockets + 1, 2) * (1 + it.ilvl / 12));
           const rem = Math.round(40 + it.ilvl * 6);
-          row(e, `${where(e)} \xB7 sockets ${it.sockets}/${ms}${used ? ` \xB7 ${used} gem${used > 1 ? "s" : ""}` : ""}`, [
+          row2(e, `${where(e)} \xB7 sockets ${it.sockets}/${ms}${used ? ` \xB7 ${used} gem${used > 1 ? "s" : ""}` : ""}`, [
             ["Add socket", it.sockets < ms ? add : 0, () => {
               it.sockets++;
               sfx("gold");
@@ -50280,7 +51620,7 @@ void main(){
     }
     renderQuest() {
       const body = this.body("quest", QUEST_GIVER, { left: "50%", top: "16%", width: "500px", transform: "translateX(-50%)" });
-      const inTown = G.level.kind === "town";
+      const inTown = G.level.safe;
       const q = G.quest;
       let html = "";
       if (q) {
@@ -50756,7 +52096,7 @@ void main(){
       <h3><span>Clothing tint</span></h3>${sw("tint", ARMOR_TINTS)}
       <h3><span>Cape</span></h3>${sw("cape", CAPE_COLORS)}
       <div class="setrow"><span>Wear a cape</span><input type="checkbox" id="wd-cape" ${L3.capeOn !== false ? "checked" : ""}></div>
-      <div class="setrow"><span>Show helm</span><input type="checkbox" id="wd-helm" ${L3.helm !== false ? "checked" : ""}></div>
+      <div class="setrow"><span>Show helm</span><input type="checkbox" id="wd-helm" ${L3.showHelm !== false ? "checked" : ""}></div>
       ${detailRows(L3)}`;
       const apply = () => {
         sfx("ui");
@@ -50773,7 +52113,7 @@ void main(){
         apply();
       };
       $("#wd-helm", body).onchange = (e) => {
-        L3.helm = e.target.checked;
+        L3.showHelm = e.target.checked;
         apply();
       };
     }
@@ -50783,7 +52123,7 @@ void main(){
       const body = this.body("pet", "Companion", { left: "50%", top: "50px", width: "760px", transform: "translateX(-50%)", maxHeight: "90vh", overflowY: "auto" });
       const view = this.petView && PET_SPECIES[this.petView] ? this.petView : G.petSpecies;
       const sp = PET_SPECIES[view], rec = G.pets[view], active = view === G.petSpecies;
-      const stg = petStage(rec), inTown = G.level?.kind === "town";
+      const stg = petStage(rec), inTown = !!G.level?.safe;
       const next = STAGE_LEVELS.find((l2) => l2 > rec.lvl);
       const xpF = rec.lvl >= PET_MAX_LEVEL ? 1 : rec.xp / petXpToNext(rec.lvl);
       const c6 = (c2) => "#" + c2.toString(16).padStart(6, "0");
@@ -50853,7 +52193,7 @@ void main(){
       });
     }
     swapPet(sp) {
-      if (G.level?.kind !== "town") {
+      if (!G.level?.safe) {
         this.flash("Companions can only be swapped in town");
         return;
       }
@@ -51009,7 +52349,7 @@ void main(){
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.6.2 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music mostly made in code, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.7.0 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
         if (hasSave()) this.confirmNew();
@@ -51231,7 +52571,7 @@ void main(){
       geo2.setAttribute("color", new BufferAttribute(this.col, 4).setUsage(DynamicDrawUsage));
       geo2.setAttribute("size", new BufferAttribute(this.size, 1).setUsage(DynamicDrawUsage));
       this.geo = geo2;
-      const mat4 = new ShaderMaterial({
+      const mat5 = new ShaderMaterial({
         uniforms: { map: { value: softTexture() }, scale: { value: 400 } },
         vertexShader: `attribute float size; attribute vec4 color; varying vec4 vColor;
         uniform float scale;
@@ -51242,7 +52582,7 @@ void main(){
         depthWrite: false,
         blending: AdditiveBlending
       });
-      this.points = new Points(geo2, mat4);
+      this.points = new Points(geo2, mat5);
       this.points.frustumCulled = false;
       this.points.renderOrder = 10;
       scene2.add(this.points);
@@ -51332,37 +52672,37 @@ void main(){
     }
     // a hot glowing ball that swells and fades (the heart of a blast or an impact)
     core(pos, color, size = 1, dur = 0.3) {
-      const mat4 = new MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: AdditiveBlending, depthWrite: false });
-      const m3 = new Mesh(CORE_GEO, mat4);
+      const mat5 = new MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: AdditiveBlending, depthWrite: false });
+      const m3 = new Mesh(CORE_GEO, mat5);
       m3.position.copy(pos);
       m3.scale.setScalar(size * 0.3);
       m3.renderOrder = 11;
       this.scene.add(m3);
-      this.meshes.push({ m: m3, t: 0, dur, mat: mat4, upd: (k2) => {
+      this.meshes.push({ m: m3, t: 0, dur, mat: mat5, upd: (k2) => {
         m3.scale.setScalar(size * (0.3 + k2 * 0.9));
-        mat4.opacity = 0.85 * (1 - k2) * (1 - k2);
+        mat5.opacity = 0.85 * (1 - k2) * (1 - k2);
       } });
     }
     // a dark burn mark left on the floor that fades over a few seconds
     scorch(pos, r = 1.5) {
-      const mat4 = new MeshBasicMaterial({ map: scorchTex(), transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
-      const m3 = new Mesh(SCORCH_GEO, mat4);
+      const mat5 = new MeshBasicMaterial({ map: scorchTex(), transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+      const m3 = new Mesh(SCORCH_GEO, mat5);
       m3.rotation.set(-Math.PI / 2, 0, Math.random() * 6.28);
       m3.position.set(pos.x, 0.03, pos.z);
       m3.scale.setScalar(r * 2);
       this.scene.add(m3);
-      this.meshes.push({ m: m3, t: 0, dur: 7, mat: mat4, upd: (k2) => {
-        mat4.opacity = 0.8 * Math.min(1, (1 - k2) * 3);
+      this.meshes.push({ m: m3, t: 0, dur: 7, mat: mat5, upd: (k2) => {
+        mat5.opacity = 0.8 * Math.min(1, (1 - k2) * 3);
       } });
     }
     // ice crystals bursting from the ground, then shattering
     spike(pos, color = 12578559, scale = 1) {
       const g2 = new Group();
-      const mat4 = new MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, metalness: 0.1, roughness: 0.15, transparent: true, opacity: 0.9, flatShading: true });
+      const mat5 = new MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, metalness: 0.1, roughness: 0.15, transparent: true, opacity: 0.9, flatShading: true });
       const n = 7;
       for (let i = 0; i < n; i++) {
         const h2 = (i === 0 ? 2.6 : 1 + Math.random() * 1.2) * scale;
-        const m3 = new Mesh(new ConeGeometry(0.28 * scale * (i === 0 ? 1.4 : 1), h2, 5), mat4);
+        const m3 = new Mesh(new ConeGeometry(0.28 * scale * (i === 0 ? 1.4 : 1), h2, 5), mat5);
         const a = i / n * Math.PI * 2, r = i === 0 ? 0 : 0.55 * scale;
         m3.position.set(Math.cos(a) * r, h2 / 2, Math.sin(a) * r);
         m3.rotation.set(Math.sin(a) * 0.35 * (i ? 1 : 0), 0, -Math.cos(a) * 0.35 * (i ? 1 : 0));
@@ -51371,17 +52711,17 @@ void main(){
       g2.position.set(pos.x, 0, pos.z);
       g2.scale.y = 0.01;
       this.scene.add(g2);
-      this.meshes.push({ m: g2, t: 0, dur: 1.2, mat: mat4, upd: (k2) => {
+      this.meshes.push({ m: g2, t: 0, dur: 1.2, mat: mat5, upd: (k2) => {
         g2.scale.y = Math.min(1, k2 * 8);
-        mat4.opacity = k2 > 0.7 ? 0.9 * (1 - (k2 - 0.7) / 0.3) : 0.9;
+        mat5.opacity = k2 > 0.7 ? 0.9 * (1 - (k2 - 0.7) / 0.3) : 0.9;
       } });
     }
     // a danger zone on the ground that fills up, then calls onDone (boss attacks)
     telegraph(pos, radius, dur, color = 16724770, onDone) {
       const g2 = new Group();
-      const mat4 = new MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false, side: DoubleSide });
-      const edge = new Mesh(new RingGeometry(radius * 0.94, radius, 48), mat4);
-      const fill2 = new Mesh(new CircleGeometry(radius, 48), mat4.clone());
+      const mat5 = new MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false, side: DoubleSide });
+      const edge = new Mesh(new RingGeometry(radius * 0.94, radius, 48), mat5);
+      const fill2 = new Mesh(new CircleGeometry(radius, 48), mat5.clone());
       fill2.material.opacity = 0.28;
       for (const m3 of [edge, fill2]) {
         m3.rotation.x = -Math.PI / 2;
@@ -51391,20 +52731,20 @@ void main(){
       fill2.position.y = 0.08;
       g2.position.set(pos.x, 0, pos.z);
       this.scene.add(g2);
-      this.meshes.push({ m: g2, t: 0, dur, mat: mat4, done: () => {
+      this.meshes.push({ m: g2, t: 0, dur, mat: mat5, done: () => {
         fill2.material.dispose();
         onDone?.();
       }, upd: (k2) => {
         fill2.scale.setScalar(Math.max(0.01, k2));
-        mat4.opacity = 0.35 + 0.35 * Math.abs(Math.sin(k2 * 14));
+        mat5.opacity = 0.35 + 0.35 * Math.abs(Math.sin(k2 * 14));
       } });
       return g2;
     }
     // a line telegraph (charges)
     lane(from, to, width, dur, color = 16724770, onDone) {
       const len = Math.hypot(to.x - from.x, to.z - from.z);
-      const mat4 = new MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false, side: DoubleSide });
-      const m3 = new Mesh(new PlaneGeometry(width, len), mat4);
+      const mat5 = new MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false, side: DoubleSide });
+      const m3 = new Mesh(new PlaneGeometry(width, len), mat5);
       m3.rotation.x = -Math.PI / 2;
       m3.rotation.z = -Math.atan2(to.x - from.x, to.z - from.z) + Math.PI;
       m3.position.set((from.x + to.x) / 2, 0.09, (from.z + to.z) / 2);
@@ -51413,8 +52753,8 @@ void main(){
       const g2 = new Group();
       g2.add(m3);
       this.scene.add(g2);
-      this.meshes.push({ m: g2, t: 0, dur, mat: mat4, done: onDone, upd: (k2) => {
-        mat4.opacity = 0.2 + 0.35 * Math.abs(Math.sin(k2 * 12));
+      this.meshes.push({ m: g2, t: 0, dur, mat: mat5, done: onDone, upd: (k2) => {
+        mat5.opacity = 0.2 + 0.35 * Math.abs(Math.sin(k2 * 12));
       } });
       return g2;
     }
@@ -51652,7 +52992,7 @@ void main(){
   function starterKit(s2) {
     const cls = CLASSES[s2.cls];
     const gear = cls.gear[s2.gear || 0] || cls.gear[0];
-    const eq = { weapon: starterItem(gear.weapon[0]), offhand: gear.offhand[0] ? starterItem(gear.offhand[0]) : null, helm: null, armor: null, ring: null, amulet: null };
+    const eq = { weapon: starterItem(gear.weapon[0]), offhand: gear.offhand[0] ? starterItem(gear.offhand[0]) : null, helm: null, armor: null, ring: null, amulet: null, shoulders: null, gloves: null, shirt: null, belt: null, pants: null, boots: null };
     const helmVis = s2.hooded ? "Rogue_Head_Hooded" : HELM_VIS[cls.headgear];
     if (helmVis && (s2.helm !== false || s2.hooded)) eq.helm = starterHelm(helmVis);
     eq.armor = starterOutfit(OUTFIT2[s2.cls]);
@@ -51973,6 +53313,9 @@ void main(){
       else if (loc && loc.kind === "town") {
         restockShop();
         this.loadLevel("town", 0, "resume", loc);
+      } else if (loc && loc.kind === "interior") {
+        restockShop();
+        this.loadLevel("interior", loc.floor, "resume", loc);
       } else this.enterTown();
       msg(`Welcome back, ${G.heroName}.`, "#f0c674");
     }
@@ -52013,6 +53356,11 @@ void main(){
         this.emerge = 0.7;
       }
       if (arrive === "resume" && loc && kind === "town") pos = new Vector3(loc.x, 0, loc.z);
+      if (arrive === "resume" && loc && kind === "interior") pos = new Vector3(loc.x, 0, loc.z);
+      if (kind === "town" && arrive === "door" && loc) {
+        const b2 = L3.buildings[loc.bi];
+        if (b2 && b2.door) pos = b2.door.clone().add(new Vector3(b2.dir[0] * 1.2, 0, b2.dir[1] * 1.2));
+      }
       if (!L3.walkable(pos)) pos = L3.toWorld(...L3.nearestFloor(...L3.cellOf(pos)));
       p2.root.position.copy(pos);
       L3.add(p2);
@@ -52036,11 +53384,14 @@ void main(){
         playMusic(dungeonTrack(floor));
         Barks.reset();
         setTimeout(() => Barks.hero(floor % 5 === 0 ? "boss" : "down", 0.8, 0), 1500);
+      } else if (kind === "interior") {
+        this.ui.banner(L3.title, "Hollowmere");
+        playMusic(daylight() < 0.25 ? "town_night" : "town");
       } else {
-        this.ui.banner("Hollowmere", "A lantern-lit town above the Wells");
-        playMusic("town");
+        if (arrive !== "door") this.ui.banner("Hollowmere", "A lantern-lit town above the Wells");
+        playMusic(daylight() < 0.25 ? "town_night" : "town");
         Barks.reset();
-        setTimeout(() => Barks.hero("town", 0.5, 0), 1500);
+        if (arrive !== "door") setTimeout(() => Barks.hero("town", 0.5, 0), 1500);
       }
       sfx("door");
       saveGame();
@@ -52229,6 +53580,12 @@ void main(){
             this.loadLevel("dungeon", f2);
           }
           break;
+        case "door":
+          this.loadLevel("interior", e.data.bi, "door");
+          break;
+        case "exit":
+          this.loadLevel("town", 0, "door", { bi: e.data.bi });
+          break;
         case "stairs_down":
           this.loadLevel("dungeon", G.level.floor + 1, "down");
           break;
@@ -52269,7 +53626,7 @@ void main(){
       }
     }
     usePortal() {
-      if (!G.level || G.level.kind === "town") {
+      if (!G.level || G.level.safe) {
         this.flash("You are already in town");
         return;
       }
@@ -52635,7 +53992,7 @@ void main(){
         L3.sun.position.copy(this.camFocus).add(new Vector3(14, 26, 10));
         L3.sun.target.position.copy(this.camFocus);
         if (this.sky) this.sky.update(dt, L3, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));
-        if (L3.kind === "town" && !this.menuMode) playMusic(daylight() < 0.25 ? "town_night" : "town");
+        if (L3.safe && !this.menuMode) playMusic(daylight() < 0.25 ? "town_night" : "town");
         this.ui.update(dt);
         Barks.update(dt);
         document.body.style.cursor = G.player.hover ? G.player.hover.type === "enemy" ? "crosshair" : "pointer" : "default";
@@ -52645,6 +54002,8 @@ void main(){
   };
   window.__THREE = three_module_exports;
   window.__real = { buildReal, NPC_SPECS, fullLook };
+  window.__audio = Audio2;
+  window.__items = { generate, lookOf };
   if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", () => {
     window.game = new Main();
   });
