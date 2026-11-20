@@ -24420,24 +24420,24 @@ void main() {
       const P22 = new Vector3();
       const B2 = new Vector3();
       const T2 = new Vector3();
-      const N2 = new Vector3();
+      const N3 = new Vector3();
       for (let i = 0; i <= tubularSegments; ++i) {
         const u2 = i / tubularSegments * p2 * Math.PI * 2;
         calculatePositionOnCurve(u2, p2, q, radius, P1);
         calculatePositionOnCurve(u2 + 0.01, p2, q, radius, P22);
         T2.subVectors(P22, P1);
-        N2.addVectors(P22, P1);
-        B2.crossVectors(T2, N2);
-        N2.crossVectors(B2, T2);
+        N3.addVectors(P22, P1);
+        B2.crossVectors(T2, N3);
+        N3.crossVectors(B2, T2);
         B2.normalize();
-        N2.normalize();
+        N3.normalize();
         for (let j2 = 0; j2 <= radialSegments; ++j2) {
           const v2 = j2 / radialSegments * Math.PI * 2;
           const cx = -tube * Math.cos(v2);
           const cy = tube * Math.sin(v2);
-          vertex2.x = P1.x + (cx * N2.x + cy * B2.x);
-          vertex2.y = P1.y + (cx * N2.y + cy * B2.y);
-          vertex2.z = P1.z + (cx * N2.z + cy * B2.z);
+          vertex2.x = P1.x + (cx * N3.x + cy * B2.x);
+          vertex2.y = P1.y + (cx * N3.y + cy * B2.y);
+          vertex2.z = P1.z + (cx * N3.z + cy * B2.z);
           vertices.push(vertex2.x, vertex2.y, vertex2.z);
           normal.subVectors(vertex2, P1).normalize();
           normals.push(normal.x, normal.y, normal.z);
@@ -24516,15 +24516,15 @@ void main() {
       }
       function generateSegment(i) {
         P3 = path.getPointAt(i / tubularSegments, P3);
-        const N2 = frames.normals[i];
+        const N3 = frames.normals[i];
         const B2 = frames.binormals[i];
         for (let j2 = 0; j2 <= radialSegments; j2++) {
           const v2 = j2 / radialSegments * Math.PI * 2;
           const sin = Math.sin(v2);
           const cos = -Math.cos(v2);
-          normal.x = cos * N2.x + sin * B2.x;
-          normal.y = cos * N2.y + sin * B2.y;
-          normal.z = cos * N2.z + sin * B2.z;
+          normal.x = cos * N3.x + sin * B2.x;
+          normal.y = cos * N3.y + sin * B2.y;
+          normal.z = cos * N3.z + sin * B2.z;
           normal.normalize();
           normals.push(normal.x, normal.y, normal.z);
           vertex2.x = P3.x + radius * normal.x;
@@ -33404,94 +33404,171 @@ void main() {
   }
   var darker = (c2, k2 = 0.6) => new Color(c2).multiplyScalar(k2).getHex();
   var lighter = (c2, k2 = 0.45) => new Color(c2).lerp(new Color(16773848), k2).getHex();
+  var tmpV = new Vector3();
+  var tmpV2 = new Vector3();
+  var FWD = new Vector3(0, 0, 1);
+  function curveTube(points, r, m3, parent) {
+    const g2 = new TubeGeometry(new CatmullRomCurve3(points.map((p2) => new Vector3(...p2))), 16, r, 5, false);
+    const o2 = new Mesh(g2, m3);
+    o2.castShadow = false;
+    parent.add(o2);
+    return o2;
+  }
+  function buildLongDragon(stage, coat) {
+    const root = new Group();
+    const body = new Group();
+    root.add(body);
+    const parts = { long: true };
+    const sc = [0.75, 1, 1.3][stage];
+    const gilded = new Color(coat).getHSL({}).s > 0.5 && Math.abs(new Color(coat).getHSL({}).h - 0.12) < 0.04;
+    const accent = gilded ? 13120030 : 15251520;
+    const belly = lighter(coat, 0.5), dark = darker(coat, 0.5);
+    const mC = mat2(coat, { r: 0.35, m: 0.25 }), mB = mat2(belly, { r: 0.5, m: 0.1 }), mD = mat2(dark, { r: 0.45 });
+    const mA = mat2(accent, { r: 0.4, m: 0.35, e: accent, ei: 0.18 }), mHorn = mat2(15260856, { r: 0.35 }), mEye = mat2(16769120, { e: 16756768, ei: 1.8 });
+    const mWhisk = mat2(lighter(accent, 0.3), { r: 0.5 });
+    const N3 = 16 + stage * 4, spacing = 0.13;
+    const segs = [];
+    for (let i = 0; i < N3; i++) {
+      const u2 = i / (N3 - 1);
+      const r = 0.13 * (1 - 0.78 * Math.pow(u2, 1.3)) * (1 + 0.18 * Math.exp(-Math.pow((u2 - 0.18) / 0.12, 2)));
+      const g2 = new Group();
+      body.add(g2);
+      M(geo.sph, mC, r, r * 0.92, spacing * 1.3, 0, 0, 0, g2);
+      M(geo.sph, mB, r * 0.82, r * 0.6, spacing * 0.85, 0, -r * 0.42, 0, g2);
+      if (i > 0 && i < N3 - 1) {
+        const fin = M(geo.cone, i % 2 ? mA : mD, r * 0.32, r * 1.1, spacing * 0.35, 0, r * 1.15, 0, g2);
+        fin.rotation.x = -0.45;
+        fin.castShadow = false;
+      }
+      segs.push({ g: g2, r, u: u2 });
+    }
+    const tuft = new Group();
+    segs[N3 - 1].g.add(tuft);
+    for (let k2 = 0; k2 < 5; k2++) {
+      const c2 = M(geo.cone, mA, 0.05, 0.32, 0.02, 0, 0, -0.16, tuft);
+      c2.rotation.set(-Math.PI / 2, 0, (k2 - 2) * 0.32);
+      c2.position.x = (k2 - 2) * 0.025;
+      c2.castShadow = false;
+    }
+    parts.legs = [];
+    for (const [si, front] of [[Math.round(N3 * 0.16), true], [Math.round(N3 * 0.52), false]]) {
+      const sg = segs[si];
+      for (const x2 of [-1, 1]) {
+        const hip = new Group();
+        hip.position.set(x2 * sg.r * 0.85, -sg.r * 0.2, 0);
+        sg.g.add(hip);
+        M(geo.cap, mC, 0.035, 0.1, 0.035, 0, -0.07, 0.02, hip).rotation.x = 0.6;
+        const foot = new Group();
+        foot.position.set(0, -0.14, 0.08);
+        hip.add(foot);
+        M(geo.sph, mD, 0.045, 0.03, 0.05, 0, 0, 0, foot);
+        for (let c2 = -1; c2 <= 1; c2++) {
+          const cl = M(geo.cone, mHorn, 0.012, 0.06, 0.012, c2 * 0.025, -0.01, 0.05, foot);
+          cl.rotation.x = Math.PI / 2 + 0.5;
+          cl.castShadow = false;
+        }
+        hip.rotation.z = x2 * 0.5;
+        parts.legs.push({ hip, x: x2, front });
+      }
+    }
+    const head = new Group();
+    body.add(head);
+    const sk = new Group();
+    head.add(sk);
+    M(geo.sph, mC, 0.13, 0.11, 0.15, 0, 0.02, 0, sk);
+    M(geo.sph, mC, 0.085, 0.065, 0.16, 0, 0, 0.15, sk);
+    M(geo.sph, mA, 0.05, 0.03, 0.06, 0, 0.055, 0.2, sk);
+    for (const x2 of [-1, 1]) {
+      M(geo.sph, mEye, 0.03, 0.026, 0.03, x2 * 0.085, 0.06, 0.07, sk);
+      M(geo.sph, mat2(0), 0.01, 0.022, 8e-3, x2 * 0.1, 0.062, 0.088, sk);
+      M(geo.sph, mD, 0.045, 0.018, 0.05, x2 * 0.08, 0.095, 0.07, sk).rotation.z = x2 * 0.3;
+      M(geo.sph, mat2(2230272), 0.012, 0.012, 0.012, x2 * 0.035, 0.03, 0.29, sk);
+      const ant = new Group();
+      ant.position.set(x2 * 0.06, 0.1, -0.06);
+      ant.rotation.set(-0.85, 0, x2 * -0.35);
+      sk.add(ant);
+      const L3 = 0.2 + stage * 0.07;
+      M(geo.cone, mHorn, 0.022, L3, 0.022, 0, L3 / 2, 0, ant);
+      const t1 = M(geo.cone, mHorn, 0.014, L3 * 0.45, 0.014, x2 * 0.03, L3 * 0.45, 0, ant);
+      t1.rotation.z = x2 * -0.9;
+      const t2 = M(geo.cone, mHorn, 0.012, L3 * 0.35, 0.012, x2 * 0.02, L3 * 0.72, 0, ant);
+      t2.rotation.z = x2 * -0.7;
+      const w2 = curveTube([[x2 * 0.06, 0, 0.25], [x2 * 0.18, -0.02, 0.22], [x2 * 0.3, -0.08, 0.1], [x2 * 0.38, -0.18, -0.05]], 6e-3, mWhisk, sk);
+      (parts.whiskers ||= []).push(w2);
+      for (let k2 = 0; k2 < 3; k2++) {
+        const m3 = M(geo.cone, mA, 0.035, 0.16, 0.02, x2 * (0.1 + k2 * 0.015), 0.04 - k2 * 0.04, -0.1, sk);
+        m3.rotation.set(-1.9 + k2 * 0.2, 0, x2 * (0.9 + k2 * 0.2));
+        m3.castShadow = false;
+      }
+    }
+    for (let k2 = 0; k2 < 4; k2++) {
+      const m3 = M(geo.cone, mA, 0.04, 0.18, 0.02, 0, 0.12 - k2 * 0.02, -0.08 - k2 * 0.04, sk);
+      m3.rotation.x = -2.2 + k2 * 0.1;
+      m3.castShadow = false;
+    }
+    const jaw = new Group();
+    jaw.position.set(0, -0.04, 0.03);
+    head.add(jaw);
+    M(geo.sph, mB, 0.07, 0.03, 0.15, 0, -0.02, 0.12, jaw);
+    for (const x2 of [-1, 1]) {
+      const f2 = M(geo.cone, mHorn, 8e-3, 0.03, 8e-3, x2 * 0.04, 0, 0.22, jaw);
+      f2.rotation.x = Math.PI;
+      f2.castShadow = false;
+    }
+    const beard = M(geo.cone, mA, 0.035, 0.14, 0.02, 0, -0.08, 0.06, jaw);
+    beard.rotation.x = Math.PI - 0.3;
+    beard.castShadow = false;
+    const pearl = M(geo.sph, mat2(16774368, { e: 16760944, ei: 1.4, r: 0.15 }), 0.06, 0.06, 0.06, 0, 0, 0, body);
+    pearl.castShadow = false;
+    parts.head = head;
+    parts.jaw = jaw;
+    parts.pearl = pearl;
+    parts.hover = true;
+    body.scale.setScalar(sc);
+    let atk = 0, phase = 0, amp = 0.5;
+    const pos = segs.map(() => new Vector3());
+    const anim = (t, moving, dt, attack) => {
+      if (attack) atk = 1;
+      atk = Math.max(0, atk - (dt || 0.016) * 3);
+      const speed = moving ? 5.5 : 2.2;
+      phase += (dt || 0.016) * speed;
+      amp += ((moving ? 1 : 0.65) - amp) * Math.min(1, (dt || 0.016) * 3);
+      const baseY = 0.95 + Math.sin(t * 1.3) * 0.08;
+      const headZ = 0.55 + atk * 0.3;
+      for (let i = 0; i < N3; i++) {
+        const u2 = i / (N3 - 1), d2 = i * spacing;
+        const k2 = Math.min(1, 0.25 + u2 * 2);
+        pos[i].set(Math.sin(phase - d2 * 4.2) * 0.22 * amp * k2, baseY + Math.sin(phase * 0.8 - d2 * 3.1) * 0.13 * amp * k2 - u2 * 0.08, headZ - 0.16 - d2);
+      }
+      for (let i = 0; i < N3; i++) {
+        const g2 = segs[i].g;
+        g2.position.copy(pos[i]);
+        const a = i === 0 ? tmpV.set(pos[0].x * 0.6, pos[0].y, headZ) : pos[i - 1];
+        tmpV2.subVectors(a, pos[i]).normalize();
+        g2.quaternion.setFromUnitVectors(FWD, tmpV2);
+      }
+      head.position.set(pos[0].x * 0.6, pos[0].y + 0.02, headZ);
+      tmpV2.subVectors(head.position, pos[0]).normalize();
+      head.quaternion.setFromUnitVectors(FWD, tmpV2);
+      head.rotateX(0.12 - atk * 0.3 + Math.sin(t * 1.7) * 0.05);
+      jaw.rotation.x = 0.08 + atk * 0.55 + Math.max(0, Math.sin(t * 0.9)) * 0.06;
+      for (const w2 of parts.whiskers) w2.rotation.y = Math.sin(t * 2.2) * 0.12;
+      tuft.rotation.y = Math.sin(phase * 1.3) * 0.4;
+      for (const l2 of parts.legs) l2.hip.rotation.x = Math.sin(phase * 1.6 + (l2.front ? 0 : Math.PI) + (l2.x > 0 ? Math.PI : 0)) * 0.55;
+      pearl.position.set(Math.sin(t * 2.1) * 0.12, baseY + 0.12 + Math.sin(t * 3.3) * 0.06, headZ + 0.42 + Math.cos(t * 2.1) * 0.06);
+      pearl.material.emissiveIntensity = 1.2 + Math.sin(t * 5) * 0.3 + atk;
+    };
+    anim(0, false, 0.016, 0);
+    return { root, anim, parts };
+  }
   function buildPetModel(species, stage, coat) {
     const root = new Group();
     const body = new Group();
     root.add(body);
     const parts = {};
     const sc = [0.8, 1.05, 1.35][stage];
-    if (species === "dragon") {
-      const c2 = coat, belly = lighter(coat, 0.55), dark = darker(coat, 0.55);
-      const mC = mat2(c2, { r: 0.45, m: 0.15 }), mB = mat2(belly, { r: 0.6 }), mD = mat2(dark, { r: 0.5 }), mH = mat2(15787720, { r: 0.4 }), mE = mat2(16764992, { e: 16752672, ei: 1.6 });
-      const torso = M(geo.sph, mC, 0.32, 0.3, 0.46, 0, 0.55, 0, body);
-      M(geo.sph, mB, 0.26, 0.24, 0.38, 0, 0.47, 0.06, body);
-      const neck = new Group();
-      neck.position.set(0, 0.68, 0.32);
-      body.add(neck);
-      M(geo.cap, mC, 0.12, 0.18, 0.12, 0, 0.12, 0.05, neck).rotation.x = 0.5;
-      const head = new Group();
-      head.position.set(0, 0.28, 0.16);
-      neck.add(head);
-      M(geo.sph, mC, 0.17, 0.15, 0.2, 0, 0, 0, head);
-      M(geo.sph, mC, 0.11, 0.09, 0.15, 0, -0.03, 0.17, head);
-      const jaw = M(geo.sph, mB, 0.09, 0.05, 0.13, 0, -0.09, 0.13, head);
-      for (const x2 of [-1, 1]) {
-        M(geo.sph, mE, 0.035, 0.035, 0.03, x2 * 0.09, 0.04, 0.14, head);
-        M(geo.sph, mat2(0), 0.012, 0.03, 0.01, x2 * 0.1, 0.04, 0.17, head);
-        M(geo.sph, mat2(2230784), 0.015, 0.015, 0.015, x2 * 0.04, 0, 0.31, head);
-        const h1 = M(geo.cone, mH, 0.04, 0.2 + stage * 0.08, 0.04, x2 * 0.09, 0.14, -0.08, head);
-        h1.rotation.set(-0.9, 0, x2 * 0.25);
-        if (stage >= 1) {
-          const h2 = M(geo.cone, mH, 0.025, 0.12, 0.025, x2 * 0.15, 0.07, -0.06, head);
-          h2.rotation.set(-1.1, 0, x2 * 0.7);
-        }
-        if (stage >= 2) {
-          const h3 = M(geo.cone, mH, 0.022, 0.1, 0.022, x2 * 0.12, -0.08, -0.04, head);
-          h3.rotation.set(-1.6, 0, x2 * 0.9);
-        }
-      }
-      for (let i = 0; i < 4 + stage * 2; i++) {
-        const s2 = M(geo.cone, mD, 0.035, 0.1 + stage * 0.02, 0.035, 0, 0.84 - i * 0.03, 0.25 - i * 0.1, body);
-        s2.rotation.x = -0.35;
-      }
-      for (const [x2, z2] of [[-0.18, 0.2], [0.18, 0.2], [-0.2, -0.18], [0.2, -0.18]]) {
-        M(geo.cap, mC, 0.07, 0.14, 0.07, x2, 0.24, z2, body);
-        M(geo.sph, mD, 0.08, 0.05, 0.1, x2, 0.06, z2 + 0.04, body);
-      }
-      const tail = new Group();
-      tail.position.set(0, 0.5, -0.4);
-      body.add(tail);
-      parts.tail = [];
-      let prev = tail;
-      for (let i = 0; i < 6; i++) {
-        const seg = new Group();
-        seg.position.set(0, 0, i === 0 ? 0 : -0.13);
-        prev.add(seg);
-        M(geo.sph, mC, 0.1 - i * 0.012, 0.09 - i * 0.011, 0.11, 0, 0, -0.06, seg);
-        if (i % 2 === 0) {
-          const sp = M(geo.cone, mD, 0.025, 0.07, 0.025, 0, 0.08 - i * 8e-3, -0.06, seg);
-          sp.rotation.x = -0.4;
-        }
-        parts.tail.push(seg);
-        prev = seg;
-      }
-      const spade = M(geo.cone, mD, 0.08, 0.16, 0.02, 0, 0, -0.16, prev);
-      spade.rotation.x = -Math.PI / 2;
-      parts.wings = [];
-      const wg = wingGeo(0.75 + stage * 0.2, 0.55 + stage * 0.12);
-      const memb = mat2(darker(coat, 0.8), { r: 0.7, side: DoubleSide });
-      for (const x2 of [-1, 1]) {
-        const piv = new Group();
-        piv.position.set(x2 * 0.16, 0.78, 0.08);
-        body.add(piv);
-        const w2 = new Mesh(wg, memb);
-        w2.castShadow = true;
-        w2.scale.set(x2, 1, 1);
-        w2.rotation.x = -Math.PI / 2 + 0.25;
-        piv.add(w2);
-        const bone = M(geo.cap, mD, 0.02, 0.5 + stage * 0.15, 0.02, x2 * 0.3, 0.12, 0, piv);
-        bone.rotation.z = x2 * -1.2;
-        parts.wings.push(piv);
-      }
-      parts.head = head;
-      parts.jaw = jaw;
-      parts.neck = neck;
-      if (stage >= 2) {
-        const glow = M(geo.sph, mat2(16742944, { e: 16734736, ei: 1.5 }), 0.07, 0.07, 0.05, 0, 0.6, 0.42, body);
-        glow.castShadow = false;
-      }
-      body.scale.setScalar(sc * 1.15);
-    } else if (species === "imp") {
+    if (species === "dragon") return buildLongDragon(stage, coat);
+    if (species === "imp") {
       const c2 = coat, dark = darker(coat, 0.5), light = lighter(coat, 0.3);
       const mC = mat2(c2, { r: 0.55 }), mD = mat2(dark, { r: 0.5 }), mHo = mat2(2760744, { r: 0.4 }), mE = mat2(16773216, { e: 16764960, ei: 2 });
       const torso = M(geo.sph, mC, 0.17, 0.22, 0.15, 0, 0.62, 0, body);
@@ -33633,6 +33710,15 @@ void main() {
       if (parts.lamps) for (const l2 of parts.lamps) l2.material.emissiveIntensity = 1.6 + Math.sin(t * 6) * 0.4;
       body.position.y = parts.hover ? 0.35 + Math.sin(t * 3) * 0.08 : parts.wings && moving ? 0.25 + Math.sin(t * 4.5) * 0.06 : moving ? Math.abs(Math.sin(t * 14)) * 0.06 : Math.sin(t * 2) * 8e-3;
       body.position.z = atk * 0.25;
+      const bs = body.userData.bs || (body.userData.bs = body.scale.x);
+      body.scale.set(bs, bs * (1 + Math.sin(t * 2.3) * 0.018), bs);
+      if (parts.head) parts.head.rotation.y = Math.sin(t * 0.55) * (moving ? 0.08 : 0.45) + Math.sin(t * 1.9) * 0.05;
+      if (parts.legs) body.rotation.x = moving ? Math.sin(t * 16) * 0.07 : 0;
+      if (parts.hover) {
+        body.rotation.z = Math.sin(t * 1.4) * 0.09;
+        body.rotation.x = moving ? 0.25 : 0.05;
+        body.rotation.y = atk * Math.PI * 0.5;
+      }
     };
     return { root, anim, parts };
   }
@@ -39510,7 +39596,8 @@ void main() {
     });
     return g2;
   }
-  function modelFlash(m3, s2 = 1) {
+  var FLASH_WHITE = new Color(1, 0.94, 0.85);
+  function modelFlash(m3, s2 = 1, color = null) {
     if (!m3._fm) {
       m3._fm = [];
       m3.root.traverse((o2) => {
@@ -39524,17 +39611,17 @@ void main() {
       });
       m3._fbase = m3.root.scale.clone();
     }
-    m3._fd = 0.14;
+    m3._fd = color ? 0.3 : 0.14;
     m3._ft = m3._fd;
     m3._fs = Math.min(2, s2);
+    m3._fc = color ? new Color(color) : FLASH_WHITE;
   }
-  var FLASH_WHITE = new Color(1, 0.94, 0.85);
   function modelFlashTick(m3, dt) {
     if (!(m3._ft > 0)) return;
     m3._ft = Math.max(0, m3._ft - dt);
     const k2 = m3._ft / m3._fd, ks = k2 * m3._fs;
     for (const f2 of m3._fm) {
-      f2.m.emissive.copy(f2.e).lerp(FLASH_WHITE, Math.min(1, ks * 0.85));
+      f2.m.emissive.copy(f2.e).lerp(m3._fc, Math.min(1, ks * 0.85));
       f2.m.emissiveIntensity = f2.i + ks * 0.9;
     }
     const b2 = m3._fbase;
@@ -39784,8 +39871,8 @@ void main() {
       this.current = a;
       return a.getClip().duration / timeScale;
     }
-    flash(s2 = 1) {
-      modelFlash(this, s2);
+    flash(s2 = 1, c2 = null) {
+      modelFlash(this, s2, c2);
     }
     update(dt) {
       this.mixer.update(dt);
@@ -40129,8 +40216,8 @@ void main() {
       this.current = a;
       return a.getClip().duration / timeScale;
     }
-    flash(s2 = 1) {
-      modelFlash(this, s2);
+    flash(s2 = 1, c2 = null) {
+      modelFlash(this, s2, c2);
     }
     update(dt) {
       this.mixer.update(dt);
@@ -43151,11 +43238,11 @@ void main(){
   var FLESH = [8002074, 9185826, 5902352, 10107440];
   var BONE = [14735552, 13616808, 15788240, 12103824];
   function splatAtlas() {
-    const S3 = 128, N2 = 4, c2 = document.createElement("canvas");
-    c2.width = c2.height = S3 * N2;
+    const S3 = 128, N3 = 4, c2 = document.createElement("canvas");
+    c2.width = c2.height = S3 * N3;
     const g2 = c2.getContext("2d");
-    for (let i = 0; i < N2 * N2; i++) {
-      const cx = i % N2 * S3 + S3 / 2, cy = Math.floor(i / N2) * S3 + S3 / 2;
+    for (let i = 0; i < N3 * N3; i++) {
+      const cx = i % N3 * S3 + S3 / 2, cy = Math.floor(i / N3) * S3 + S3 / 2;
       g2.save();
       g2.translate(cx, cy);
       g2.fillStyle = "#fff";
@@ -43500,6 +43587,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   var tmp2 = new Vector3();
   var DMG_COLORS = { phys: "#ffffff", fire: "#ffa040", frost: "#9fdcff", storm: "#c6b8ff", poison: "#9dff7a", arcane: "#b8a0ff", light: "#fff0a0", dark: "#c070e0", bleed: "#ff4a4a" };
   var BLOB_MAT = null;
+  var HALO_GEO = new SphereGeometry(1, 12, 8);
   var BLOB_GEO = new PlaneGeometry(1, 1);
   function blobMat() {
     if (BLOB_MAT) return BLOB_MAT;
@@ -44020,6 +44108,14 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     die() {
       this.dead = true;
       sfx("die");
+      if (this.char) {
+        const at = this.pos.clone();
+        setTimeout(() => {
+          if (G.level && this.root.parent) {
+            G.main.fx.emit(at.setY(0.15), { count: 14, color: 9075302, speed: 1.6, life: 0.9, size: 0.7, rise: 0.25 });
+          }
+        }, 650);
+      }
       addXp(this.xp);
       if (G.pet && !G.pet.dead && G.petAwayTime <= 0) addPetXp(Math.ceil(this.xp * 0.7));
       G.main.floatText(this.pos, `+${this.xp} xp`, "#c9a3ff", 16, 1);
@@ -44149,6 +44245,15 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         if (this.atkCd <= 0) {
           this.atkCd = (this.ranged ? 1.9 : 1.4) * (this.slowT > 0 ? 1.6 : 1) * (this.boss ? 0.8 : 1);
           this.swingT = 0.3;
+          this.char?.flash?.(this.boss ? 1.2 : 0.7, 16723984);
+          if (!this.ranged) {
+            const lv = tg.pos.clone().sub(this.pos).setY(0);
+            if (lv.lengthSq() > 0.36) {
+              lv.normalize().multiplyScalar(0.18);
+              const to = this.pos.clone().add(lv);
+              if (G.level.walkable(to)) this.pos.copy(to);
+            }
+          }
           if (this.char) this.char.once(this.ranged ? this.data.shape === "skel_rogue" ? "1H_Ranged_Shoot" : "Spellcast_Shoot" : this.boss ? "2H_Melee_Attack_Chop" : "1H_Melee_Attack_Chop", { timeScale: 1.5 });
           const target = tg;
           const delay = this.char ? 350 : 0;
@@ -44160,7 +44265,10 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
               const p2 = new Projectile(dir, this.dmg, "ally", col2, { trail: col2, speed: 11, kind: "fire", size: this.data.shape === "skel_rogue" ? 0.12 : 0.25, blade: this.data.shape === "skel_rogue" });
               p2.root.position.copy(this.pos).addScaledVector(dir, 0.7);
               G.level.add(p2);
-            } else if (flatDist(target.pos, this.pos) < range + 1) target.takeDamage(this.dmg * rand(0.8, 1.2));
+            } else if (flatDist(target.pos, this.pos) < range + 1) {
+              target.takeDamage(this.dmg * rand(0.8, 1.2));
+              G.main.fx.emit(target.pos.clone().setY(0.9), { count: 8, color: 16767392, speed: 3.5, life: 0.25, size: 0.35, rise: 0.2 });
+            }
           }, delay);
         }
       } else {
@@ -44911,6 +45019,11 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         const s2 = sphere(o2.size ?? 0.22, color, 4);
         s2.castShadow = false;
         this.root.add(s2);
+        const halo = new Mesh(HALO_GEO, new MeshBasicMaterial({ color, transparent: true, opacity: 0.35, blending: AdditiveBlending, depthWrite: false }));
+        halo.scale.setScalar((o2.size ?? 0.22) * 2.6);
+        halo.renderOrder = 9;
+        this.root.add(halo);
+        this.halo = halo;
       }
       this.root.children.forEach((c2) => c2.position.y = 1);
     }
@@ -44960,7 +45073,11 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     impact() {
       const fx = G.main.fx;
       fx.emit(this.pos.clone().setY(1), { count: this.explode ? 30 : 10, color: this.color, speed: this.explode ? 5 : 3, life: 0.35, size: 0.5 });
-      if (!this.spinMesh) fx.flash(this.pos, this.color, this.explode ? 25 : 10, 0.25);
+      if (!this.spinMesh) {
+        fx.flash(this.pos, this.color, this.explode ? 25 : 10, 0.25);
+        fx.core(this.pos.clone().setY(1), this.color, this.explode ? 1.1 : 0.45, 0.22);
+      }
+      if (this.halo) this.halo.material.dispose();
       G.level.remove(this);
     }
   };
@@ -47564,15 +47681,15 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   }
   function groundDetail() {
     if (cache4.ground) return cache4.ground;
-    const N2 = 512;
-    const hc = canvas(N2), g2 = hc.getContext("2d");
+    const N3 = 512;
+    const hc = canvas(N3), g2 = hc.getContext("2d");
     g2.fillStyle = "#808080";
-    g2.fillRect(0, 0, N2, N2);
+    g2.fillRect(0, 0, N3, N3);
     const wrapDraw = (fn) => {
-      for (const ox of [-N2, 0, N2]) for (const oy of [-N2, 0, N2]) fn(ox, oy);
+      for (const ox of [-N3, 0, N3]) for (const oy of [-N3, 0, N3]) fn(ox, oy);
     };
     for (let i = 0; i < 260; i++) {
-      const x2 = Math.random() * N2, y2 = Math.random() * N2, r = 6 + Math.random() * 26, v2 = 100 + Math.random() * 60;
+      const x2 = Math.random() * N3, y2 = Math.random() * N3, r = 6 + Math.random() * 26, v2 = 100 + Math.random() * 60;
       wrapDraw((ox, oy) => {
         const gr = g2.createRadialGradient(x2 + ox, y2 + oy, 0, x2 + ox, y2 + oy, r);
         gr.addColorStop(0, `rgba(${v2},${v2},${v2},0.35)`);
@@ -47583,7 +47700,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     }
     g2.lineCap = "round";
     for (let i = 0; i < 14e3; i++) {
-      const x2 = Math.random() * N2, y2 = Math.random() * N2, len = 3 + Math.random() * 7, a = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
+      const x2 = Math.random() * N3, y2 = Math.random() * N3, len = 3 + Math.random() * 7, a = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
       const v2 = 70 + Math.random() * 130;
       g2.strokeStyle = `rgba(${v2},${v2},${v2},0.55)`;
       g2.lineWidth = 0.8 + Math.random() * 1.2;
@@ -47593,7 +47710,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       g2.stroke();
     }
     for (let i = 0; i < 500; i++) {
-      const x2 = Math.random() * N2, y2 = Math.random() * N2, r = 0.8 + Math.random() * 2;
+      const x2 = Math.random() * N3, y2 = Math.random() * N3, r = 0.8 + Math.random() * 2;
       const v2 = 150 + Math.random() * 80;
       g2.fillStyle = `rgb(${v2},${v2},${v2})`;
       g2.beginPath();
@@ -48022,10 +48139,10 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       return true;
     }
     astar(a, b2) {
-      const W = this.w, N2 = W * this.h;
-      const g2 = new Float32Array(N2).fill(Infinity);
-      const came = new Int32Array(N2).fill(-1);
-      const closed = new Uint8Array(N2);
+      const W = this.w, N3 = W * this.h;
+      const g2 = new Float32Array(N3).fill(Infinity);
+      const came = new Int32Array(N3).fill(-1);
+      const closed = new Uint8Array(N3);
       const start = a[1] * W + a[0], goal = b2[1] * W + b2[0];
       const heap = [];
       const push = (i, f2) => {
@@ -50892,7 +51009,7 @@ void main(){
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.6.1 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music mostly made in code, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.6.2 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music mostly made in code, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
         if (hasSave()) this.confirmNew();
@@ -51081,6 +51198,27 @@ void main(){
     t.colorSpace = SRGBColorSpace;
     return t;
   }
+  var CORE_GEO = new SphereGeometry(1, 16, 12);
+  var SCORCH_GEO = new PlaneGeometry(1, 1);
+  CORE_GEO.userData.shared = SCORCH_GEO.userData.shared = true;
+  var SCORCH_TEX = null;
+  function scorchTex() {
+    if (SCORCH_TEX) return SCORCH_TEX;
+    const c2 = document.createElement("canvas");
+    c2.width = c2.height = 128;
+    const g2 = c2.getContext("2d");
+    for (let i = 0; i < 14; i++) {
+      const x2 = 64 + (Math.random() - 0.5) * 40, y2 = 64 + (Math.random() - 0.5) * 40, r = 20 + Math.random() * 30;
+      const grd = g2.createRadialGradient(x2, y2, 0, x2, y2, r);
+      grd.addColorStop(0, "rgba(12,8,6,0.55)");
+      grd.addColorStop(1, "rgba(12,8,6,0)");
+      g2.fillStyle = grd;
+      g2.fillRect(0, 0, 128, 128);
+    }
+    SCORCH_TEX = new CanvasTexture(c2);
+    SCORCH_TEX.colorSpace = SRGBColorSpace;
+    return SCORCH_TEX;
+  }
   var FX = class {
     constructor(scene2) {
       this.scene = scene2;
@@ -51185,8 +51323,37 @@ void main(){
     explosion(pos, color, radius = 2) {
       this.emit(pos.clone().setY(0.6), { count: 40, color, speed: radius * 3, life: 0.6, size: 0.9, up: 0.8 });
       this.emit(pos.clone().setY(0.3), { count: 20, color: 3355443, speed: radius * 1.5, life: 1, size: 1.2, up: 0.5, rise: 1 });
+      this.emit(pos.clone().setY(0.5), { count: 18, color: 16765056, speed: radius * 2.6, life: 1.1, size: 0.22, up: 1.6, gravity: 9, drag: 0.4 });
       this.ring(pos, color, radius);
+      this.ring(pos, 16777215, radius * 0.6, 0.25);
       this.flash(pos, color, 40, 0.5);
+      this.core(pos.clone().setY(0.7), color, radius * 0.55, 0.35);
+      this.scorch(pos, radius * 0.8);
+    }
+    // a hot glowing ball that swells and fades (the heart of a blast or an impact)
+    core(pos, color, size = 1, dur = 0.3) {
+      const mat4 = new MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: AdditiveBlending, depthWrite: false });
+      const m3 = new Mesh(CORE_GEO, mat4);
+      m3.position.copy(pos);
+      m3.scale.setScalar(size * 0.3);
+      m3.renderOrder = 11;
+      this.scene.add(m3);
+      this.meshes.push({ m: m3, t: 0, dur, mat: mat4, upd: (k2) => {
+        m3.scale.setScalar(size * (0.3 + k2 * 0.9));
+        mat4.opacity = 0.85 * (1 - k2) * (1 - k2);
+      } });
+    }
+    // a dark burn mark left on the floor that fades over a few seconds
+    scorch(pos, r = 1.5) {
+      const mat4 = new MeshBasicMaterial({ map: scorchTex(), transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+      const m3 = new Mesh(SCORCH_GEO, mat4);
+      m3.rotation.set(-Math.PI / 2, 0, Math.random() * 6.28);
+      m3.position.set(pos.x, 0.03, pos.z);
+      m3.scale.setScalar(r * 2);
+      this.scene.add(m3);
+      this.meshes.push({ m: m3, t: 0, dur: 7, mat: mat4, upd: (k2) => {
+        mat4.opacity = 0.8 * Math.min(1, (1 - k2) * 3);
+      } });
     }
     // ice crystals bursting from the ground, then shattering
     spike(pos, color = 12578559, scale = 1) {
@@ -51326,7 +51493,9 @@ void main(){
         if (o2.t >= o2.dur) {
           o2.done?.();
           this.scene.remove(o2.m);
-          o2.m.traverse((c2) => c2.geometry?.dispose());
+          o2.m.traverse((c2) => {
+            if (c2.geometry && !c2.geometry.userData.shared) c2.geometry.dispose();
+          });
           o2.mat?.dispose();
           this.meshes.splice(i, 1);
         }
@@ -51334,6 +51503,119 @@ void main(){
       for (const L3 of this.lights) {
         L3.t += dt;
         L3.l.intensity = L3.t < L3.dur ? L3.peak * (1 - L3.t / L3.dur) : 0;
+      }
+    }
+  };
+
+  // src/atmos.js
+  var N2 = 320;
+  var BOX = 26;
+  var HGT = 5;
+  function dotTex() {
+    const c2 = document.createElement("canvas");
+    c2.width = c2.height = 32;
+    const g2 = c2.getContext("2d"), r = g2.createRadialGradient(16, 16, 0, 16, 16, 16);
+    r.addColorStop(0, "rgba(255,255,255,1)");
+    r.addColorStop(0.4, "rgba(255,255,255,0.5)");
+    r.addColorStop(1, "rgba(255,255,255,0)");
+    g2.fillStyle = r;
+    g2.fillRect(0, 0, 32, 32);
+    const t = new CanvasTexture(c2);
+    t.colorSpace = SRGBColorSpace;
+    return t;
+  }
+  function mistTex() {
+    const s2 = 256, c2 = document.createElement("canvas");
+    c2.width = c2.height = s2;
+    const g2 = c2.getContext("2d");
+    g2.fillStyle = "rgba(0,0,0,0)";
+    g2.fillRect(0, 0, s2, s2);
+    for (let i = 0; i < 70; i++) {
+      const x2 = Math.random() * s2, y2 = Math.random() * s2, r = 18 + Math.random() * 60, a = 0.05 + Math.random() * 0.12;
+      for (const ox of [-s2, 0, s2]) for (const oy of [-s2, 0, s2]) {
+        const grd = g2.createRadialGradient(x2 + ox, y2 + oy, 0, x2 + ox, y2 + oy, r);
+        grd.addColorStop(0, `rgba(255,255,255,${a})`);
+        grd.addColorStop(1, "rgba(255,255,255,0)");
+        g2.fillStyle = grd;
+        g2.fillRect(x2 + ox - r, y2 + oy - r, r * 2, r * 2);
+      }
+    }
+    const t = new CanvasTexture(c2);
+    t.wrapS = t.wrapT = RepeatWrapping;
+    t.repeat.set(4, 4);
+    t.colorSpace = SRGBColorSpace;
+    return t;
+  }
+  var Atmos = class {
+    hide() {
+      this.points.visible = false;
+      this.mist.visible = false;
+    }
+    constructor(scene2) {
+      this.scene = scene2;
+      const pos = new Float32Array(N2 * 3);
+      this.base = new Float32Array(N2 * 3);
+      this.ph = new Float32Array(N2);
+      for (let i = 0; i < N2; i++) {
+        this.base[i * 3] = (Math.random() - 0.5) * BOX;
+        this.base[i * 3 + 1] = 0.2 + Math.random() * HGT;
+        this.base[i * 3 + 2] = (Math.random() - 0.5) * BOX;
+        this.ph[i] = Math.random() * 100;
+      }
+      const geo2 = new BufferGeometry();
+      geo2.setAttribute("position", new BufferAttribute(pos, 3).setUsage(DynamicDrawUsage));
+      this.mat = new PointsMaterial({ map: dotTex(), size: 0.07, sizeAttenuation: true, transparent: true, depthWrite: false, blending: AdditiveBlending, opacity: 0.4, color: 13351066 });
+      this.points = new Points(geo2, this.mat);
+      this.points.frustumCulled = false;
+      this.points.renderOrder = 8;
+      scene2.add(this.points);
+      this.mistMat = new MeshBasicMaterial({ map: mistTex(), transparent: true, depthWrite: false, opacity: 0.22, color: 6976648 });
+      this.mist = new Mesh(new PlaneGeometry(70, 70), this.mistMat);
+      this.mist.rotation.x = -Math.PI / 2;
+      this.mist.renderOrder = 7;
+      this.mist.visible = false;
+      scene2.add(this.mist);
+      this.kind = "town";
+      this.t = 0;
+      this.points.visible = false;
+    }
+    setLevel(kind) {
+      this.kind = kind;
+      this.points.visible = true;
+      this.mist.visible = kind === "dungeon" && Settings.quality !== "low";
+    }
+    update(dt, focus, day = 1) {
+      this.t += dt;
+      const t = this.t, P3 = this.points.geometry.attributes.position.array, B2 = this.base;
+      const town = this.kind === "town", night = town && day < 0.3;
+      if (!town) {
+        this.mat.color.setHex(13351066);
+        this.mat.size = 0.06;
+        this.mat.opacity = 0.42;
+      } else if (night) {
+        this.mat.color.setHex(14221168);
+        this.mat.size = 0.13;
+        this.mat.opacity = 0.55 + Math.sin(t * 2.3) * 0.3;
+      } else {
+        this.mat.color.setHex(16773312);
+        this.mat.size = 0.05;
+        this.mat.opacity = 0.3;
+      }
+      const sp = night ? 0.6 : 0.25, h2 = BOX / 2;
+      for (let i = 0; i < N2; i++) {
+        const p2 = this.ph[i];
+        let x2 = B2[i * 3] + Math.sin(t * 0.13 * (1 + i % 5 * 0.1) + p2) * 2 * sp - focus.x;
+        let z2 = B2[i * 3 + 2] + Math.cos(t * 0.11 * (1 + i % 7 * 0.08) + p2) * 2 * sp - focus.z;
+        x2 = (x2 % BOX + BOX * 1.5) % BOX - h2;
+        z2 = (z2 % BOX + BOX * 1.5) % BOX - h2;
+        P3[i * 3] = focus.x + x2;
+        P3[i * 3 + 1] = (night ? 0.3 + B2[i * 3 + 1] % 2.2 : B2[i * 3 + 1]) + Math.sin(t * 0.7 + p2) * 0.25;
+        P3[i * 3 + 2] = focus.z + z2;
+      }
+      this.points.geometry.attributes.position.needsUpdate = true;
+      if (this.mist.visible) {
+        this.mist.position.set(Math.round(focus.x / 10) * 10, 0.18 + Math.sin(t * 0.3) * 0.03, Math.round(focus.z / 10) * 10);
+        this.mistMat.map.offset.set(t * 6e-3, t * 4e-3);
       }
     }
   };
@@ -51427,6 +51709,7 @@ void main(){
       this.camera = new PerspectiveCamera(40, 1, 0.5, 260);
       this.fx = new FX(this.scene);
       this.gore = new Gore(this.scene);
+      this.atmos = new Atmos(this.scene);
       this.zoom = Math.min(1.5, Math.max(0.3, +localStorage.getItem("hollowmere_zoom") || 0.82));
       this.keys = {};
       this.mouse = new Vector2();
@@ -51563,6 +51846,7 @@ void main(){
       this.fx.setScale?.(h2 * this.renderer.getPixelRatio());
     }
     menuScene() {
+      this.atmos?.hide();
       this.clearLevel();
       G.level = new Level(this.scene, "town", 0);
       this.sky = new Sky(this.scene);
@@ -51718,6 +52002,7 @@ void main(){
       G.currentFloor = floor;
       const L3 = new Level(this.scene, kind, floor);
       G.level = L3;
+      this.atmos.setLevel(kind);
       if (kind === "town") this.sky = new Sky(this.scene);
       this.applyShadowRes();
       const p2 = new Player();
@@ -52346,6 +52631,7 @@ void main(){
           this.shakeAmt = Math.max(0, this.shakeAmt - dt * 1.8);
         }
         this.camera.lookAt(this.camFocus.clone().add(new Vector3(0, 0.8 + 0.5 * (1 - za), 0)));
+        this.atmos.update(dt, this.camFocus, L3.kind === "town" ? daylight() : 1);
         L3.sun.position.copy(this.camFocus).add(new Vector3(14, 26, 10));
         L3.sun.target.position.copy(this.camFocus);
         if (this.sky) this.sky.update(dt, L3, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));
