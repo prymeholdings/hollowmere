@@ -40441,9 +40441,22 @@ void main() {
     const b2 = m3._fbase;
     m3.root.scale.set(b2.x * (1 + 0.06 * ks), b2.y * (1 - 0.1 * ks), b2.z * (1 + 0.06 * ks));
   }
+  function alienClip(n) {
+    if (/Death/.test(n)) return "Death_A";
+    if (/Hit|Dodge|Block|Stun/.test(n)) return "Hit_A";
+    if (/Run/.test(n)) return "Running_A";
+    if (/Walk|Sneak/.test(n)) return "Walking_A";
+    if (/Cheer|Wave/.test(n)) return "Cheer";
+    if (/Interact|PickUp|Use/.test(n)) return "Interact";
+    if (/Spell|Cast|Shoot|Ranged|Throw|Raise|Summon|Long/.test(n)) return "Spellcast_Shoot";
+    if (/Attack|Melee|Slice|Chop|Stab|Punch|Kick|Spin|Slash|Jump/.test(n)) return "2H_Melee_Attack_Chop";
+    return "Idle";
+  }
+  var ALIEN_GRIP = { rx: 3.14, ry: 0, rz: 0, x: 0, y: 0.02, z: 0.02, s: 0.65 };
   var CharModel = class _CharModel {
     constructor(name, opts = {}) {
       this.name = name;
+      this.alien = name === "Alien";
       const src = Assets.models[name];
       this.root = src ? clone(src) : new Group();
       this.scale = opts.scale ?? 0.72;
@@ -40507,6 +40520,7 @@ void main() {
     // ---------------------------------------------------------------- wardrobe
     // Show every equipped item on the 3D model: weapon, off-hand, helm, armor (body/arms/legs), jewellery.
     dress(equipment, look, cls) {
+      if (this.alien) return this.dressAlien(equipment);
       this.gearDef = null;
       for (const n of ALL_ACCESSORIES) if (this.parts[n]) this.parts[n].visible = false;
       if (cls.headgear && this.parts[cls.headgear]) this.parts[cls.headgear].visible = false;
@@ -40584,6 +40598,30 @@ void main() {
         skinSafeTint(o2.material, tint, tone || 16777215);
       });
     }
+    // the alien hero shows its weapon and off-hand in its hands (armour changes stats only)
+    dressAlien(eq) {
+      for (const o2 of this.worn || []) o2.parent?.remove(o2);
+      this.worn = [];
+      if (!this.bones) {
+        this.bones = {};
+        this.root.traverse((o2) => {
+          if (o2.isBone) this.bones[o2.name] = o2;
+        });
+      }
+      this.bones["handslot.r"] = this.bones.DEF_handR || this.bones["DEF-handR"];
+      this.bones["handslot.l"] = this.bones["DEF-handL"];
+      const W = (it) => it ? itemLook(it) : null;
+      for (const [it, slot, side] of [[eq.weapon, "handslot.r", 1], [eq.offhand, "handslot.l", -1]]) {
+        const l2 = W(it);
+        if (!l2) continue;
+        const m3 = this.wear(l2, slot);
+        if (m3) {
+          m3.rotation.set(ALIEN_GRIP.rx, ALIEN_GRIP.ry * side, ALIEN_GRIP.rz * side);
+          m3.position.set(ALIEN_GRIP.x * side, ALIEN_GRIP.y, ALIEN_GRIP.z);
+          m3.scale.multiplyScalar(ALIEN_GRIP.s);
+        }
+      }
+    }
     addDetails(outfit, look, al) {
       if (_CharModel.detailHook) _CharModel.detailHook(this, outfit, look, al);
     }
@@ -40645,7 +40683,7 @@ void main() {
     }
     action(name) {
       if (!this.actions[name]) {
-        const clip = this.clips[name];
+        const clip = this.clips[name] || (this.alien ? this.clips[alienClip(name)] : null);
         if (!clip) return null;
         this.actions[name] = this.mixer.clipAction(clip);
       }
@@ -48319,8 +48357,9 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       super("player");
       this.blob(0.5);
       const cls = CLASSES[G.cls] || CLASSES.Knight;
-      this.model = new CharModel(cls.model, { scale: 0.72 * (G.look?.height || 1) });
-      this.model.applyLook(cls, G.look || {});
+      this.isAlien = G.look?.race === "alien";
+      this.model = new CharModel(this.isAlien ? "Alien" : cls.model, { scale: (this.isAlien ? 0.84 : 0.72) * (G.look?.height || 1), tint: this.isAlien ? G.look.alienTint : void 0 });
+      if (!this.isAlien) this.model.applyLook(cls, G.look || {});
       this.root.add(this.model.root);
       this.attacks = ATTACKS[G.cls] || ATTACKS.Knight;
       this.ranged = null;
@@ -48338,7 +48377,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.lastHit = null;
       this.hitAnimCd = 0;
       this.refreshVisuals();
-      if (REAL_OK && Settings.realistic !== false) {
+      if (!this.isAlien && REAL_OK && Settings.realistic !== false) {
         this.model.root.visible = false;
         this.standIn = setTimeout(() => {
           if (this.model && !this.model.isReal) this.model.root.visible = true;
@@ -48348,7 +48387,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     }
     // swap the stylised stand-in for the realistic human once it has been built
     async upgradeReal() {
-      if (!REAL_OK || Settings.realistic === false) return;
+      if (this.isAlien || !REAL_OK || Settings.realistic === false) return;
       const look = fullLook(G.look, G.cls);
       const al = G.equipment.armor ? lookOf(G.equipment.armor) : null;
       const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls), armorKey(al)].join("|");
@@ -54697,11 +54736,12 @@ void main(){
     rebuild() {
       const cls = CLASSES[G.cls] || CLASSES.Knight;
       if (this.model) this.pivot.remove(this.model.root);
-      this.model = new CharModel(cls.model, { scale: 0.72 * (G.look?.height || 1) });
-      this.model.applyLook(cls, G.look || {});
+      const alien = G.look?.race === "alien";
+      this.model = new CharModel(alien ? "Alien" : cls.model, { scale: (alien ? 0.84 : 0.72) * (G.look?.height || 1), tint: alien ? G.look.alienTint : void 0 });
+      if (!alien) this.model.applyLook(cls, G.look || {});
       this.model.dress(G.equipment, G.look || {}, cls);
       this.pivot.add(this.model.root);
-      if (Settings.realistic !== false) {
+      if (Settings.realistic !== false && !alien) {
         const sig = this.sig, stand = this.model;
         stand.root.visible = false;
         realFor(fullLook(G.look, G.cls), G.cls, G.equipment, lookOf, { priority: 8 }).then((rc) => {
@@ -54768,12 +54808,19 @@ void main(){
   };
   var SLOTKEYS = ["rmb", "q", "w", "e", "r"];
   var KEYLABEL = { rmb: "RMB", q: "Q", w: "W", e: "E", r: "R" };
-  function bodyRows(state) {
-    if (!REAL_OK || Settings.realistic === false) return "";
+  var ALIEN_TINTS = [["#ffffff", "Grey-green"], ["#9ec8ff", "Teal"], ["#d0a8ff", "Violet"], ["#ffb98a", "Ember"], ["#c9c9c9", "Ash"]];
+  function raceRows(state) {
+    const al = state.race === "alien";
+    return `<h3><span>Species</span></h3><div class="chips"><button class="chip ${al ? "" : "on"}" data-det="race" data-v="human">Human</button><button class="chip ${al ? "on" : ""}" data-det="race" data-v="alien">Grey Alien</button></div>
+    ${al ? `<div class="muted" style="margin:6px 0">A thin, long-limbed visitor from somewhere far below the Wells. Plays exactly like the class you chose; only the body changes.</div><h3><span>Skin colour</span></h3><div class="chips">${ALIEN_TINTS.map(([v3, l2]) => `<button class="chip ${(state.alienTint || "#ffffff") === v3 ? "on" : ""}" data-det="alienTint" data-v="${v3}">${l2}</button>`).join("")}</div>` : ""}`;
+  }
+  function bodyRows(state, creating) {
+    if (state.race === "alien") return creating ? raceRows(state) : "";
+    if (!REAL_OK || Settings.realistic === false) return creating ? raceRows(state) : "";
     const chips = (key, opts) => `<div class="chips">${opts.map(([v3, l2]) => `<button class="chip ${state[key] === v3 ? "on" : ""}" data-det="${key}" data-v="${v3}">${l2}</button>`).join("")}</div>`;
     const sw = (key, list, none) => `<div class="swatches">${list.map((c2) => `<div class="sw ${c2 === (state[key] || "") ? "on" : ""}" style="background:${c2 || "repeating-linear-gradient(45deg,#2a2218,#2a2218 4px,#4a3a26 4px,#4a3a26 8px)"}" data-det="${key}" data-v="${c2}" title="${c2 ? "" : none}"></div>`).join("")}</div>`;
     const male = state.sex !== "f";
-    return `<h3><span>Body</span></h3>
+    return `${creating ? raceRows(state) : ""}<h3><span>Body</span></h3>
     <div class="chips"><button class="chip ${male ? "on" : ""}" data-det="sex" data-v="m">Male</button><button class="chip ${!male ? "on" : ""}" data-det="sex" data-v="f">Female</button></div>
     <div class="setrow"><span>Build</span><span><input type="range" data-rng="weight" min="0" max="100" value="${Math.round((state.weight ?? 0.5) * 100)}"> ${Math.round((state.weight ?? 0.5) * 100)}</span></div>
     <div class="setrow"><span>Muscle</span><span><input type="range" data-rng="muscle" min="0" max="100" value="${Math.round((state.muscle ?? 0.6) * 100)}"> ${Math.round((state.muscle ?? 0.6) * 100)}</span></div>
@@ -56421,7 +56468,7 @@ void main(){
       <h3><span>Cape</span></h3>${sw("cape", CAPE_COLORS)}
       <div class="setrow"><span>Wear a cape</span><input type="checkbox" id="wd-cape" ${L3.capeOn !== false ? "checked" : ""}></div>
       <div class="setrow"><span>Show helm</span><input type="checkbox" id="wd-helm" ${L3.showHelm !== false ? "checked" : ""}></div>
-      ${detailRows(L3)}`;
+      ${L3.race === "alien" ? "" : detailRows(L3)}`;
       const apply = () => {
         sfx("ui");
         G.player?.refreshVisuals();
@@ -56673,7 +56720,7 @@ void main(){
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.7.7 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.7.8 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
         if (hasSave()) this.confirmNew();
@@ -56719,7 +56766,7 @@ void main(){
           ${["str", "dex", "vit", "mag"].map((k2) => `<div class="statbar"><span>${statName[k2]}</span><div><i style="width:${cls.base[k2] / 20 * 100}%"></i></div><b>${cls.base[k2]}</b></div>`).join("")}
           <h3><span>Starting skills</span></h3><div class="muted">${Object.keys(cls.skills).map(skillName).join(", ")}. You can learn every skill tree later.</div>`;
         } else if (state.tab === "body") {
-          inner = bodyRows(state);
+          inner = bodyRows(state, true);
         } else if (state.tab === "look") {
           inner = `<h3><span>Weapons</span></h3><div class="chips">${cls.gear.map((g2, i) => `<button class="chip ${state.gear === i ? "on" : ""}" data-gear="${i}">${g2.label}</button>`).join("")}</div>
           <h3><span>Armor tint</span></h3><div class="swatches">${ARMOR_TINTS.map((col2) => `<div class="sw ${col2 === state.tint ? "on" : ""}" style="background:${col2}" data-tint="${col2}"></div>`).join("")}</div>
@@ -56728,7 +56775,7 @@ void main(){
           ${cls.alt ? `<div class="setrow"><span>Wear a hood</span><input type="checkbox" id="cr-hood" ${state.hooded ? "checked" : ""}></div>` : ""}
           ${cls.headgear ? `<div class="setrow"><span>Wear ${state.cls === "Mage" ? "hat" : "helmet"}</span><input type="checkbox" id="cr-helm" ${state.helm ? "checked" : ""}></div>` : ""}
           <div class="setrow"><span>Height</span><span><input type="range" id="cr-height" min="88" max="112" value="${Math.round(state.height * 100)}"> ${Math.round(state.height * 100)}%</span></div>
-          ${detailRows(state)}`;
+          ${state.race === "alien" ? "" : detailRows(state)}`;
         } else {
           const PS = PET_SPECIES[state.petSpecies] || PET_SPECIES.fox;
           inner = `<h3><span>Companion</span></h3><div class="chips">${Object.entries(PET_SPECIES).map(([k2, v3]) => `<button class="chip ${state.petSpecies === k2 ? "on" : ""}" data-psp="${k2}">${v3.name}</button>`).join("")}</div>
@@ -56738,7 +56785,7 @@ void main(){
         }
         c2.innerHTML = `<div class="panel cls"><h2>Choose your class</h2>${Object.entries(CLASSES).map(([k2, v3]) => `<div class="clscard ${k2 === state.cls ? "on" : ""}" data-cls="${k2}"><div class="ic">${skillIcon(skillIconKey(Object.keys(v3.skills)[0]))}</div><div><b>${v3.title}</b><small>${v3.desc}</small></div></div>`).join("")}</div>
         <div class="panel info"><h2>${cls.title}</h2>
-          <div class="crtabs">${tab("class", "Class")}${REAL_OK && Settings.realistic !== false ? tab("body", "Body") : ""}${tab("look", "Appearance")}${tab("pet", "Companion")}</div>
+          <div class="crtabs">${tab("class", "Class")}${tab("body", "Body")}${tab("look", "Appearance")}${tab("pet", "Companion")}</div>
           <div class="crbody">${inner}</div>
           <h3><span>Hero name</span></h3><input type="text" id="cr-name" maxlength="18" placeholder="Name your hero" value="${state.name}" style="width:100%">
           <div style="text-align:center;margin-top:14px"><button id="cr-rand">Randomize</button><button id="cr-back">Back</button><button id="cr-go" class="primary big">Begin</button></div>
@@ -57562,8 +57609,9 @@ void main(){
       const s2 = this.creation;
       const cls = CLASSES[s2.cls];
       if (this.preview) this.podium.remove(this.preview.root);
-      this.preview = new CharModel(cls.model, { scale: s2.height });
-      this.preview.applyLook(cls, s2);
+      const alien = s2.race === "alien";
+      this.preview = new CharModel(alien ? "Alien" : cls.model, { scale: alien ? 0.95 * s2.height : s2.height, tint: alien ? s2.alienTint : void 0 });
+      if (!alien) this.preview.applyLook(cls, s2);
       this.preview.dress(starterKit(s2), s2, cls);
       if (this.previewPet) this.podium.remove(this.previewPet);
       const psp = PET_SPECIES[s2.petSpecies] ? s2.petSpecies : "fox";
@@ -57578,7 +57626,7 @@ void main(){
       this.podium.add(this.preview.root);
       this.preview.once("Cheer", { timeScale: 1.2 });
       sfx("buff");
-      if (Settings.realistic !== false && REAL_OK) {
+      if (Settings.realistic !== false && REAL_OK && !alien) {
         const stand = this.preview;
         stand.root.visible = false;
         const kit = starterKit(s2), stamp = this.previewStamp = (this.previewStamp || 0) + 1;
@@ -57616,7 +57664,7 @@ void main(){
       reset();
       G.heroName = (s2.name || "").trim().slice(0, 18) || "Wanderer";
       G.cls = s2.cls;
-      G.look = { cape: s2.cape, hooded: !!s2.hooded, helm: s2.helm, gear: s2.gear, tint: s2.tint, height: s2.height, capeOn: s2.capeOn, pet: s2.pet, skin: s2.skin, shoulders: s2.shoulders, belt: s2.belt, back: s2.back, metal: s2.metal, scarf: s2.scarf, ...s2.sex ? { sex: s2.sex, weight: s2.weight, muscle: s2.muscle, hairStyle: s2.hairStyle, hairColor: s2.hairColor, hairHi: s2.hairHi, beard: s2.beard, eyes: s2.eyes, skinTone: s2.skinTone } : {} };
+      G.look = { race: s2.race === "alien" ? "alien" : void 0, alienTint: s2.alienTint, cape: s2.cape, hooded: !!s2.hooded, helm: s2.helm, gear: s2.gear, tint: s2.tint, height: s2.height, capeOn: s2.capeOn, pet: s2.pet, skin: s2.skin, shoulders: s2.shoulders, belt: s2.belt, back: s2.back, metal: s2.metal, scarf: s2.scarf, ...s2.sex ? { sex: s2.sex, weight: s2.weight, muscle: s2.muscle, hairStyle: s2.hairStyle, hairColor: s2.hairColor, hairHi: s2.hairHi, beard: s2.beard, eyes: s2.eyes, skinTone: s2.skinTone } : {} };
       G.petName = (s2.petName || "").trim().slice(0, 14) || "Pip";
       G.petSpecies = PET_SPECIES[s2.petSpecies] ? s2.petSpecies : "fox";
       G.pets = null;
