@@ -13,6 +13,7 @@ export function applyUI() {
   if (typeof document === 'undefined' || !document.body) return;
   const r = document.documentElement.style, b = document.body.classList;
   r.setProperty('--uis', String(Settings.uiScale ?? 1));
+  r.setProperty('--hudz', String(Settings.hudScale ?? 1));
   r.setProperty('--hudop', String(Settings.hudOpacity ?? 1));
   r.setProperty('--tbs', String(Settings.touchSize ?? 1));
   r.setProperty('--tbo', String(Settings.touchOpacity ?? 1));
@@ -22,5 +23,6 @@ export function applyUI() {
   b.toggle('no-minimap', Settings.showMinimap === false);
   b.toggle('no-log', Settings.showLog === false);
   b.toggle('no-orbs3d', Settings.compactOrbs === true);
+  b.toggle('no-portrait', Settings.showPortrait === false);
   b.toggle('lefty', !!Settings.leftHanded);
 }

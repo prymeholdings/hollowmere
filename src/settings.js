@@ -4,11 +4,14 @@ export const Settings = {
   master: 0.8, music: 0.55, sfx: 0.8,
   quality: 'high', // low | medium | high | ultra
   renderScale: 1,
+  adaptiveRes: true, // lower the 3D resolution a little whenever the frame rate dips below 60
   sharpen: 0.35,
   damageNumbers: true,
   showHelp: true,
   screenShake: true,
   autoLoot: true,
+  autoEquip: true, // better armour goes on as you pick it up (never weapons)
+  difficulty: 'normal', // easy | normal | hard | nightmare | hell
   autoAttack: false, // attack nearby foes on your own
   autoMode: 'basic', // 'basic' or a hotbar slot: rmb q w e r
   autoRange: 8,
@@ -19,7 +22,7 @@ export const Settings = {
   grit: 'gritty', // gritty | classic
   realistic: true, // realistic human models (off = the stylised heroes)
   // interface
-  uiScale: 1, hudOpacity: 1, theme: 'bronze', showMinimap: true, showLog: true,
+  uiScale: 1, hudScale: 1, showPortrait: true, hudOpacity: 1, theme: 'bronze', showMinimap: true, showLog: true,
   pcStick: true, touchSize: 1, touchOpacity: 0.9, leftHanded: false,
 };
 export function loadSettings() {

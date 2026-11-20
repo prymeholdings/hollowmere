@@ -24,6 +24,7 @@ done
 mkdir -p "$OUT/assets/ara" "$OUT/assets/music"
 cp -r app/assets/ara/. "$OUT/assets/ara/"
 cp -r app/assets/music/. "$OUT/assets/music/"
+mkdir -p "$OUT/assets/private" && cp -r app/assets/private/. "$OUT/assets/private/" 2>/dev/null || true
 cp app/assets/CREDITS.txt "$OUT/assets/" 2>/dev/null || true
 VER=$(cat "$OUT/game.js" "$OUT/style.css" "$OUT/index.html" | sha1sum | cut -c1-10)
 FILES=$(cd "$OUT" && { echo ./; find . -type f ! -name vercel.json ! -name sw.js ! -path './assets/ara/*' ! -path './assets/music/*' | sed 's#^\./##' | sort; } | python3 -c "import sys,json;print(json.dumps([l.strip() for l in sys.stdin]))")

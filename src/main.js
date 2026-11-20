@@ -172,7 +172,8 @@ class Main {
     const q = Settings.quality;
     const rs = Settings.renderScale || 1;
     const prMax = q === 'ultra' ? 2 : q === 'high' ? 1.5 : q === 'medium' ? 1.25 : 1;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, prMax) * rs);
+    this.basePR = Math.min(window.devicePixelRatio || 1, prMax) * rs;
+    this.renderer.setPixelRatio(this.basePR * (this.dyn || 1));
     this.renderer.shadowMap.enabled = q !== 'low';
     this.renderer.shadowMap.type = q === 'low' || q === 'medium' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     this.renderer.shadowMap.needsUpdate = true;
@@ -235,7 +236,7 @@ class Main {
     if (this.composer) {
       this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h);
       const sz = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-      if (this.grade) { this.grade.uniforms.resolution.value.copy(sz); this.grade.uniforms.sharpen.value = (Settings.sharpen ?? 0.35) + (1 - (Settings.renderScale || 1)) * 0.8; }
+      if (this.grade) { this.grade.uniforms.resolution.value.copy(sz); this.grade.uniforms.sharpen.value = (Settings.sharpen ?? 0.35) + (1 - (Settings.renderScale || 1) * (this.dyn || 1)) * 0.8; }
     }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -769,7 +770,38 @@ class Main {
     if (L.waters) L.waters.forEach((w, i) => { w.material.emissiveIntensity = (i ? 0.8 : 0.5) + Math.sin(t * 1.4 + i) * 0.15; });
   }
 
+  // Adaptive resolution: when frames start taking longer than 60 fps allows, the 3D view renders at a
+  // slightly lower resolution (the HUD stays sharp); when there is headroom again it climbs back to full.
+  dynTick() {
+    const now = performance.now(), d = now - (this._dynLast || now);
+    this._dynLast = now;
+    if (this.menuMode || !this.ready || d <= 0 || d > 120) return; // menus, tab switches, loading hitches
+    const D = this._dyn || (this._dyn = { sum: 0, n: 0, good: 0, coolT: 0, cap: 1 });
+    D.sum += d; D.n++;
+    if (D.sum < 1000) return;
+    const avg = D.sum / D.n; D.sum = 0; D.n = 0;
+    this.fpsAvg = 1000 / avg;
+    const fe = document.getElementById('hud-fps');
+    if (fe) { fe.style.display = Settings.showFps ? '' : 'none'; if (Settings.showFps) fe.textContent = `${Math.round(this.fpsAvg)} fps · 3D ${Math.round((this.dyn || 1) * 100)}%`; }
+    if (Settings.adaptiveRes === false) { if (this.dyn && this.dyn !== 1) this.setDyn(1); return; }
+    D.coolT = Math.max(0, D.coolT - 1);
+    const cur = this.dyn || 1;
+    if (avg > 18.2) { // under ~55 fps
+      D.good = 0;
+      if (cur > 0.6) { D.cap = cur; D.coolT = 12; this.setDyn(Math.max(0.6, cur - (avg > 25 ? 0.12 : 0.06))); }
+    } else if (avg < 17.4) {
+      D.good++;
+      if (D.coolT <= 0 && D.good >= 4 && cur < 1) { D.good = 0; const up = Math.min(1, cur + 0.05); if (up <= D.cap + 1e-6 || D.coolT <= 0) { this.setDyn(up); D.cap = Math.max(D.cap, up); } }
+    } else D.good = 0;
+  }
+  setDyn(v) {
+    this.dyn = v;
+    if (!this.basePR) return;
+    this.renderer.setPixelRatio(this.basePR * v);
+    this.resize();
+  }
   frame() {
+    this.dynTick();
     const dt = Math.min(this.maxDt || 0.05, this.clock.getDelta());
     const t = this.clock.elapsedTime;
     const L = G.level;

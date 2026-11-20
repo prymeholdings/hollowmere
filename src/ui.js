@@ -7,6 +7,9 @@ import { hex, sfx, clamp, flatDist } from './util.js';
 import { itemIcon, skillIcon } from './icons.js';
 import { SKILLS, PASSIVES, CLASSES, CAPE_COLORS, ARMOR_TINTS, PET_COATS, TREES, NODE, TIER_LEVEL, canCast, learnBlock, maxRank, isActive, skillName, skillIconKey, treePoints, synergyText } from './skills.js';
 import { Settings, saveSettings } from './settings.js';
+import { diff, DIFFICULTIES } from './difficulty.js';
+// per-frame HUD text only touches the page when it actually changes (each write costs a layout pass)
+const setTxt = (el, v) => { if (!el) return; v = String(v); if (el._t !== v) { el._t = v; el.textContent = v; } };
 import { Orb3D } from './orbs.js';
 import { HeroView } from './heroview.js';
 import { SIGNS, STARS, starRank, starPoints, starPointsTotal, canLearn, learnStar, respecCost, signsCompleted, signProgress } from './zodiac.js';
@@ -90,7 +93,7 @@ export class UI {
       <div id="lowhp"></div><div id="vignette"></div>
       <div id="hud" class="hidden">
         <div id="hud-top-left">
-          <div id="hud-name"></div><div id="hud-sub"></div>
+          <div id="hud-id"><img id="hud-portrait" src="assets/private/portrait.jpg" alt=""><div><div id="hud-name"></div><div id="hud-sub"></div></div></div>
           <div id="pet-wrap"><div class="bar pet"><div></div><span></span></div></div>
           <div id="hud-points" class="hidden">✦ Points to spend: ${isTouch() || /[?&]touch=1/.test(location.search) ? "tap Hero / Skills / Stars" : "C attributes · K skills · Z stars"}</div>
           <div id="hud-buffs"></div>
@@ -99,7 +102,7 @@ export class UI {
         <div id="hud-target" class="hidden"><div id="hud-target-name"></div><div class="bar"><div></div><span></span></div></div>
         <div id="hud-right">
           <div id="mmwrap"><canvas id="minimap" width="208" height="208"></canvas></div>
-          <div id="hud-loc"></div><div id="hud-clock"></div><div id="hud-gold"></div><div id="hud-fame" style="color:#c99bff"></div><div id="hud-quest"></div>
+          <div id="hud-fps" style="display:none;color:#9fd8a0;font-size:12px"></div><div id="hud-loc"></div><div id="hud-clock"></div><div id="hud-gold"></div><div id="hud-fame" style="color:#c99bff"></div><div id="hud-quest"></div>
         </div>
         <div id="log"></div>
         <div id="hud-bottom">
@@ -117,6 +120,7 @@ export class UI {
       <div id="menu" class="hidden"></div>
       <div id="create" class="hidden"></div>
       <div id="loading"><div class="title" style="font-size:64px">HOLLOWMERE</div><div class="muted" id="load-txt">Loading the Sunken Wells...</div><div class="lb"><div></div></div></div>`;
+    { const pi = this.root.querySelector('#hud-portrait'); if (pi) pi.onerror = () => { pi.style.display = 'none'; }; }
     this.hud = $('#hud');
     this.orbHp = new Orb3D($('.orb.hp .orbgl'), [0xff5a40, 0x8a0a06, 0xffb08a]);
     this.orbMp = new Orb3D($('.orb.mp .orbgl'), [0x5a9aff, 0x0a1a8a, 0xb8e0ff]);
@@ -276,24 +280,24 @@ export class UI {
       if (f.t > 1.0) { f.el.remove(); this.floats.splice(i, 1); }
     }
     const cls = CLASSES[G.cls];
-    $('#hud-name').textContent = G.heroName;
-    $('#hud-sub').textContent = `Level ${G.lvl} ${cls ? cls.title : ''} · ${fameTitle()}`;
+    setTxt($('#hud-name'), G.heroName);
+    setTxt($('#hud-sub'), `Level ${G.lvl} ${cls ? cls.title : ''} · ${fameTitle()}${Settings.difficulty && Settings.difficulty !== 'normal' ? ' · ' + diff().name : ''}`);
     const hpF = G.hp / maxHp(), mpF = G.mp / maxMp();
     $('.orb.hp .fill').style.height = clamp(hpF, 0, 1) * 100 + '%';
     $('.orb.mp .fill').style.height = clamp(mpF, 0, 1) * 100 + '%';
     const now = performance.now();
     this.orbHp.set(hpF); this.orbMp.set(mpF);
     this.orbHp.draw(dt, now); this.orbMp.draw(dt, now);
-    $('.orb.hp .txt').textContent = `${Math.ceil(G.hp)} / ${Math.round(maxHp())}`;
-    $('.orb.mp .txt').textContent = `${Math.floor(G.mp)} / ${Math.round(maxMp())}`;
+    setTxt($('.orb.hp .txt'), `${Math.ceil(G.hp)} / ${Math.round(maxHp())}`);
+    setTxt($('.orb.mp .txt'), `${Math.floor(G.mp)} / ${Math.round(maxMp())}`);
     $('#lowhp').style.opacity = hpF < 0.3 ? (0.3 - hpF) * 2.5 * (0.7 + Math.sin(performance.now() / 200) * 0.3) : 0;
     $('#xpbar div').style.width = (G.lvl >= MAX_LEVEL ? 100 : (G.xp / xpToNext()) * 100) + '%';
     const pet = G.pet;
     const pb = $('#pet-wrap .bar');
     const formName = { golem: 'Stone Golem', wyrm: 'Ember Wyrm', stag: 'Spirit Stag' }[G.petForm];
     const petLbl = `${G.petName} · Lv ${G.pets?.[G.petSpecies]?.lvl || 1} ${PET_SPECIES[G.petSpecies]?.stages[petStage()] || ''}`;
-    if (pet && !pet.dead && G.petAwayTime <= 0) { pb.firstElementChild.style.width = clamp(pet.hp / pet.maxHp, 0, 1) * 100 + '%'; pb.lastElementChild.textContent = formName ? `${G.petName} · ${formName} ${Math.ceil(G.petFormTime)}s` : petLbl; }
-    else { pb.firstElementChild.style.width = '0%'; pb.lastElementChild.textContent = G.petAwayTime > 0 ? `${G.petName} is selling in town (${Math.ceil(G.petAwayTime)}s)` : `${G.petName} is resting in town`; }
+    if (pet && !pet.dead && G.petAwayTime <= 0) { pb.firstElementChild.style.width = clamp(pet.hp / pet.maxHp, 0, 1) * 100 + '%'; setTxt(pb.lastElementChild, formName ? `${G.petName} · ${formName} ${Math.ceil(G.petFormTime)}s` : petLbl); }
+    else { pb.firstElementChild.style.width = '0%'; setTxt(pb.lastElementChild, G.petAwayTime > 0 ? `${G.petName} is selling in town (${Math.ceil(G.petAwayTime)}s)` : `${G.petName} is resting in town`); }
     $('#hud-points').classList.toggle('hidden', !(G.statPoints || G.skillPoints || starPoints()));
     const buffs = [];
     if (G.buffs.power > 0) buffs.push(['fire', G.buffs.power, 'Shrine of Power']);
@@ -304,28 +308,28 @@ export class UI {
     for (const k in BUFF_DEFS) if (G.buffs[k] > 0) { const sk = Object.values(SKILLS).find((x) => x.o && x.o.buff === k); buffs.push([sk ? sk.id : 'arcane', G.buffs[k], BUFF_DEFS[k].name]); }
     const bk = buffs.map((b) => b[0] + Math.ceil(b[1])).join();
     if (bk !== this._bk) { this._bk = bk; $('#hud-buffs').innerHTML = buffs.map(([ic, t, n]) => `<div class="buff" title="${n}">${skillIcon(ic)}<span>${Math.ceil(t)}</span></div>`).join(''); }
-    $('#hud-loc').textContent = G.level.kind === 'town' ? 'Hollowmere' : G.level.kind === 'interior' ? G.level.title : `Sunken Wells · Floor ${G.level.floor}`;
-    $('#hud-clock').textContent = G.level.safe ? clockText() : '';
+    setTxt($('#hud-loc'), G.level.kind === 'town' ? 'Hollowmere' : G.level.kind === 'interior' ? G.level.title : `Sunken Wells · Floor ${G.level.floor}`);
+    setTxt($('#hud-clock'), G.level.safe ? clockText() : '');
     this.updateAutoChip();
     const boss = G.level.kind === 'dungeon' && G.level.entities.find((e) => e.type === 'enemy' && e.boss && !e.dead && e.aggro && flatDist(e.pos, G.player.pos) < 24);
     const bb = $('#boss-bar');
     bb.classList.toggle('hidden', !boss);
     if (boss) {
       const ph = boss.bb?.phase || 1;
-      bb.querySelector('.bn').innerHTML = `${boss.data.name}${boss.bb?.enraged ? ' <span style="color:#ff4433">· ENRAGED</span>' : ''} <small>Phase ${ph} / 3</small>`;
+      { const bn = bb.querySelector('.bn'), h = `${boss.data.name}${boss.bb?.enraged ? ' <span style="color:#ff4433">· ENRAGED</span>' : ''} <small>Phase ${ph} / 3</small>`; if (bn._h !== h) { bn._h = h; bn.innerHTML = h; } }
       bb.querySelector('.bf').style.width = clamp(boss.hp / boss.maxHp, 0, 1) * 100 + '%';
-      bb.querySelector('.bt').textContent = `${Math.ceil(boss.hp).toLocaleString()} / ${Math.ceil(boss.maxHp).toLocaleString()}`;
+      setTxt(bb.querySelector('.bt'), `${Math.ceil(boss.hp).toLocaleString()} / ${Math.ceil(boss.maxHp).toLocaleString()}`);
     }
-    $('#hud-gold').textContent = `${G.gold.toLocaleString()} gold`;
-    $('#hud-fame').textContent = `Fame: ${fameTitle()}`;
+    setTxt($('#hud-gold'), `${G.gold.toLocaleString()} gold`);
+    setTxt($('#hud-fame'), `Fame: ${fameTitle()}`);
     const q = G.quest;
-    $('#hud-quest').textContent = q ? `◆ ${q.title}: ${q.done ? 'Complete! Return to town' : q.type === 'slay' ? `${q.progress}/${q.count}` : `floor ${q.floor}`}` : '';
+    setTxt($('#hud-quest'), q ? `◆ ${q.title}: ${q.done ? 'Complete! Return to town' : q.type === 'slay' ? `${q.progress}/${q.count}` : `floor ${q.floor}`}` : '');
     let tg = (pl.hover && pl.hover.type === 'enemy' && !pl.hover.dead) ? pl.hover : (pl.lastHit && !pl.lastHit.dead && pl.lastHit.root.parent ? pl.lastHit : null);
     if (tg && tg === boss) tg = null; // the boss has its own big bar
     $('#hud-target').classList.toggle('hidden', !tg);
     if (tg) {
-      const n = $('#hud-target-name'); n.textContent = tg.displayName(); n.style.color = tg.boss ? '#ff6644' : tg.elite ? '#ffcc33' : '#e8dcc0';
-      const b = $('#hud-target .bar'); b.firstElementChild.style.width = clamp(tg.hp / tg.maxHp, 0, 1) * 100 + '%'; b.lastElementChild.textContent = `${Math.ceil(tg.hp)} / ${Math.round(tg.maxHp)}`;
+      const n = $('#hud-target-name'); setTxt(n, tg.displayName()); n.style.color = tg.boss ? '#ff6644' : tg.elite ? '#ffcc33' : '#e8dcc0';
+      const b = $('#hud-target .bar'); b.firstElementChild.style.width = clamp(tg.hp / tg.maxHp, 0, 1) * 100 + '%'; setTxt(b.lastElementChild, `${Math.ceil(tg.hp)} / ${Math.round(tg.maxHp)}`);
     }
     for (const k of SLOTKEYS) {
       const id = G.hotbar[k];
@@ -342,13 +346,13 @@ export class UI {
       cd.style.background = f > 0 ? `conic-gradient(transparent ${(1 - f) * 360}deg, #000c ${(1 - f) * 360}deg)` : 'none';
       let t = s.querySelector('.cdt');
       if (!t) { t = el('span', 'cdt'); s.appendChild(t); }
-      t.textContent = left > 0.05 && cdMax >= 1.5 ? (left >= 10 ? Math.ceil(left) : left.toFixed(1)) : '';
+      setTxt(t, left > 0.05 && cdMax >= 1.5 ? (left >= 10 ? Math.ceil(left) : left.toFixed(1)) : '');
       if (s._wasCd && left <= 0) { s.classList.remove('ready'); void s.offsetWidth; s.classList.add('ready'); }
       s._wasCd = left > 0;
     }
-    this.slotEls.hp.querySelector('.cnt').textContent = G.hpPotions;
-    this.slotEls.mp.querySelector('.cnt').textContent = G.mpPotions;
-    this.slotEls.scroll.querySelector('.cnt').textContent = G.scrolls;
+    setTxt(this.slotEls.hp.querySelector('.cnt'), G.hpPotions);
+    setTxt(this.slotEls.mp.querySelector('.cnt'), G.mpPotions);
+    setTxt(this.slotEls.scroll.querySelector('.cnt'), G.scrolls);
     $('#help').classList.toggle('hidden', !Settings.showHelp);
     const padOn = !!this.main.pad?.active;
     if (padOn !== this.helpPad) {
@@ -891,6 +895,8 @@ export class UI {
       <h3><span>Graphics</span></h3>
       <div class="setrow"><span>Quality</span><select id="set-q"><option value="low">Low (fastest)</option><option value="medium">Medium (glow, SMAA)</option><option value="high">High (ambient occlusion, MSAA, soft shadows)</option><option value="ultra">Ultra (sharper shadows, full resolution)</option></select></div>
       <div class="setrow"><span>Render scale <small class="muted">(lower is faster)</small></span><span><input type="range" min="50" max="100" step="5" value="${Math.round((Settings.renderScale || 1) * 100)}" id="set-rs"> <span id="sv-rs">${Math.round((Settings.renderScale || 1) * 100)}%</span></span></div>
+      ${check('adaptiveRes', 'Hold 60 fps (lowers 3D resolution a little only when needed)')}
+      ${check('showFps', 'Show frame rate')}
       <div class="setrow"><span>Sharpening</span><span><input type="range" min="0" max="100" value="${Math.round((Settings.sharpen ?? 0.35) * 100)}" id="set-sh"> <span id="sv-sh">${Math.round((Settings.sharpen ?? 0.35) * 100)}%</span></span></div>
       <div class="setrow"><span>Fullscreen</span><button class="small" id="set-fs">Toggle (F11)</button></div>
       <h3><span>Mature content</span></h3>
@@ -898,14 +904,18 @@ export class UI {
       <div class="setrow"><span>Blood and gore</span><select id="set-gore"><option value="off">Off</option><option value="low">Light</option><option value="max">Maximum</option></select></div>
       ${check('profanity', 'Strong language')}${check('barks', 'Characters talk while you play')}
       <div class="muted" style="font-size:12px">This game is rated Mature (violence, gore, strong language). You can tone it down here at any time.</div>
-      <h3><span>Gameplay</span></h3>${check('damageNumbers', 'Show damage numbers')}${check('screenShake', 'Screen shake')}${check('autoLoot', 'Auto-pick up potions')}${check('showHelp', 'Show key hints')}
+      <h3><span>Gameplay</span></h3>${check('damageNumbers', 'Show damage numbers')}${check('screenShake', 'Screen shake')}${check('autoLoot', 'Auto-pick up potions')}${check('autoEquip', 'Auto-equip better armour when picked up (not weapons)')}${check('showHelp', 'Show key hints')}
+      <div class="setrow"><span>Difficulty</span><select id="set-diff">${Object.entries(DIFFICULTIES).map(([k, d]) => `<option value="${k}">${d.name}: ${d.note}</option>`).join('')}</select></div>
+      <div class="muted" style="font-size:12px">Harder settings give foes more life and damage, add more of them, and pay more experience, gold and magic find. Changes apply to monsters on the next floor you enter.</div>
       <h3><span>Auto-attack</span></h3>${check('autoAttack', 'Attack nearby foes automatically (V)')}
       <div class="setrow"><span>Auto-attack with</span><select id="set-am"><option value="basic">Basic attack</option>${['rmb', 'q', 'w', 'e', 'r'].map((k) => `<option value="${k}">${k.toUpperCase()} slot${G.hotbar?.[k] ? ': ' + skillName(G.hotbar[k]) : ''}</option>`).join('')}</select></div>
       <div class="setrow"><span>Auto-attack range</span><span><input type="range" min="3" max="14" value="${Settings.autoRange}" id="set-ar"> <span id="sv-ar">${Settings.autoRange}m</span></span></div>
       <h3><span>Controls</span></h3>${check('pcStick', 'Show the on-screen walking joystick (mouse)')}
       <div class="muted" style="font-size:12px">With a skill chosen, it is cast whenever it is ready and you have the mana; otherwise you use your basic attack. Moving by clicking always wins.</div>
       <h3><span>Interface</span></h3>
-      <div class="setrow"><span>Interface size</span><span><input type="range" min="60" max="140" step="5" value="${Math.round((Settings.uiScale ?? 1) * 100)}" data-u="uiScale"> <span id="sv-uiScale">${Math.round((Settings.uiScale ?? 1) * 100)}%</span></span></div>
+      <div class="setrow"><span>HUD size <small class="muted">(orbs, skill bar, name plate, map)</small></span><span><input type="range" min="50" max="200" step="5" value="${Math.round((Settings.hudScale ?? 1) * 100)}" data-u="hudScale"> <span id="sv-hudScale">${Math.round((Settings.hudScale ?? 1) * 100)}%</span></span></div>
+      ${check('showPortrait', 'Show my portrait next to the hero name')}
+      <div class="setrow"><span>Menu and window size</span><span><input type="range" min="60" max="140" step="5" value="${Math.round((Settings.uiScale ?? 1) * 100)}" data-u="uiScale"> <span id="sv-uiScale">${Math.round((Settings.uiScale ?? 1) * 100)}%</span></span></div>
       <div class="setrow"><span>HUD opacity</span><span><input type="range" min="30" max="100" step="5" value="${Math.round((Settings.hudOpacity ?? 1) * 100)}" data-u="hudOpacity"> <span id="sv-hudOpacity">${Math.round((Settings.hudOpacity ?? 1) * 100)}%</span></span></div>
       <div class="setrow"><span>Colour theme</span><select id="set-theme">${Object.entries(UI_THEMES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join('')}</select></div>
       ${check('showMinimap', 'Show minimap')}${check('showLog', 'Show message log')}
@@ -923,6 +933,8 @@ export class UI {
     $('#set-grit', body).onchange = (e) => { Settings.grit = e.target.value; saveSettings(); this.main.applyGrit?.(); msg('Art style applies fully the next time you enter a level.', '#9fd8a0'); };
     $('#set-gore', body).value = Settings.gore || 'max';
     $('#set-gore', body).onchange = (e) => { Settings.gore = e.target.value; saveSettings(); };
+    $('#set-diff', body).value = Settings.difficulty || 'normal';
+    $('#set-diff', body).onchange = (e) => { Settings.difficulty = e.target.value; saveSettings(); msg(`Difficulty: ${diff().name}. ${diff().note}.`, '#ffcc66'); };
     $('#set-am', body).value = Settings.autoMode;
     $('#set-am', body).onchange = (e) => { Settings.autoMode = e.target.value; saveSettings(); };
     $('#set-ar', body).oninput = (e) => { Settings.autoRange = +e.target.value; $('#sv-ar').textContent = e.target.value + 'm'; saveSettings(); };
@@ -1301,7 +1313,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.7.5 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG · v0.7.6 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { diff } from './difficulty.js';
 import { Settings } from './settings.js';
 import { bakeStatic } from './perf.js';
 import { makeWater, tickWater } from './water.js';
@@ -877,10 +878,11 @@ export class Level {
     const pool = ENEMIES.filter((e) => e.minFloor <= f && (f < 30 || e.minFloor >= f - 45));
     for (let i = 1; i < this.rooms.length; i++) {
       const r = this.rooms[i];
-      const packs = 1 + (Math.random() < 0.4 + f * 0.03 ? 1 : 0);
+      // bigger hordes: two or three packs a room, more on higher difficulties
+      const packs = 2 + (Math.random() < 0.35 + f * 0.03 ? 1 : 0);
       for (let p = 0; p < packs; p++) {
         const t = pick(pool);
-        const cnt = randi(2, 4) + Math.min(Math.floor(f / 3), 3);
+        const cnt = Math.round((randi(3, 5) + Math.min(Math.floor(f / 3), 4)) * diff().mobs);
         const elitePack = Math.random() < 0.12;
         for (let j = 0; j < cnt; j++) {
           const e = new Enemy(t, f, elitePack && j === 0, false);
@@ -909,10 +911,11 @@ export class Level {
   }
 
   dropLoot(p, f, elite, boss) {
-    const mf = G.main.magicFind();
+    const D = diff();
+    const mf = G.main.magicFind() + D.mf;
     const drops = [];
     if (Math.random() < 0.55 || elite || boss) {
-      let g = Math.floor(randi(2, 7) * (1 + f * 0.6) * (1 + G.main.goldFind() / 100));
+      let g = Math.floor(randi(2, 7) * (1 + f * 0.6) * (1 + G.main.goldFind() / 100) * D.gold);
       if (boss) g *= 6;
       drops.push({ gold: g });
     }

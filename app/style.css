@@ -28,6 +28,10 @@ input[type=range] { accent-color: #c89a4a; width: 200px; }
 select { font-family: inherit; background: #0d0a07; color: #f3e2bd; border: 1px solid var(--gold2); padding: 4px 8px; font-size: 14px; }
 /* ---------- HUD ---------- */
 #hud-top-left { position: absolute; left: 10px; top: 10px; width: 300px; padding: 8px 12px 10px; background: linear-gradient(90deg, rgba(10,8,6,0.72), rgba(10,8,6,0.35)); border: 1px solid rgba(201,162,90,0.35); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
+#hud-id { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+#hud-id > div { min-width: 0; flex: 1; }
+#hud-portrait { width: 62px; height: 62px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold); box-shadow: 0 0 0 2px #000, 0 0 12px rgba(232,193,112,0.45), inset 0 0 8px #000; background: #000; }
+body.no-portrait #hud-portrait { display: none; }
 #hud-name { font-size: 17px; color: var(--gold); text-shadow: 1px 1px 2px #000, 0 0 8px #000; }
 #hud-sub { font-size: 12px; color: #c8b890; text-shadow: 1px 1px 2px #000; margin-bottom: 6px; }
 .bar { position: relative; height: 16px; background: #0d0a08d0; border: 1px solid #6a5535; border-radius: 2px; margin-bottom: 5px; overflow: hidden; }
@@ -285,7 +289,8 @@ body.touch #hud-fame, body.touch #hud-quest { display: none; }
 body.touch #hud-right { font-size: 12px; }
 
 /* ---------- interface options ---------- */
-#hud-bottom, #hud-top-left, #hud-right, #panels, #log, #boss-bar { zoom: calc(var(--uiz, 1) * var(--uis, 1)); }
+#panels, #boss-bar { zoom: calc(var(--uiz, 1) * var(--uis, 1)); }
+#hud-bottom, #hud-top-left, #hud-right, #log { zoom: calc(var(--uiz, 1) * var(--uis, 1) * var(--hudz, 1)); }
 #hud-bottom, #hud-top-left, #hud-right, #log { opacity: var(--hudop, 1); }
 body.no-minimap #mmwrap { display: none; }
 body.no-log #log { display: none; }

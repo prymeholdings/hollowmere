@@ -4,6 +4,7 @@ import { randi, pick, sfx } from './util.js';
 import { petRec, petBonus, ensurePets } from './pets.js';
 import { zodiacBonus } from './zodiac.js';
 import { perkBonus, liveBuff } from './perks.js';
+import { Settings } from './settings.js';
 
 const SAVE_KEY = 'hollowmere_save_v2';
 export const SKILL_ZERO = { firebolt: 0, lightning: 0, nova: 0, meteor: 0, blizzard: 0, heal: 0, bones: 0, whirlwind: 0, slam: 0, earthquake: 0, knives: 0, blink: 0, smoke: 0, blades: 0, warcry: 0,
@@ -186,11 +187,33 @@ export function restack() {
   for (const it of G.backpack) { const ex = stackable(it) && out.find((x) => stackable(x) && sameStack(x, it)); if (ex) ex.n = packCount(ex) + packCount(it); else out.push(it); }
   G.backpack = out;
 }
+// rough worth of a piece of gear, used to decide whether a pickup beats what is worn
+const SCORE_W = { str: 2, dex: 2, vit: 2, mag: 2, life: 0.8, mana: 0.4, dmg: 3, dmg_pct: 2, armor: 1, aspd: 2.5, leech: 3, crit: 3, spell: 2, regen: 1.5, fire: 1, cold: 1, light: 1, poison: 1, gold_find: 0.5, magic_find: 0.8 };
+export function gearScore(it) {
+  if (!it) return 0;
+  let s = (it.armor || 0) * 1.2 + (it.rarity || 0) * 2;
+  for (const k in it.affixes || {}) s += (it.affixes[k] || 0) * (SCORE_W[k] ?? 1);
+  for (const g of it.gems || []) if (g) s += 4 + g.tier * 3;
+  return s;
+}
+const AUTO_SLOTS = new Set(['helm', 'armor', 'shoulders', 'gloves', 'shirt', 'belt', 'pants', 'boots', 'ring', 'amulet']);
+// armour (never weapons or off-hands) goes straight on when its slot is empty or it is clearly better
+function autoEquip(it) {
+  if (Settings.autoEquip === false) return;
+  if (!it || !AUTO_SLOTS.has(it.slot) || !(it.slot in G.equipment) || (it.req || 0) > G.lvl) return;
+  const cur = G.equipment[it.slot];
+  if (cur && gearScore(it) <= gearScore(cur) * 1.05 + 0.5) return;
+  const i = G.backpack.indexOf(it);
+  if (i < 0) return;
+  equipFromPack(i);
+  if (G.equipment[it.slot] === it) msg(`Auto-equipped ${displayName(it)}${cur ? ` (better than your ${displayName(cur)})` : ''}`, '#9fd8a0');
+}
 export function pickupItem(it) {
   if (!packRoom(it)) { msg('Your backpack is full!', '#ff6666'); return false; }
   packAdd(it);
   msg(`Picked up ${displayName(it)}`, '#' + itemColor(it).toString(16).padStart(6, '0'));
   sfx('pick');
+  autoEquip(it);
   if ((it.rarity || 0) >= 2) G.main?.barkLoot?.();
   return true;
 }

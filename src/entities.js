@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { diff } from './difficulty.js';
 import { G, msg, maxHp, maxMp, armor, rollDamage, attackSpeed, critChance, critMult, stat, itemBonus, elementalDamage, petDamage, petMaxHp, addXp, onKill, pickupItem } from './state.js';
 import { box, sphere, capsule, cyl, cone, humanoid, ring, rand, pick, flatDist, sfx, hex } from './util.js';
 import { itemColor, typeOf, lookOf, displayName, GEMS } from './items.js';
@@ -346,11 +347,12 @@ export class Enemy extends Entity {
     this.floor = floor;
     const f1 = floor - 1;
     const hpMul = 1 + 0.42 * f1 + 0.004 * f1 * f1, dmgMul = 1 + 0.26 * f1 + 0.0015 * f1 * f1;
-    this.maxHp = d.hp * hpMul * (elite ? 2.6 : 1);
+    const D = diff();
+    this.maxHp = d.hp * hpMul * (elite ? 2.6 : 1) * D.hp;
     this.hp = this.maxHp;
-    this.dmg = d.dmg * dmgMul * (elite ? 1.4 : 1);
+    this.dmg = d.dmg * dmgMul * (elite ? 1.4 : 1) * D.dmg;
     this.speed = d.speed;
-    this.xp = Math.floor(d.xp * (1 + 0.35 * f1 + 0.012 * f1 * f1) * (elite ? 3 : 1));
+    this.xp = Math.floor(d.xp * (1 + 0.35 * f1 + 0.012 * f1 * f1) * (elite ? 3 : 1) * D.xp);
     this.ranged = !!d.ranged;
     const s = boss ? 2.4 : elite ? 1.4 : 1.15;
     const sk = SKEL[d.shape];
@@ -430,7 +432,7 @@ export class Enemy extends Entity {
     if (kind === 'fire' && burnPct() > 0) this.applyDot(d * burnPct() / 3, 3, 'fire');
     if (kind === 'storm' && Math.random() < stunChance()) this.stunT = Math.max(this.stunT || 0, 0.5);
     this.hp -= d;
-    this.lastDmg = d; this.lastCrit = !!crit;
+    this.lastDmg = d; this.lastCrit = !!crit; if (crit) this.critHit = true;
     this.aggro = true;
     this.hitT = 0.15;
     this.char?.flash?.(crit ? 1.6 : 1);
@@ -461,7 +463,8 @@ export class Enemy extends Entity {
     G.level.dropLoot(this.pos.clone(), this.floor, this.elite, this.boss);
     G.main.fx.emit(this.pos.clone().setY(0.8), { count: this.boss ? 60 : 16, color: this.isSkel ? 0xd8d0b8 : this.data.color, speed: 4, life: 0.7, size: 0.5, gravity: 5 });
     // overkill bursts the body apart
-    const big = (this.lastDmg || 0) > this.maxHp * 0.55 || this.hp < -this.maxHp * 0.35;
+    // a foe only bursts apart if it took a critical hit at some point in the fight; otherwise it drops whole
+    const big = !!this.critHit;
     G.main.gore.death(this.pos, goreKind(this.data), (this.boss ? 2.2 : this.elite ? 1.4 : 1) * (this.pickR > 0.8 ? 1.3 : 1), big, G.player ? G.player.pos : null);
     Barks.kill(this, big);
     { const lk = itemBonus('life_kill'), mk = itemBonus('mana_kill'); if (lk) G.hp = Math.min(maxHp(), G.hp + lk); if (mk) G.mp = Math.min(maxMp(), G.mp + mk); }
@@ -473,14 +476,12 @@ export class Enemy extends Entity {
       const max = Settings.gore === 'max';
       const from = G.player ? G.player.pos : null;
       // every kill on max gore leaves something: at least one limb or the head, often guts and organs
-      const cuts = big ? (max ? 3 + ((Math.random() * 4) | 0) : 1) : this.boss ? 3 : max ? 1 + (this.lastCrit || Math.random() < 0.45 ? 1 : 0) : Math.random() < 0.3 ? 1 : 0;
+      const cuts = big ? (max ? (this.boss ? 5 : 3) + ((Math.random() * 4) | 0) : 1) : 0;
       if (cuts) { G.main.gore.dismember(this.char, this.pos, gk, 1, cuts, from, enemySkin(this.data.shape), false); G.main.sfxGore?.(); }
       if (max) {
         const d = from ? this.pos.clone().sub(from).setY(0).normalize() : new THREE.Vector3(1, 0, 0);
         const sz = Math.max(1, this.char.root.scale.x * 0.9);
-        if (big || this.boss) G.main.gore.carnage(this.pos, d, sz);
-        else if (Math.random() < 0.6) { G.main.gore.entrails(this.pos, d, sz); }
-        else G.main.gore.organs(this.pos, d, sz, 2);
+        if (big) { G.main.gore.carnage(this.pos, d, sz); if (Math.random() < 0.7) G.main.gore.entrails(this.pos, d, sz); G.main.gore.organs(this.pos, d, sz, 3); G.main.shake?.(0.25); }
         G.main.gore.pool(this.pos.x, this.pos.z, 2.2 * sz, gk === 'bone' ? 'rot' : gk);
       }
     } else if (big && Settings.gore === 'max' && gk !== 'none') { this.model.visible = false; this.deathT = 0.4; G.main.sfxGore?.(); }

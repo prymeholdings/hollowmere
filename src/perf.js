@@ -21,6 +21,13 @@ function tinyParts(rc) {
   for (const k in rc.parts) { const m = rc.parts[k]; const g = m.geometry; const tris = g.index ? g.index.count / 3 : g.attributes.position.count / 3; if (tris < 450) rc._tiny.push(m); }
   return rc._tiny;
 }
+// beyond 18 m the small extras (buckles, pouches, hair ties, small trims) can go too
+function smallParts(rc) {
+  if (rc._small) return rc._small;
+  rc._small = [];
+  for (const k in rc.parts) { const m = rc.parts[k]; const g = m.geometry; const tris = g.index ? g.index.count / 3 : g.attributes.position.count / 3; if (tris >= 450 && tris < 1000) rc._small.push(m); }
+  return rc._small;
+}
 function setShadow(rc, on) {
   if (rc._shadow === on) return;
   rc._shadow = on;
@@ -53,6 +60,7 @@ export function beforeRender(camera) {
   for (const [, rc, d2] of list) {
     rc.lod = d2 > 196 ? 1 : 0;
     if (d2 > 121) for (const m of tinyParts(rc)) if (m.visible) { m.visible = false; tinyOff.push(m); }
+    if (d2 > 324) for (const m of smallParts(rc)) if (m.visible) { m.visible = false; tinyOff.push(m); }
     if (shadows) setShadow(rc, d2 < 100);
   }
   if (G.player && G.player.model && G.player.model.isReal && shadows) setShadow(G.player.model, true);

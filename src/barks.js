@@ -363,6 +363,123 @@ for (const k in MORE_NPC) (NPC[k] ||= []).push(...MORE_NPC[k]);
 FOE.push(...MORE_FOE);
 FOE_DEATH.push(...MORE_FOE_DEATH);
 
+// ---- 0.7.6: even filthier
+const MORE2_HERO = {
+  kill: [
+    ['Down you go, you crusty ballsack.', 'Down you go.'],
+    ['Died like he fucked: fast and disappointing.', 'Died fast and disappointing.'],
+    ['I have had more fight out of a wet fart.', 'I have had more fight out of a wet sock.'],
+    ['Tell the devil I said suck it.', 'Tell the devil I said hello.'],
+    ['You smelled like a dead tramp\'s jockstrap anyway.', 'You smelled awful anyway.'],
+    ['Another bellend for the pile.', 'Another one for the pile.'],
+    ['Should have stayed in your mum\'s basement, you sweaty bollock.', 'Should have stayed home.'],
+    ['That was quicker than my wedding night.', 'That was quick.'],
+    ['Bye bye, fuckface. Nobody will miss you.', 'Bye bye. Nobody will miss you.'],
+    ['I would piss on your grave but you are not worth the water.', 'Not worth the effort.'],
+    ['Your corpse is the only useful thing you ever made, twat.', 'Your corpse is useful at last.'],
+    ['Lights out, knob jockey.', 'Lights out.'],
+  ],
+  bigkill: [
+    ['CRIT! Look at that, his arse is over there and his face is over here!', 'CRIT! He went everywhere!'],
+    ['Exploded like a fat priest at an all-you-can-eat buffet.', 'Exploded like a melon.'],
+    ['Somebody get a mop. And a bucket. And a fucking shovel.', 'Somebody get a mop.'],
+    ['I just turned that prick into soup.', 'I just turned that into soup.'],
+    ['Splattered him like a bird shitting on a statue.', 'Splattered him everywhere.'],
+    ['Guts on the wall, dick on the ceiling. Beautiful.', 'Guts on the wall. Beautiful.'],
+    ['That\'s not a corpse, that\'s a fucking jigsaw puzzle.', 'That\'s a jigsaw puzzle now.'],
+    ['Critical hit, critical shit. He shat himself into orbit.', 'Critical hit! Into orbit!'],
+    ['I think I just found his spleen in my boot.', 'I found something in my boot.'],
+    ['Rained bollocks. Literally.', 'It rained bits.'],
+  ],
+  idle: [
+    ['I need a drink, a bath and a woman who doesn\'t ask questions. In any order.', 'I need a drink and a bath.'],
+    ['My arse crack has been sweating since floor one.', 'I have been sweating since floor one.'],
+    ['Who designs a dungeon without a fucking toilet?', 'Who designs a dungeon without a privy?'],
+    ['Why do I always end up knee-deep in some poor bastard\'s colon?', 'Why am I always knee-deep in this?'],
+    ['Saw a rat humping a skull back there. Even the rats are depressed.', 'Saw a rat chewing a skull back there.'],
+    ['I could murder a pie. And then a goblin. Then another pie.', 'I could murder a pie.'],
+    ['These boots smell like a troll\'s taint.', 'These boots smell awful.'],
+    ['I\'m so bored I could lick a torch.', 'I\'m so bored.'],
+    ['What\'s the difference between a goblin and a bag of shit? The bag.', 'Goblins. Ugh.'],
+    ['Why did the skeleton not fuck anyone? He had no balls. And no friends..', 'Why are skeletons lonely? No body.'],
+    ['I once shagged a barmaid so hard the tavern changed its name.', 'I once caused a tavern to change its name.'],
+    ['If I die down here, bury me with my boots on and my cock out.', 'If I die down here, bury me with my boots on.'],
+  ],
+  town: [
+    ['Hollowmere: where the ale is warm and the whores are warmer.', 'Hollowmere: where the ale is warm.'],
+    ['Smells like piss and regret. Home sweet home.', 'Smells like home.'],
+    ['The mayor has a face like a bulldog licking piss off a nettle.', 'The mayor looks permanently cross.'],
+    ['I\'ve seen more life in a dead hooker\'s handbag.', 'This town is very quiet.'],
+  ],
+  hurt: [
+    ['OW, you fucking ballbag!', 'OW!'],
+    ['That went right in my piss flaps!', 'That hurt!'],
+    ['Hit me again and I\'ll skull-fuck your corpse!', 'Hit me again and you\'ll regret it!'],
+    ['Right in the knackers, you cheating shit!', 'Low blow!'],
+  ],
+  low: [
+    ['I\'m leaking like a cheap whore\'s bucket!', 'I\'m leaking badly!'],
+    ['Shit shit shit shit SHIT!', 'Oh no no no!'],
+    ['If I die, delete my browser history!', 'If I die, burn my diary!'],
+  ],
+  loot: [
+    ['Ooh, shiny. Better than sex. Well, better than sex with you.', 'Ooh, shiny.'],
+    ['Finders keepers, dead fuckers weepers.', 'Finders keepers.'],
+    ['Came out of his arse, still counts.', 'Still counts.'],
+  ],
+  level: [
+    ['I just got harder than a priest in a choir.', 'I just got stronger.'],
+    ['Stronger, faster, and my dick is probably bigger too.', 'Stronger and faster.'],
+  ],
+  potion: [
+    ['Tastes like a goat pissed in honey. Delicious.', 'Tastes awful. Delicious.'],
+    ['Down the hatch, up the arse.', 'Down the hatch.'],
+  ],
+};
+const MORE2_NPC = {
+  villager: [
+    ['Mind the shit on the cobbles. Some of it is the mayor\'s.', 'Mind the cobbles.'],
+    ['My husband went into the Wells and came back with crabs. The other kind.', 'My husband came back from the Wells itchy.'],
+    ['Oi, hero! My wife says you\'re handsome. I say you look like a ballsack in a cape.', 'My wife says you\'re handsome.'],
+    ['I\'d offer you a drink but you look like you\'d drink your own piss.', 'You look thirsty.'],
+    ['Last hero who came through shagged my sheep. Keep your hands where I can see them.', 'Keep away from my sheep.'],
+    ['Heard you made a ghoul explode. My mother-in-law next, please.', 'Heard you made a ghoul explode.'],
+    ['What do you call a hero with no money? A fucking peasant. Welcome home.', 'Welcome home.'],
+  ],
+  merchant: [
+    ['Buy something or fuck off, I\'m not a museum.', 'Buy something or move along.'],
+    ['That price? I\'d sooner sell my arsehole. Actually, make an offer.', 'That price? No chance.'],
+  ],
+  blacksmith: [
+    ['I hammer steel all day. Your mum says I hammer other things too.', 'I hammer steel all day.'],
+    ['This blade could cut a fart in half.', 'This blade is very sharp.'],
+  ],
+  healer: [
+    ['Drop your trousers. No, not for that. Okay, a little for that.', 'Let me look at those wounds.'],
+    ['I\'ve stitched up worse. Mostly from your last trip.', 'I\'ve stitched up worse.'],
+  ],
+};
+const MORE2_FOE = [
+  ['I\'ll fuck your skull and wear it as a hat!', 'I\'ll wear your skull as a hat!'],
+  ['Come here so I can tea-bag your corpse!', 'Come here and die!'],
+  ['Your mum squealed louder than you will!', 'You\'ll squeal!'],
+  ['I\'ll use your spine as a back-scratcher!', 'I\'ll use your spine as a back-scratcher!'],
+  ['Smells like fresh meat and stale piss!', 'Smells like fresh meat!'],
+  ['I\'ll shit down your neck hole!', 'I\'ll end you!'],
+  ['Nice arse! I\'ll eat it last!', 'I\'ll eat you last!'],
+  ['Your guts are going on my fucking mantelpiece!', 'Your guts are mine!'],
+];
+const MORE2_FOE_DEATH = [
+  ['Tell... my wife... she was a shit lay...', 'Tell... my wife...'],
+  ['I... shat... myself...', 'I... am done...'],
+  ['Not... the face... you bastard...', 'Not... the face...'],
+  ['Fuck... this... job...', 'I... quit...'],
+];
+for (const k in MORE2_HERO) (HERO[k] ||= []).push(...MORE2_HERO[k]);
+for (const k in MORE2_NPC) (NPC[k] ||= []).push(...MORE2_NPC[k]);
+FOE.push(...MORE2_FOE);
+FOE_DEATH.push(...MORE2_FOE_DEATH);
+
 const text = (pair) => (Settings.profanity ? pair[0] : pair[1]);
 let cd = 0, idleT = 12, npcT = 8, foeT = 9, streak = 0, streakT = 0, lastLow = 0;
 
