@@ -1,6 +1,6 @@
 !include "MUI2.nsh"
 !define APPNAME "Hollowmere"
-!define VERSION "0.6.1"
+!define VERSION "0.6.2"
 Name "${APPNAME}: The Sunken Wells"
 OutFile "..\dist\HollowmereSetup-${VERSION}.exe"
 InstallDir "$LOCALAPPDATA\Programs\${APPNAME}"

@@ -17,6 +17,7 @@ const DMG_COLORS = { phys: '#ffffff', fire: '#ffa040', frost: '#9fdcff', storm: 
 
 // soft contact shadow under characters: grounds them on phones (no shadow maps) and adds depth on PC
 let BLOB_MAT = null;
+const HALO_GEO = new THREE.SphereGeometry(1, 12, 8);
 const BLOB_GEO = new THREE.PlaneGeometry(1, 1);
 function blobMat() {
   if (BLOB_MAT) return BLOB_MAT;
@@ -405,6 +406,8 @@ export class Enemy extends Entity {
   die() {
     this.dead = true;
     sfx('die');
+    // body hits the floor: a dust puff once the fall lands
+    if (this.char) { const at = this.pos.clone(); setTimeout(() => { if (G.level && this.root.parent) { G.main.fx.emit(at.setY(0.15), { count: 14, color: 0x8a7a66, speed: 1.6, life: 0.9, size: 0.7, rise: 0.25 }); } }, 650); }
     addXp(this.xp);
     if (G.pet && !G.pet.dead && G.petAwayTime <= 0) addPetXp(Math.ceil(this.xp * 0.7));
     G.main.floatText(this.pos, `+${this.xp} xp`, '#c9a3ff', 16, 1.0);
@@ -483,6 +486,9 @@ export class Enemy extends Entity {
       if (this.atkCd <= 0) {
         this.atkCd = (this.ranged ? 1.9 : 1.4) * (this.slowT > 0 ? 1.6 : 1) * (this.boss ? 0.8 : 1);
         this.swingT = 0.3;
+        // wind-up tell: a red glint and a short lunge toward the target
+        this.char?.flash?.(this.boss ? 1.2 : 0.7, 0xff3010);
+        if (!this.ranged) { const lv = tg.pos.clone().sub(this.pos).setY(0); if (lv.lengthSq() > 0.36) { lv.normalize().multiplyScalar(0.18); const to = this.pos.clone().add(lv); if (G.level.walkable(to)) this.pos.copy(to); } }
         if (this.char) this.char.once(this.ranged ? (this.data.shape === 'skel_rogue' ? '1H_Ranged_Shoot' : 'Spellcast_Shoot') : (this.boss ? '2H_Melee_Attack_Chop' : '1H_Melee_Attack_Chop'), { timeScale: 1.5 });
         const target = tg;
         const delay = this.char ? 350 : 0;
@@ -494,7 +500,10 @@ export class Enemy extends Entity {
             const p = new Projectile(dir, this.dmg, 'ally', col, { trail: col, speed: 11, kind: 'fire', size: this.data.shape === 'skel_rogue' ? 0.12 : 0.25, blade: this.data.shape === 'skel_rogue' });
             p.root.position.copy(this.pos).addScaledVector(dir, 0.7);
             G.level.add(p);
-          } else if (flatDist(target.pos, this.pos) < range + 1) target.takeDamage(this.dmg * rand(0.8, 1.2));
+          } else if (flatDist(target.pos, this.pos) < range + 1) {
+            target.takeDamage(this.dmg * rand(0.8, 1.2));
+            G.main.fx.emit(target.pos.clone().setY(0.9), { count: 8, color: 0xffd9a0, speed: 3.5, life: 0.25, size: 0.35, rise: 0.2 });
+          }
         }, delay);
       }
     } else {
@@ -1021,6 +1030,9 @@ export class Projectile extends Entity {
       this.spinMesh = b;
     } else {
       const s = sphere(o.size ?? 0.22, color, 4); s.castShadow = false; this.root.add(s);
+      // soft glow around the bolt
+      const halo = new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+      halo.scale.setScalar((o.size ?? 0.22) * 2.6); halo.renderOrder = 9; this.root.add(halo); this.halo = halo;
     }
     this.root.children.forEach((c) => (c.position.y = 1.0));
   }
@@ -1061,7 +1073,8 @@ export class Projectile extends Entity {
   impact() {
     const fx = G.main.fx;
     fx.emit(this.pos.clone().setY(1), { count: this.explode ? 30 : 10, color: this.color, speed: this.explode ? 5 : 3, life: 0.35, size: 0.5 });
-    if (!this.spinMesh) fx.flash(this.pos, this.color, this.explode ? 25 : 10, 0.25);
+    if (!this.spinMesh) { fx.flash(this.pos, this.color, this.explode ? 25 : 10, 0.25); fx.core(this.pos.clone().setY(1), this.color, this.explode ? 1.1 : 0.45, 0.22); }
+    if (this.halo) this.halo.material.dispose();
     G.level.remove(this);
   }
 }

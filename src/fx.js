@@ -17,6 +17,24 @@ function softTexture() {
   return t;
 }
 
+const CORE_GEO = new THREE.SphereGeometry(1, 16, 12);
+const SCORCH_GEO = new THREE.PlaneGeometry(1, 1);
+CORE_GEO.userData.shared = SCORCH_GEO.userData.shared = true;
+let SCORCH_TEX = null;
+function scorchTex() {
+  if (SCORCH_TEX) return SCORCH_TEX;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  for (let i = 0; i < 14; i++) {
+    const x = 64 + (Math.random() - 0.5) * 40, y = 64 + (Math.random() - 0.5) * 40, r = 20 + Math.random() * 30;
+    const grd = g.createRadialGradient(x, y, 0, x, y, r);
+    grd.addColorStop(0, 'rgba(12,8,6,0.55)'); grd.addColorStop(1, 'rgba(12,8,6,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  }
+  SCORCH_TEX = new THREE.CanvasTexture(c); SCORCH_TEX.colorSpace = THREE.SRGBColorSpace;
+  return SCORCH_TEX;
+}
+
 export class FX {
   constructor(scene) {
     this.scene = scene;
@@ -104,8 +122,29 @@ export class FX {
   explosion(pos, color, radius = 2) {
     this.emit(pos.clone().setY(0.6), { count: 40, color, speed: radius * 3, life: 0.6, size: 0.9, up: 0.8 });
     this.emit(pos.clone().setY(0.3), { count: 20, color: 0x333333, speed: radius * 1.5, life: 1.0, size: 1.2, up: 0.5, rise: 1 });
+    // embers that arc out and fall back
+    this.emit(pos.clone().setY(0.5), { count: 18, color: 0xffd080, speed: radius * 2.6, life: 1.1, size: 0.22, up: 1.6, gravity: 9, drag: 0.4 });
     this.ring(pos, color, radius);
+    this.ring(pos, 0xffffff, radius * 0.6, 0.25);
     this.flash(pos, color, 40, 0.5);
+    this.core(pos.clone().setY(0.7), color, radius * 0.55, 0.35);
+    this.scorch(pos, radius * 0.8);
+  }
+  // a hot glowing ball that swells and fades (the heart of a blast or an impact)
+  core(pos, color, size = 1, dur = 0.3) {
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+    const m = new THREE.Mesh(CORE_GEO, mat);
+    m.position.copy(pos); m.scale.setScalar(size * 0.3); m.renderOrder = 11;
+    this.scene.add(m);
+    this.meshes.push({ m, t: 0, dur, mat, upd: (k) => { m.scale.setScalar(size * (0.3 + k * 0.9)); mat.opacity = 0.85 * (1 - k) * (1 - k); } });
+  }
+  // a dark burn mark left on the floor that fades over a few seconds
+  scorch(pos, r = 1.5) {
+    const mat = new THREE.MeshBasicMaterial({ map: scorchTex(), transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    const m = new THREE.Mesh(SCORCH_GEO, mat);
+    m.rotation.set(-Math.PI / 2, 0, Math.random() * 6.28); m.position.set(pos.x, 0.03, pos.z); m.scale.setScalar(r * 2);
+    this.scene.add(m);
+    this.meshes.push({ m, t: 0, dur: 7, mat, upd: (k) => { mat.opacity = 0.8 * Math.min(1, (1 - k) * 3); } });
   }
   // ice crystals bursting from the ground, then shattering
   spike(pos, color = 0xbfeeff, scale = 1) {
@@ -200,7 +239,7 @@ export class FX {
       const o = this.meshes[i];
       o.t += dt;
       o.upd(Math.min(1, o.t / o.dur), dt);
-      if (o.t >= o.dur) { o.done?.(); this.scene.remove(o.m); o.m.traverse((c) => c.geometry?.dispose()); o.mat?.dispose(); this.meshes.splice(i, 1); }
+      if (o.t >= o.dur) { o.done?.(); this.scene.remove(o.m); o.m.traverse((c) => { if (c.geometry && !c.geometry.userData.shared) c.geometry.dispose(); }); o.mat?.dispose(); this.meshes.splice(i, 1); }
     }
     for (const L of this.lights) {
       L.t += dt;

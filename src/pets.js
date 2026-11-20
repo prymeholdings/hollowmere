@@ -149,63 +149,137 @@ function wingGeo(span, depth) {
 const darker = (c, k = 0.6) => new THREE.Color(c).multiplyScalar(k).getHex();
 const lighter = (c, k = 0.45) => new THREE.Color(c).lerp(new THREE.Color(0xfff2d8), k).getHex();
 
+
+// Long eastern-style dragon: a floating serpent body that undulates along its length, four small clawed
+// legs that paddle the air, antlers, whiskers, a flowing mane and a glowing pearl. Original design.
+const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), FWD = new THREE.Vector3(0, 0, 1);
+function curveTube(points, r, m, parent) {
+  const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p))), 16, r, 5, false);
+  const o = new THREE.Mesh(g, m); o.castShadow = false; parent.add(o); return o;
+}
+function buildLongDragon(stage, coat) {
+  const root = new THREE.Group();
+  const body = new THREE.Group(); root.add(body);
+  const parts = { long: true };
+  const sc = [0.75, 1.0, 1.3][stage];
+  const gilded = new THREE.Color(coat).getHSL({}).s > 0.5 && Math.abs(new THREE.Color(coat).getHSL({}).h - 0.12) < 0.04;
+  const accent = gilded ? 0xc8321e : 0xe8b840;
+  const belly = lighter(coat, 0.5), dark = darker(coat, 0.5);
+  const mC = mat(coat, { r: 0.35, m: 0.25 }), mB = mat(belly, { r: 0.5, m: 0.1 }), mD = mat(dark, { r: 0.45 });
+  const mA = mat(accent, { r: 0.4, m: 0.35, e: accent, ei: 0.18 }), mHorn = mat(0xe8dcb8, { r: 0.35 }), mEye = mat(0xffe060, { e: 0xffb020, ei: 1.8 });
+  const mWhisk = mat(lighter(accent, 0.3), { r: 0.5 });
+  // ---- spine segments
+  const N = 16 + stage * 4, spacing = 0.13;
+  const segs = [];
+  for (let i = 0; i < N; i++) {
+    const u = i / (N - 1);
+    const r = 0.13 * (1 - 0.78 * Math.pow(u, 1.3)) * (1 + 0.18 * Math.exp(-Math.pow((u - 0.18) / 0.12, 2)));
+    const g = new THREE.Group(); body.add(g);
+    M(geo.sph, mC, r, r * 0.92, spacing * 1.3, 0, 0, 0, g);
+    M(geo.sph, mB, r * 0.82, r * 0.6, spacing * 0.85, 0, -r * 0.42, 0, g);
+    if (i > 0 && i < N - 1) { const fin = M(geo.cone, i % 2 ? mA : mD, r * 0.32, r * 1.1, spacing * 0.35, 0, r * 1.15, 0, g); fin.rotation.x = -0.45; fin.castShadow = false; }
+    segs.push({ g, r, u });
+  }
+  // ---- tail tuft (a fan of flame-like plumes)
+  const tuft = new THREE.Group(); segs[N - 1].g.add(tuft);
+  for (let k = 0; k < 5; k++) { const c = M(geo.cone, mA, 0.05, 0.32, 0.02, 0, 0, -0.16, tuft); c.rotation.set(-Math.PI / 2, 0, (k - 2) * 0.32); c.position.x = (k - 2) * 0.025; c.castShadow = false; }
+  // ---- legs: pairs near the front and the back
+  parts.legs = [];
+  for (const [si, front] of [[Math.round(N * 0.16), true], [Math.round(N * 0.52), false]]) {
+    const sg = segs[si];
+    for (const x of [-1, 1]) {
+      const hip = new THREE.Group(); hip.position.set(x * sg.r * 0.85, -sg.r * 0.2, 0); sg.g.add(hip);
+      M(geo.cap, mC, 0.035, 0.1, 0.035, 0, -0.07, 0.02, hip).rotation.x = 0.6;
+      const foot = new THREE.Group(); foot.position.set(0, -0.14, 0.08); hip.add(foot);
+      M(geo.sph, mD, 0.045, 0.03, 0.05, 0, 0, 0, foot);
+      for (let c = -1; c <= 1; c++) { const cl = M(geo.cone, mHorn, 0.012, 0.06, 0.012, c * 0.025, -0.01, 0.05, foot); cl.rotation.x = Math.PI / 2 + 0.5; cl.castShadow = false; }
+      hip.rotation.z = x * 0.5;
+      parts.legs.push({ hip, x, front });
+    }
+  }
+  // ---- head
+  const head = new THREE.Group(); body.add(head);
+  const sk = new THREE.Group(); head.add(sk); // skull, so the jaw can open beneath it
+  M(geo.sph, mC, 0.13, 0.11, 0.15, 0, 0.02, 0, sk);
+  M(geo.sph, mC, 0.085, 0.065, 0.16, 0, 0.0, 0.15, sk);           // long snout
+  M(geo.sph, mA, 0.05, 0.03, 0.06, 0, 0.055, 0.2, sk);            // ridge on the nose
+  for (const x of [-1, 1]) {
+    M(geo.sph, mEye, 0.03, 0.026, 0.03, x * 0.085, 0.06, 0.07, sk);
+    M(geo.sph, mat(0x000000), 0.01, 0.022, 0.008, x * 0.1, 0.062, 0.088, sk);
+    M(geo.sph, mD, 0.045, 0.018, 0.05, x * 0.08, 0.095, 0.07, sk).rotation.z = x * 0.3;   // brow
+    M(geo.sph, mat(0x220800), 0.012, 0.012, 0.012, x * 0.035, 0.03, 0.29, sk);            // nostril
+    // antlers: a main beam with two tines, longer as the dragon grows
+    const ant = new THREE.Group(); ant.position.set(x * 0.06, 0.1, -0.06); ant.rotation.set(-0.85, 0, x * -0.35); sk.add(ant);
+    const L = 0.2 + stage * 0.07;
+    M(geo.cone, mHorn, 0.022, L, 0.022, 0, L / 2, 0, ant);
+    const t1 = M(geo.cone, mHorn, 0.014, L * 0.45, 0.014, x * 0.03, L * 0.45, 0, ant); t1.rotation.z = x * -0.9;
+    const t2 = M(geo.cone, mHorn, 0.012, L * 0.35, 0.012, x * 0.02, L * 0.72, 0, ant); t2.rotation.z = x * -0.7;
+    // long whiskers from the snout, drawn as soft curves
+    const w = curveTube([[x * 0.06, 0.0, 0.25], [x * 0.18, -0.02, 0.22], [x * 0.3, -0.08, 0.1], [x * 0.38, -0.18, -0.05]], 0.006, mWhisk, sk);
+    (parts.whiskers ||= []).push(w);
+    // mane tufts behind the cheeks
+    for (let k = 0; k < 3; k++) { const m = M(geo.cone, mA, 0.035, 0.16, 0.02, x * (0.1 + k * 0.015), 0.04 - k * 0.04, -0.1, sk); m.rotation.set(-1.9 + k * 0.2, 0, x * (0.9 + k * 0.2)); m.castShadow = false; }
+  }
+  // mane down the back of the head
+  for (let k = 0; k < 4; k++) { const m = M(geo.cone, mA, 0.04, 0.18, 0.02, 0, 0.12 - k * 0.02, -0.08 - k * 0.04, sk); m.rotation.x = -2.2 + k * 0.1; m.castShadow = false; }
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.04, 0.03); head.add(jaw);
+  M(geo.sph, mB, 0.07, 0.03, 0.15, 0, -0.02, 0.12, jaw);
+  for (const x of [-1, 1]) { const f = M(geo.cone, mHorn, 0.008, 0.03, 0.008, x * 0.04, 0.0, 0.22, jaw); f.rotation.x = Math.PI; f.castShadow = false; }
+  const beard = M(geo.cone, mA, 0.035, 0.14, 0.02, 0, -0.08, 0.06, jaw); beard.rotation.x = Math.PI - 0.3; beard.castShadow = false;
+  // the flaming pearl it chases
+  const pearl = M(geo.sph, mat(0xfff4e0, { e: 0xffc070, ei: 1.4, r: 0.15 }), 0.06, 0.06, 0.06, 0, 0, 0, body); pearl.castShadow = false;
+  parts.head = head; parts.jaw = jaw; parts.pearl = pearl; parts.hover = true;
+  body.scale.setScalar(sc);
+  // ---- motion
+  let atk = 0, phase = 0, amp = 0.5;
+  const pos = segs.map(() => new THREE.Vector3());
+  const anim = (t, moving, dt, attack) => {
+    if (attack) atk = 1;
+    atk = Math.max(0, atk - (dt || 0.016) * 3);
+    const speed = moving ? 5.5 : 2.2;
+    phase += (dt || 0.016) * speed;
+    amp += ((moving ? 1 : 0.65) - amp) * Math.min(1, (dt || 0.016) * 3);
+    const baseY = 0.95 + Math.sin(t * 1.3) * 0.08;
+    const headZ = 0.55 + atk * 0.3;
+    // the body is laid out behind the head along a travelling S-wave (side to side and up and down)
+    for (let i = 0; i < N; i++) {
+      const u = i / (N - 1), d = i * spacing;
+      const k = Math.min(1, 0.25 + u * 2);
+      pos[i].set(Math.sin(phase - d * 4.2) * 0.22 * amp * k, baseY + Math.sin(phase * 0.8 - d * 3.1) * 0.13 * amp * k - u * 0.08, headZ - 0.16 - d);
+    }
+    for (let i = 0; i < N; i++) {
+      const g = segs[i].g;
+      g.position.copy(pos[i]);
+      const a = i === 0 ? tmpV.set(pos[0].x * 0.6, pos[0].y, headZ) : pos[i - 1];
+      tmpV2.subVectors(a, pos[i]).normalize();
+      g.quaternion.setFromUnitVectors(FWD, tmpV2);
+    }
+    // head rides the front of the body, looks slightly ahead and dips when it strikes
+    head.position.set(pos[0].x * 0.6, pos[0].y + 0.02, headZ);
+    tmpV2.subVectors(head.position, pos[0]).normalize();
+    head.quaternion.setFromUnitVectors(FWD, tmpV2);
+    head.rotateX(0.12 - atk * 0.3 + Math.sin(t * 1.7) * 0.05);
+    jaw.rotation.x = 0.08 + atk * 0.55 + Math.max(0, Math.sin(t * 0.9)) * 0.06;
+    for (const w of parts.whiskers) w.rotation.y = Math.sin(t * 2.2) * 0.12;
+    tuft.rotation.y = Math.sin(phase * 1.3) * 0.4;
+    // legs paddle the air in a slow alternating stroke
+    for (const l of parts.legs) l.hip.rotation.x = Math.sin(phase * 1.6 + (l.front ? 0 : Math.PI) + (l.x > 0 ? Math.PI : 0)) * 0.55;
+    // the pearl circles just ahead of the snout
+    pearl.position.set(Math.sin(t * 2.1) * 0.12, baseY + 0.12 + Math.sin(t * 3.3) * 0.06, headZ + 0.42 + Math.cos(t * 2.1) * 0.06);
+    pearl.material.emissiveIntensity = 1.2 + Math.sin(t * 5) * 0.3 + atk;
+  };
+  anim(0, false, 0.016, 0);
+  return { root, anim, parts };
+}
+
 // returns { root, anim(t, moving, dt, attack) }
 export function buildPetModel(species, stage, coat) {
   const root = new THREE.Group();
   const body = new THREE.Group(); root.add(body);
   const parts = {};
   const sc = [0.8, 1.05, 1.35][stage];
-  if (species === 'dragon') {
-    const c = coat, belly = lighter(coat, 0.55), dark = darker(coat, 0.55);
-    const mC = mat(c, { r: 0.45, m: 0.15 }), mB = mat(belly, { r: 0.6 }), mD = mat(dark, { r: 0.5 }), mH = mat(0xf0e6c8, { r: 0.4 }), mE = mat(0xffd040, { e: 0xffa020, ei: 1.6 });
-    const torso = M(geo.sph, mC, 0.32, 0.3, 0.46, 0, 0.55, 0, body);
-    M(geo.sph, mB, 0.26, 0.24, 0.38, 0, 0.47, 0.06, body);
-    const neck = new THREE.Group(); neck.position.set(0, 0.68, 0.32); body.add(neck);
-    M(geo.cap, mC, 0.12, 0.18, 0.12, 0, 0.12, 0.05, neck).rotation.x = 0.5;
-    const head = new THREE.Group(); head.position.set(0, 0.28, 0.16); neck.add(head);
-    M(geo.sph, mC, 0.17, 0.15, 0.2, 0, 0, 0, head);
-    M(geo.sph, mC, 0.11, 0.09, 0.15, 0, -0.03, 0.17, head);
-    const jaw = M(geo.sph, mB, 0.09, 0.05, 0.13, 0, -0.09, 0.13, head);
-    for (const x of [-1, 1]) {
-      M(geo.sph, mE, 0.035, 0.035, 0.03, x * 0.09, 0.04, 0.14, head);
-      M(geo.sph, mat(0x000000), 0.012, 0.03, 0.01, x * 0.1, 0.04, 0.17, head);
-      M(geo.sph, mat(0x220a00), 0.015, 0.015, 0.015, x * 0.04, 0.0, 0.31, head);
-      const h1 = M(geo.cone, mH, 0.04, 0.2 + stage * 0.08, 0.04, x * 0.09, 0.14, -0.08, head); h1.rotation.set(-0.9, 0, x * 0.25);
-      if (stage >= 1) { const h2 = M(geo.cone, mH, 0.025, 0.12, 0.025, x * 0.15, 0.07, -0.06, head); h2.rotation.set(-1.1, 0, x * 0.7); }
-      if (stage >= 2) { const h3 = M(geo.cone, mH, 0.022, 0.1, 0.022, x * 0.12, -0.08, -0.04, head); h3.rotation.set(-1.6, 0, x * 0.9); }
-    }
-    // back spikes
-    for (let i = 0; i < 4 + stage * 2; i++) { const s = M(geo.cone, mD, 0.035, 0.1 + (stage * 0.02), 0.035, 0, 0.84 - i * 0.03, 0.25 - i * 0.1, body); s.rotation.x = -0.35; }
-    // legs
-    for (const [x, z] of [[-0.18, 0.2], [0.18, 0.2], [-0.2, -0.18], [0.2, -0.18]]) {
-      M(geo.cap, mC, 0.07, 0.14, 0.07, x, 0.24, z, body);
-      M(geo.sph, mD, 0.08, 0.05, 0.1, x, 0.06, z + 0.04, body);
-    }
-    // tail
-    const tail = new THREE.Group(); tail.position.set(0, 0.5, -0.4); body.add(tail);
-    parts.tail = [];
-    let prev = tail;
-    for (let i = 0; i < 6; i++) {
-      const seg = new THREE.Group(); seg.position.set(0, 0, i === 0 ? 0 : -0.13); prev.add(seg);
-      M(geo.sph, mC, 0.1 - i * 0.012, 0.09 - i * 0.011, 0.11, 0, 0, -0.06, seg);
-      if (i % 2 === 0) { const sp = M(geo.cone, mD, 0.025, 0.07, 0.025, 0, 0.08 - i * 0.008, -0.06, seg); sp.rotation.x = -0.4; }
-      parts.tail.push(seg); prev = seg;
-    }
-    const spade = M(geo.cone, mD, 0.08, 0.16, 0.02, 0, 0, -0.16, prev); spade.rotation.x = -Math.PI / 2;
-    // wings
-    parts.wings = [];
-    const wg = wingGeo(0.75 + stage * 0.2, 0.55 + stage * 0.12);
-    const memb = mat(darker(coat, 0.8), { r: 0.7, side: THREE.DoubleSide });
-    for (const x of [-1, 1]) {
-      const piv = new THREE.Group(); piv.position.set(x * 0.16, 0.78, 0.08); body.add(piv);
-      const w = new THREE.Mesh(wg, memb); w.castShadow = true; w.scale.set(x, 1, 1); w.rotation.x = -Math.PI / 2 + 0.25; piv.add(w);
-      const bone = M(geo.cap, mD, 0.02, 0.5 + stage * 0.15, 0.02, x * 0.3, 0.12, 0, piv); bone.rotation.z = x * -1.2;
-      parts.wings.push(piv);
-    }
-    parts.head = head; parts.jaw = jaw; parts.neck = neck;
-    if (stage >= 2) { const glow = M(geo.sph, mat(0xff7a20, { e: 0xff5a10, ei: 1.5 }), 0.07, 0.07, 0.05, 0, 0.6, 0.42, body); glow.castShadow = false; }
-    body.scale.setScalar(sc * 1.15);
-  } else if (species === 'imp') {
+  if (species === 'dragon') return buildLongDragon(stage, coat);
+  if (species === 'imp') {
     const c = coat, dark = darker(coat, 0.5), light = lighter(coat, 0.3);
     const mC = mat(c, { r: 0.55 }), mD = mat(dark, { r: 0.5 }), mHo = mat(0x2a2028, { r: 0.4 }), mE = mat(0xfff060, { e: 0xffd020, ei: 2 });
     const torso = M(geo.sph, mC, 0.17, 0.22, 0.15, 0, 0.62, 0, body);
@@ -302,6 +376,12 @@ export function buildPetModel(species, stage, coat) {
     if (parts.lamps) for (const l of parts.lamps) l.material.emissiveIntensity = 1.6 + Math.sin(t * 6) * 0.4;
     body.position.y = parts.hover ? 0.35 + Math.sin(t * 3) * 0.08 : (parts.wings && moving ? 0.25 + Math.sin(t * 4.5) * 0.06 : (moving ? Math.abs(Math.sin(t * 14)) * 0.06 : Math.sin(t * 2) * 0.008));
     body.position.z = atk * 0.25;
+    // life: breathing, looking around when idle, a gallop pitch for the fox, a lazy sway for the imp
+    const bs = body.userData.bs || (body.userData.bs = body.scale.x);
+    body.scale.set(bs, bs * (1 + Math.sin(t * 2.3) * 0.018), bs);
+    if (parts.head) parts.head.rotation.y = Math.sin(t * 0.55) * (moving ? 0.08 : 0.45) + Math.sin(t * 1.9) * 0.05;
+    if (parts.legs) body.rotation.x = moving ? Math.sin(t * 16) * 0.07 : 0;
+    if (parts.hover) { body.rotation.z = Math.sin(t * 1.4) * 0.09; body.rotation.x = moving ? 0.25 : 0.05; body.rotation.y = atk * Math.PI * 0.5; }
   };
   return { root, anim, parts };
 }

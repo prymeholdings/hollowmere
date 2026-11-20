@@ -57,6 +57,7 @@ import { QUEST_GIVER } from './data.js';
 import { loadAll, CharModel } from './assets.js';
 import { FX } from './fx.js';
 import { Gore } from './gore.js';
+import { Atmos } from './atmos.js';
 import { sfx, playMusic, unlockAudio } from './audio.js';
 import { Settings, loadSettings, saveSettings } from './settings.js';
 import { CLASSES, SKILLS, PET_COATS, cast, canCast, updateZones, clearZones } from './skills.js';
@@ -120,6 +121,7 @@ class Main {
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.5, 260);
     this.fx = new FX(this.scene);
     this.gore = new Gore(this.scene);
+    this.atmos = new Atmos(this.scene);
     this.zoom = Math.min(1.5, Math.max(0.3, +localStorage.getItem('hollowmere_zoom') || 0.82));
     this.keys = {};
     this.mouse = new THREE.Vector2();
@@ -237,6 +239,7 @@ class Main {
   }
 
   menuScene() {
+    this.atmos?.hide();
     this.clearLevel();
     G.level = new Level(this.scene, 'town', 0);
     this.sky = new Sky(this.scene);
@@ -368,6 +371,7 @@ class Main {
     G.currentFloor = floor;
     const L = new Level(this.scene, kind, floor);
     G.level = L;
+    this.atmos.setLevel(kind);
     if (kind === 'town') this.sky = new Sky(this.scene);
     this.applyShadowRes();
     const p = new Player();
@@ -823,6 +827,7 @@ class Main {
         this.shakeAmt = Math.max(0, this.shakeAmt - dt * 1.8);
       }
       this.camera.lookAt(this.camFocus.clone().add(new THREE.Vector3(0, 0.8 + 0.5 * (1 - za), 0)));
+      this.atmos.update(dt, this.camFocus, L.kind === 'town' ? daylight() : 1);
       L.sun.position.copy(this.camFocus).add(new THREE.Vector3(14, 26, 10));
       L.sun.target.position.copy(this.camFocus);
       if (this.sky) this.sky.update(dt, L, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));

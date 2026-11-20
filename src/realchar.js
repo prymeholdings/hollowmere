@@ -240,7 +240,7 @@ export class RealChar {
     this.current = a;
     return a.getClip().duration / timeScale;
   }
-  flash(s = 1) { modelFlash(this, s); }
+  flash(s = 1, c = null) { modelFlash(this, s, c); }
   update(dt) { this.mixer.update(dt); modelFlashTick(this, dt); }
   applyLook() {}
   setGear() {}
