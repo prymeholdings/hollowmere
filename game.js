@@ -23232,18 +23232,18 @@ void main() {
     } while (a !== start);
   }
   function eliminateHoles(data, holeIndices, outerNode, dim) {
-    const queue2 = [];
+    const queue = [];
     let i, len, start, end, list;
     for (i = 0, len = holeIndices.length; i < len; i++) {
       start = holeIndices[i] * dim;
       end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
       list = linkedList(data, start, end, dim, false);
       if (list === list.next) list.steiner = true;
-      queue2.push(getLeftmost(list));
+      queue.push(getLeftmost(list));
     }
-    queue2.sort(compareX);
-    for (i = 0; i < queue2.length; i++) {
-      outerNode = eliminateHole(queue2[i], outerNode);
+    queue.sort(compareX);
+    for (i = 0; i < queue.length; i++) {
+      outerNode = eliminateHole(queue[i], outerNode);
     }
     return outerNode;
   }
@@ -34790,6 +34790,219 @@ void main() {
     ["Shit. Shit. Shit.", "Ugh. No."],
     ["Damn you to hell...", "Curse you..."]
   ];
+  var MORE_HERO = {
+    kill: [
+      ["Lie down, shit-for-brains.", "Lie down."],
+      ["Your mother should have swallowed you.", "Your mother would be disappointed."],
+      ["Splat, motherfucker.", "Splat."],
+      ["That is what you get for having a face like a slapped arse.", "That is what you get."],
+      ["Go cry to whatever fucked your mum.", "Go cry about it."],
+      ["Cheap bastard died broke. Not even a copper.", "Not even a copper."],
+      ["I have taken shits tougher than you.", "I have met puddles tougher than you."],
+      ["Off you pop, dickhead.", "Off you go."],
+      ["Another one bites the fucking dust.", "Another one bites the dust."],
+      ["Rest in pieces, cockwomble.", "Rest in pieces."],
+      ["You fought like a drunk goat with the runs.", "You fought like a drunk goat."],
+      ["Gutted like a fish, you smelly prick.", "Gutted like a fish."],
+      ["I would piss on your corpse, but I am saving it for your friends.", "Next."],
+      ["Fuck me, that was satisfying.", "That was satisfying."],
+      ["Thanks for the exercise, fuckface.", "Thanks for the exercise."],
+      ["Somebody mop up this sad sack of shit.", "Somebody mop that up."],
+      ["Twat down. Who is next?", "One down. Who is next?"],
+      ["Should have stayed in bed, wanker.", "Should have stayed in bed."],
+      ["You died like you lived. Ugly and fucking useless.", "You died like you lived."],
+      ["Bollocks to you and your whole rotten family tree.", "So much for your family tree."],
+      ["Smell that? That is you shitting yourself on the way out.", "Smell that? Fear."],
+      ["Get in the fucking ground.", "Into the ground with you."],
+      ["Daddy issues solved. Permanently.", "Problem solved."]
+    ],
+    streak: [
+      ["I am drowning in blood and I fucking love it!", "Nothing can stop me!"],
+      ["Line up, you bone-bags, I have got all night and a hard-on for violence!", "Line up, I have all night!"],
+      ["Somebody write a song about this shit!", "Somebody write a song about this!"],
+      ["Look at me! I am the god of fucking slaughter!", "Look at me go!"],
+      ["Next round is on your corpses, cunts!", "Next round is on you!"]
+    ],
+    bigkill: [
+      ["Ha! Look at his guts go! Like a pi\xF1ata full of sausages!", "Ha! What a mess!"],
+      ["Somebody is going to need a fucking bucket.", "Somebody will need a bucket."],
+      ["Blew him apart like a fat man in a privy.", "Blew him apart."],
+      ["That arm is going in my trophy pile.", "That one is going in my trophy pile."],
+      ["Heads up! Ha. Literally.", "Heads up!"],
+      ["I have got your liver on my boot, you disgusting fuck.", "Something is on my boot."],
+      ["Spaghetti and meatballs, anyone?", "Well, that was thorough."]
+    ],
+    hurt: [
+      ["Fuck me sideways!", "Ow!"],
+      ["Oh, you cheeky cunt!", "Oh, you cheeky thing!"],
+      ["Right in the fucking kidney!", "Right in the kidney!"],
+      ["My bollocks! Not the bollocks!", "Oof! Low blow!"],
+      ["Bastard bit me! Who bites?!", "It bit me! Who bites?"],
+      ["Shit on a stick, that stings!", "That stings!"],
+      ["Do that again and I will skull-fuck your eye socket!", "Do that again and you are finished!"],
+      ["Ow! Fucking ow! Fuck!", "Ow! Ow!"]
+    ],
+    low: [
+      ["I am pissing blood here, help!", "I am badly hurt!"],
+      ["If I die, burn my diary. And my fucking browser history.", "If I die, burn my diary."],
+      ["Shit. I can see my own ribs.", "I can see my own ribs."],
+      ["Mother of fuck, I am leaking.", "I am leaking."],
+      ["Not like this. Not in a fucking basement.", "Not like this."]
+    ],
+    potion: [
+      ["Tastes like a goblin jizzed in a lemon. Delicious.", "Tastes like a goblin squeezed a lemon."],
+      ["Down the hatch, up the arse. Ahh.", "Down the hatch."],
+      ["Better than sex. Well. Better than the sex I get.", "Better than a hot meal."],
+      ["Oh fuck yes, that is the good shit.", "Oh yes, that is the good stuff."]
+    ],
+    down: [
+      ["Deeper. That is what she said.", "Deeper we go."],
+      ["Down another hole. Story of my fucking love life.", "Down another hole."],
+      ["It smells like a troll farted in a tomb down here.", "It smells awful down here."],
+      ["Lower and lower. Like my standards.", "Lower and lower."],
+      ["Fuck these stairs and fuck whoever carved them.", "Curse these stairs."],
+      ["Somebody shat down here. Recently. And it was big.", "Something big lives down here."]
+    ],
+    boss: [
+      ["You are one ugly motherfucker.", "You are one ugly brute."],
+      ["I bet your mum still wipes your arse, big boy.", "Big boy, are you?"],
+      ["Bigger they are, the harder I fuck them up.", "The bigger they are, the harder they fall."],
+      ["Oh look, a boss. I am going to wear your skull as a hat.", "Oh look, a boss."],
+      ["Come on then, you overgrown bag of dicks!", "Come on then, you overgrown brute!"]
+    ],
+    bossdown: [
+      ["Who is the king now, bitch?", "Who is the king now?"],
+      ["Biggest shit I have ever taken. Figuratively.", "Biggest one yet."],
+      ["Lie there and think about what a pussy you were.", "Lie there and think about it."]
+    ],
+    loot: [
+      ["Ooh, shiny. Mine. Fuck off.", "Ooh, shiny. Mine."],
+      ["Look at that. I am getting a little stiff.", "Look at that. Lovely."],
+      ["Daddy likes.", "I like that."],
+      ["Wrap it up, I am taking it home to bed.", "Wrap it up, I am taking it home."]
+    ],
+    level: [
+      ["Bigger, harder, angrier. Like my ex.", "Bigger, harder, angrier."],
+      ["Feel that? That is pure fucking power.", "Feel that? Pure power."]
+    ],
+    town: [
+      ["Back in town. Where are the whores? I mean, the shops.", "Back in town. Where are the shops?"],
+      ["Same shitty town, same shitty people. Love it.", "Same town, same people. Love it."],
+      ["Who keeps pissing in the well? I can taste it.", "Who keeps spitting in the well?"]
+    ],
+    idle: [
+      ["Why did the skeleton not fuck anyone? He had no balls. Or the guts.", "Why did the skeleton stay home? No guts."],
+      ["What is the difference between a lich and my ex? The lich is warmer.", "A lich is warmer than my ex."],
+      ["I have seen more life in a tavern pisser.", "Dead quiet in here."],
+      ["How many skeletons does it take to light a torch? None, they just sit in the dark and wank.", "How many skeletons does it take to light a torch? None."],
+      ["I once shagged a mermaid. Never again. Fish breath AND fish fingers.", "I once met a mermaid. Fish breath."],
+      ["These dungeons have worse plumbing than my grandad.", "These dungeons have terrible plumbing."],
+      ["My sword is long, hard and covered in someone else. Just like the stories.", "My sword has seen things."],
+      ["Wet, dark, tight corridors. My kind of night.", "Wet, dark corridors. Great."],
+      ["I need a drink, a bath and a very bad decision.", "I need a drink and a bath."],
+      ["I bet the king of this place has a tiny crown. Overcompensating.", "I bet the king has a tiny crown."],
+      ["If a skeleton farts down here, is it just a breeze?", "If a skeleton sighs, is it a breeze?"],
+      ["Note to self: never lick the green walls again.", "Note to self: never touch the green walls."],
+      ["Somewhere a bard is writing a song about my arse. As he should.", "Somewhere a bard is writing about me."],
+      ["Hello? Any monsters want to die? Free stabbings!", "Hello? Any monsters out there?"],
+      ["My piss is glowing. That cannot be good.", "My water is glowing. Odd."],
+      ["I am bored. Somebody come bleed.", "I am bored."],
+      ["This place is a shithole. A haunted, damp, fucking shithole.", "This place is a damp, haunted hole."],
+      ["I would kill for a sandwich. I would kill for most things, actually.", "I would kill for a sandwich."]
+    ],
+    death: [
+      ["Fuck... tell my mum... she still owes me money...", "Tell my mum..."],
+      ["Oh, bollocks.", "Oh, no."],
+      ["Killed by a fucking... that? Embarrassing.", "Killed by that? Embarrassing."]
+    ],
+    cast: [
+      ["Eat fire, you crusty fuck!", "Eat fire!"],
+      ["Sit on this and spin!", "Spin on this!"],
+      ["Taste the rainbow, cunt!", "Taste the rainbow!"],
+      ["Here comes the pain, you shit-stain!", "Here comes the pain!"],
+      ["Abra-ca-fuck-you!", "Abracadabra!"],
+      ["Have some magic up your arse!", "Have some magic!"]
+    ]
+  };
+  var MORE_NPC = {
+    merchant: [
+      ["Touch it, you bought it. Lick it, you married it.", "Touch it, you bought it."],
+      ["Discounts are for virgins and the dead. Which are you?", "No discounts today."],
+      ["I have sold to kings and whores. You are dressed like neither.", "I have sold to kings. You are not one."],
+      ["Haggle with me again and I will shove that sword up where the sun never shines.", "Haggle again and I will raise my prices."]
+    ],
+    quest: [
+      ["Kill things, take their shit, come back. Not complicated.", "Kill things, take their loot, come back."],
+      ["Last hero who took this job came back in three bags. Good luck!", "Last hero did not come back. Good luck!"],
+      ["If you die, can I have your boots?", "If you fall, can I have your boots?"]
+    ],
+    blacksmith: [
+      ["I hammer steel all day. Your wife says I hammer other things too.", "I hammer steel all day."],
+      ["This blade could split a troll from arsehole to breakfast.", "This blade could split a troll."],
+      ["Do not fucking touch the anvil. It bites.", "Do not touch the anvil."]
+    ],
+    healer: [
+      ["Bend over, this goes in the back.", "Hold still, this will sting."],
+      ["I have pulled arrows out of places you do not want to know.", "I have pulled arrows out of strange places."],
+      ["Stop bleeding on the clean sheets, you selfish shit.", "Stop bleeding on the clean sheets."]
+    ],
+    beastmaster: [
+      ["My dog has more brains than you and he licks his own balls.", "My dog is smarter than you."],
+      ["Pets love you no matter how much of a cunt you are.", "Pets love you no matter what."]
+    ],
+    villager: [
+      ["Oi, hero! My wife says you have a nice arse. I say it is average.", "Oi, hero! My wife says hello."],
+      ["I shat in the river and now the fish talk to me. Fucking Wells.", "The fish talk to me now. Odd Wells."],
+      ["Got any spare coin? No? Then fuck off.", "Got any spare coin? No? Pity."],
+      ["You look like a goat shagged a bucket of mud.", "You look like you rolled in mud."],
+      ["My nan could clear that dungeon. Drunk. With one tit.", "My nan could clear that dungeon."],
+      ["Saw a skeleton humping a barrel last night. Real story.", "Saw a skeleton dancing on a barrel last night."],
+      ["Every hero says they will save us. Every hero comes back in a fucking jar.", "Every hero says they will save us."],
+      ["Bugger off, I am busy doing fuck all.", "Go away, I am busy."],
+      ["The tavern ale tastes like a horse pissed in a boot. Still drink it.", "The tavern ale is awful. Still drink it."],
+      ["My husband says his sword is huge. It is a fucking dagger.", "My husband boasts about his sword."],
+      ["You smell like a dead rat fucked a wet dog.", "You smell like a wet dog."],
+      ["Shit, it is the hero. Hide the good beer.", "It is the hero. Hide the good ale."],
+      ["Go kill something and stop staring at my melons. I sell melons. Stop it.", "Go kill something. I am busy selling melons."],
+      ["I have got piles the size of plums and you are blocking the road.", "You are blocking the road."],
+      ["Do you know the difference between you and a skeleton? The skeleton has a backbone.", "Even skeletons have backbones."],
+      ["Bloody heroes. All sword, no brains, and the clap.", "Bloody heroes. All sword, no brains."],
+      ["Back from the dead again? Like a fucking herpes sore.", "Back from the dead again?"],
+      ["My goat died. Not your fault. Still, fuck you.", "My goat died. Sad day."],
+      ["I would tell you a joke about the Wells but it stinks. Like your breath.", "I would tell a joke but it stinks."],
+      ["Lost three sons in that hole. Well, two. The third just likes it down there.", "Lost my sons to that hole."]
+    ]
+  };
+  var MORE_FOE = [
+    ["I will wear your skin as a fucking onesie!", "I will wear your cloak!"],
+    ["Your skull will be my piss pot!", "Your skull will be my cup!"],
+    ["I will eat your eyes like grapes!", "I will have your eyes!"],
+    ["Come closer, I want to smell your fear-shit!", "Come closer, I smell your fear!"],
+    ["Your mum screamed louder than this last night!", "Your mother screamed louder than this!"],
+    ["I am going to floss with your intestines!", "I am going to tie you in knots!"],
+    ["Look at this sweaty little cunt!", "Look at this sweaty little worm!"],
+    ["Run home and cry into your dick-sock!", "Run home and cry!"],
+    ["I will rip off your arm and beat you with it!", "I will beat you with your own arm!"],
+    ["You fight like a constipated priest!", "You fight like a tired priest!"],
+    ["Fresh meat! Tender and full of shit!", "Fresh meat!"],
+    ["Kneel and kiss my rotten arse!", "Kneel before me!"],
+    ["I will hang your bollocks from my belt!", "I will hang your trophy from my belt!"],
+    ["Stab me, you soft fucking noodle!", "Hit me, you soft noodle!"],
+    ["Even the rats laugh at you!", "Even the rats laugh at you!"],
+    ["Your god is dead and I pissed on him!", "Your god cannot help you!"]
+  ];
+  var MORE_FOE_DEATH = [
+    ["My... fucking... legs...", "My... legs..."],
+    ["Mummy...", "Mother..."],
+    ["You... absolute... cunt...", "You... wretch..."],
+    ["I shat myself... worth it...", "Ugh..."],
+    ["Not... my... dick...", "Not... like... this..."],
+    ["Tell my wife... she was shit in bed...", "Tell my wife..."]
+  ];
+  for (const k2 in MORE_HERO) (HERO[k2] ||= []).push(...MORE_HERO[k2]);
+  for (const k2 in MORE_NPC) (NPC[k2] ||= []).push(...MORE_NPC[k2]);
+  FOE.push(...MORE_FOE);
+  FOE_DEATH.push(...MORE_FOE_DEATH);
   var text = (pair) => Settings.profanity ? pair[0] : pair[1];
   var cd = 0;
   var idleT = 12;
@@ -34807,25 +35020,25 @@ void main() {
   var Barks = {
     reset() {
       cd = 2;
-      idleT = 12;
-      npcT = 8;
-      foeT = 9;
+      idleT = 6;
+      npcT = 3;
+      foeT = 4;
       streak = 0;
       streakT = 0;
     },
     hero(kind, chance = 1, hold = 2.5) {
       if (!Settings.barks || !G.player || G.player.dead || !HERO[kind]) return;
       if (cd > 0 || Math.random() > chance) return;
-      if (say(G.player, rnd(HERO[kind]), "#ffe9b0")) cd = hold + Math.random() * 2;
+      if (say(G.player, rnd(HERO[kind]), "#ffe9b0")) cd = hold * 0.5 + Math.random();
     },
     kill(enemy, big) {
       streak++;
       streakT = 6;
       if (enemy.boss) return this.hero("bossdown", 1, 0);
       if (streak >= 6 && streak % 6 === 0) return this.hero("streak", 0.8, 1);
-      if (big) return this.hero("bigkill", 0.5);
-      this.hero("kill", 0.12);
-      if (Settings.barks && Math.random() < 0.18 && !enemy.boss) say(enemy, rnd(FOE_DEATH), "#e8a090", 1.6);
+      if (big) return this.hero("bigkill", 0.9);
+      this.hero("kill", 0.4);
+      if (Settings.barks && Math.random() < 0.45 && !enemy.boss) say(enemy, rnd(FOE_DEATH), "#e8a090", 1.6);
     },
     npc(ent) {
       const key = ent.kind && NPC[ent.kind] ? ent.kind : "villager";
@@ -34838,7 +35051,7 @@ void main() {
       }
     },
     villagerLine(v2) {
-      return Settings.barks && Settings.profanity && Math.random() < 0.5 ? rnd(NPC.villager)[0] : null;
+      return Settings.barks && Settings.profanity && Math.random() < 0.85 ? rnd(NPC.villager)[0] : null;
     },
     update(dt) {
       cd -= dt;
@@ -34851,11 +35064,11 @@ void main() {
       foeT -= dt;
       const dungeon = G.level.kind === "dungeon";
       if (idleT <= 0) {
-        idleT = 25 + Math.random() * 25;
-        if (dungeon) this.hero("idle", 1, 1);
+        idleT = 9 + Math.random() * 10;
+        this.hero(dungeon ? "idle" : rnd([0, 1, 2]) ? "idle" : "town", 1, 1);
       }
       if (npcT <= 0) {
-        npcT = 8 + Math.random() * 8;
+        npcT = 3 + Math.random() * 4;
         const near = G.level.entities.filter((e) => e.type === "interact" && e.label && NPC[e.kind] && e.root.position.distanceTo(pl.root.position) < 12);
         if (near.length) {
           const e = rnd(near);
@@ -34863,7 +35076,7 @@ void main() {
         }
       }
       if (foeT <= 0) {
-        foeT = 9 + Math.random() * 9;
+        foeT = 3 + Math.random() * 4;
         const near = G.level.entities.filter((e) => e.type === "enemy" && !e.dead && e.root.visible && e.root.position.distanceTo(pl.root.position) < 11);
         if (near.length) say(rnd(near), rnd(FOE), "#ff9a8a", 2.6);
       }
@@ -39596,7 +39809,7 @@ void main() {
   }
   async function loadAll(base, onProgress) {
     const loader = new GLTFLoader();
-    const jobs = [
+    const jobs2 = [
       ...CHARS.map((n) => ["char", n, `${base}chars/${n}.glb`]),
       ...PROPS_CHAR.map((n) => ["prop", n, `${base}chars/${n}.glb`]),
       ...DUNGEON.map((n) => ["prop", n, `${base}dungeon/${n}.glb`]),
@@ -39604,7 +39817,7 @@ void main() {
       ...INTERIOR.map((n) => ["prop", n, `${base}interior/${n}.glb`])
     ];
     let done = 0;
-    await Promise.all(jobs.map(async ([kind, name, url]) => {
+    await Promise.all(jobs2.map(async ([kind, name, url]) => {
       try {
         const g2 = await fetchModel(loader, url);
         g2.scene.traverse((o2) => {
@@ -39623,7 +39836,7 @@ void main() {
         console.error("asset failed", url, e);
       }
       done++;
-      onProgress?.(done / jobs.length);
+      onProgress?.(done / jobs2.length);
     }));
     Assets.ready = true;
   }
@@ -40646,13 +40859,35 @@ void main() {
   var fullLook = (look, cls) => ({ ...defaultLook(cls, look && look.sex || "m"), ...look || {} });
   var CLEAN = /* @__PURE__ */ new Map();
   var cache = /* @__PURE__ */ new Map();
-  var queue = Promise.resolve();
+  var jobs = [];
+  var busy = false;
+  function pump() {
+    if (busy || !jobs.length) return;
+    jobs.sort((a, b2) => b2.pri - a.pri);
+    const j2 = jobs.shift();
+    busy = true;
+    j2.run().then(j2.ok, j2.fail).finally(() => {
+      busy = false;
+      pump();
+    });
+  }
+  var enqueue = (run, pri) => new Promise((ok, fail) => {
+    jobs.push({ run, pri, ok, fail });
+    pump();
+  });
   function buildReal(look, cls, kind, extra = {}) {
     const p2 = paramsFor(look, cls, kind, extra.garmentStyles, extra.armor);
     Object.assign(p2, extra.params || {});
     const key = JSON.stringify([p2.gender, p2.muscle, p2.weight, p2.height, p2.african, p2.asian, p2.caucasian, p2.skinTint, p2.eyes, p2.hair, p2.hairTint, p2.facialHair, p2.top, p2.bottom, p2.shoes, p2.accessories, p2.garmentStyles, p2.seed, p2.age, p2.breastSize, extra.detail]);
-    if (cache.has(key)) return cache.get(key);
-    const pr = queue = queue.then(() => V(p2, { animations: CLIPS, detail: extra.detail || "medium", assetsUrl: ASSET_URL }), () => V(p2, { animations: CLIPS, detail: extra.detail || "medium", assetsUrl: ASSET_URL }));
+    if (cache.has(key)) {
+      if (extra.priority) {
+        const j2 = jobs.find((x2) => x2.key === key);
+        if (j2) j2.pri = Math.max(j2.pri, extra.priority);
+      }
+      return cache.get(key);
+    }
+    const pr = enqueue(() => V(p2, { animations: CLIPS, detail: extra.detail || "medium", assetsUrl: ASSET_URL }), extra.priority || 0);
+    if (jobs.length) jobs[jobs.length - 1].key = key;
     const out2 = pr.then((res) => res).catch((e) => {
       cache.delete(key);
       console.warn("realistic character failed", e);
@@ -40822,6 +41057,21 @@ void main() {
     update(dt) {
       this.mixer.update(dt);
       modelFlashTick(this, dt);
+      if (this.twitch > 0) {
+        this.twitch -= dt;
+        const k2 = Math.min(1, this.twitch / 2) * 0.22;
+        for (const n of ["LeftArm", "RightArm", "LeftForeArm", "RightForeArm", "LeftHand", "RightHand", "LeftLeg", "RightLeg", "LeftFoot", "RightFoot", "Head"]) {
+          const b2 = this.bones[n];
+          if (!b2) continue;
+          if (Math.random() < 0.25) {
+            b2.userData.tw = (Math.random() - 0.5) * 2;
+          }
+          const w2 = b2.userData.tw || 0;
+          b2.rotation.x += w2 * k2;
+          b2.rotation.z += w2 * k2 * 0.6;
+        }
+      }
+      if (this.severed) for (const b2 of this.severed) this.bones[b2]?.scale.setScalar(1e-4);
       if (this.anims && this.anims.length && dt > 0) {
         const hb = this.bones.Hips;
         if (hb) {
@@ -41121,7 +41371,7 @@ void main() {
     if (!REAL_OK) return null;
     const al = equipment && equipment.armor ? lookOf2(equipment.armor) : null;
     const kind = opts.kind || ARMOR_KIND(al, cls);
-    const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || "medium", garmentStyles: opts.cloth, armor: al });
+    const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || "medium", garmentStyles: opts.cloth, armor: al, priority: opts.priority || 0 });
     return res ? new RealChar(res, { scale: opts.scale ?? (look && look.height || 1), look }) : null;
   }
   var EL = (o2) => ({ sex: "m", weight: 0.15, muscle: 0.2, skinTone: 1, hairStyle: "short01", hairColor: "#1a1410", beard: "none", eyes: "brown", hairHi: "", ...o2 });
@@ -41132,6 +41382,7 @@ void main() {
     skel_mage: { look: EL({ weight: 0.1, muscle: 0.15 }), kind: "robe", cloth: {}, params: { hair: "none", skinTint: "#a0a498", age: 0.85, facialHair: "none" }, scale: 1.12, weapon: "Skeleton_Staff", helm: "Skeleton_Mage_Hat" },
     brute: { look: EL({ weight: 0.9, muscle: 1 }), kind: "furs", cloth: {}, params: { hair: "none", skinTint: "#7e9a6c", age: 0.55, facialHair: "none" }, scale: 1.62, weapon: "Skeleton_Axe" }
   };
+  var enemySkin = (shape) => parseInt((ENEMY_BUILDS[shape]?.params.skinTint || "#c89a7a").slice(1), 16);
   async function buildEnemyReal(shape, o2 = {}) {
     const spec = ENEMY_BUILDS[shape];
     if (!REAL_OK || !spec) return null;
@@ -43902,7 +44153,8 @@ void main(){
     dark: [2753800, 3803662, 1704710],
     slime: [4890672, 7327546, 3832360],
     void: [4004454, 5909145, 2756688],
-    ichor: [12107840, 10133552, 13686880]
+    ichor: [12107840, 10133552, 13686880],
+    rot: [5900808, 7214092, 4720646, 8002064]
   };
   var FLESH = [8002074, 9185826, 5902352, 10107440];
   var BONE = [14735552, 13616808, 15788240, 12103824];
@@ -43990,8 +44242,18 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.dropMesh.count = 0;
       scene2.add(this.dropMesh);
       this.drops = [];
-      this.fleshMesh = new InstancedMesh(new IcosahedronGeometry(1, 0), new MeshStandardMaterial({ roughness: 0.55, flatShading: true }), MAXG);
-      this.boneMesh = new InstancedMesh(new CylinderGeometry(0.35, 0.5, 1, 5), new MeshStandardMaterial({ roughness: 0.8, flatShading: true }), MAXG);
+      const fg = new IcosahedronGeometry(1, 2);
+      {
+        const p2 = fg.attributes.position, v2 = new Vector3();
+        for (let i = 0; i < p2.count; i++) {
+          v2.fromBufferAttribute(p2, i);
+          const k2 = 1 + Math.sin(v2.x * 5.1) * 0.12 + Math.sin(v2.y * 6.3 + v2.z * 4) * 0.1 + Math.sin(v2.z * 7.7) * 0.06;
+          p2.setXYZ(i, v2.x * k2, v2.y * k2 * 0.8, v2.z * k2);
+        }
+        fg.computeVertexNormals();
+      }
+      this.fleshMesh = new InstancedMesh(fg, new MeshPhysicalMaterial({ roughness: 0.3, clearcoat: 0.9, clearcoatRoughness: 0.25, sheen: 0.4, sheenColor: new Color(16732240) }), MAXG);
+      this.boneMesh = new InstancedMesh(new CylinderGeometry(0.35, 0.5, 1, 8), new MeshStandardMaterial({ roughness: 0.6 }), MAXG);
       for (const m3 of [this.fleshMesh, this.boneMesh]) {
         m3.instanceColor = new InstancedBufferAttribute(new Float32Array(MAXG * 3), 3);
         m3.frustumCulled = false;
@@ -44113,6 +44375,437 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         }
       }
     }
+    // ---------------------------------------------------------------- dismemberment
+    // Cut a limb or the head off a realistic character: the bone is collapsed so the body shows a stump,
+    // a matching severed part flies off, the stump pumps arterial spray, and guts can spill out.
+    mats() {
+      if (this._mats) return this._mats;
+      const P3 = (o2) => new MeshPhysicalMaterial(o2);
+      this._mats = {
+        meat: P3({ color: 7998476, roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.25, sheen: 0.4, sheenColor: new Color(16728128) }),
+        fat: P3({ color: 14201994, roughness: 0.4, clearcoat: 0.5 }),
+        bone: new MeshStandardMaterial({ color: 15524552, roughness: 0.55 }),
+        marrow: new MeshStandardMaterial({ color: 9050644, roughness: 0.4 }),
+        gut: P3({ color: 12872298, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.15, sheen: 0.6, sheenColor: new Color(16752800) }),
+        gutDark: P3({ color: 8006202, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.2 }),
+        liver: P3({ color: 4853264, roughness: 0.2, clearcoat: 1 }),
+        brain: P3({ color: 14263200, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.2, sheen: 0.7, sheenColor: new Color(16761024), vertexColors: true }),
+        hair: new MeshStandardMaterial({ color: 1709072, roughness: 0.9 }),
+        eye: new MeshStandardMaterial({ color: 15261904, roughness: 0.2 }),
+        cloth: new MeshStandardMaterial({ color: 4077614, roughness: 0.95 })
+      };
+      return this._mats;
+    }
+    skinMat(hex2) {
+      this._skins = this._skins || {};
+      return this._skins[hex2] || (this._skins[hex2] = new MeshStandardMaterial({ color: hex2, roughness: 0.62 }));
+    }
+    // a wet stump face: torn meat ring, fat layer and a bone with marrow
+    stumpCap(r, M5) {
+      const g2 = new Group();
+      const meat = new Mesh(new CylinderGeometry(r * 1.02, r * 1.02, r * 0.18, 12), M5.meat);
+      g2.add(meat);
+      const fat = new Mesh(new TorusGeometry(r * 0.93, r * 0.09, 5, 14), M5.fat);
+      fat.rotation.x = Math.PI / 2;
+      fat.position.y = r * 0.08;
+      g2.add(fat);
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * 6.28 + rnd2();
+        const shred = new Mesh(new ConeGeometry(r * 0.16, r * R3(0.3, 0.7), 4), M5.meat);
+        shred.position.set(Math.cos(a) * r * 0.8, r * 0.18, Math.sin(a) * r * 0.8);
+        shred.rotation.set(R3(-0.6, 0.6), 0, R3(-0.6, 0.6));
+        g2.add(shred);
+      }
+      const bn = new Mesh(new CylinderGeometry(r * 0.3, r * 0.34, r * 0.7, 8), M5.bone);
+      bn.position.y = r * 0.3;
+      g2.add(bn);
+      const mar = new Mesh(new CircleGeometry(r * 0.17, 8), M5.marrow);
+      mar.rotation.x = -Math.PI / 2;
+      mar.position.y = r * 0.66;
+      g2.add(mar);
+      return g2;
+    }
+    // procedural skin: pores, fine creases, veins and bruising; used as both colour detail and bump
+    skinTex() {
+      if (this._skinTex) return this._skinTex;
+      const S3 = 256, c2 = document.createElement("canvas");
+      c2.width = c2.height = S3;
+      const g2 = c2.getContext("2d");
+      g2.fillStyle = "#e8e8e8";
+      g2.fillRect(0, 0, S3, S3);
+      const id = g2.getImageData(0, 0, S3, S3), d2 = id.data;
+      for (let i = 0; i < S3 * S3; i++) {
+        const n = 225 + (rnd2() - 0.5) * 34;
+        d2[i * 4] = d2[i * 4 + 1] = d2[i * 4 + 2] = n;
+      }
+      g2.putImageData(id, 0, 0);
+      for (let i = 0; i < 900; i++) {
+        g2.fillStyle = `rgba(90,60,60,${R3(0.08, 0.25)})`;
+        g2.beginPath();
+        g2.arc(rnd2() * S3, rnd2() * S3, R3(0.4, 1.3), 0, 6.28);
+        g2.fill();
+      }
+      g2.strokeStyle = "rgba(70,80,140,0.22)";
+      g2.lineWidth = 1.2;
+      for (let i = 0; i < 14; i++) {
+        let x2 = rnd2() * S3, y2 = rnd2() * S3;
+        g2.beginPath();
+        g2.moveTo(x2, y2);
+        for (let k2 = 0; k2 < 8; k2++) {
+          x2 += R3(-14, 14);
+          y2 += R3(6, 18);
+          g2.lineTo(x2, y2);
+        }
+        g2.stroke();
+      }
+      for (let i = 0; i < 5; i++) {
+        const x2 = rnd2() * S3, y2 = rnd2() * S3, r = R3(12, 30), gr = g2.createRadialGradient(x2, y2, 0, x2, y2, r);
+        gr.addColorStop(0, "rgba(90,40,90,0.35)");
+        gr.addColorStop(1, "rgba(90,40,90,0)");
+        g2.fillStyle = gr;
+        g2.fillRect(x2 - r, y2 - r, r * 2, r * 2);
+      }
+      g2.strokeStyle = "rgba(60,40,40,0.18)";
+      g2.lineWidth = 0.8;
+      for (let i = 0; i < 60; i++) {
+        const x2 = rnd2() * S3, y2 = rnd2() * S3;
+        g2.beginPath();
+        g2.moveTo(x2, y2);
+        g2.lineTo(x2 + R3(-8, 8), y2 + R3(-2, 2));
+        g2.stroke();
+      }
+      const tex2 = new CanvasTexture(c2);
+      tex2.wrapS = tex2.wrapT = RepeatWrapping;
+      tex2.colorSpace = SRGBColorSpace;
+      tex2.repeat.set(2, 2);
+      return this._skinTex = tex2;
+    }
+    partSkin(hex2) {
+      this._pskins = this._pskins || {};
+      if (this._pskins[hex2]) return this._pskins[hex2];
+      const tx = this.skinTex();
+      return this._pskins[hex2] = new MeshPhysicalMaterial({ color: hex2, map: tx, bumpMap: tx, bumpScale: 0.6, roughness: 0.55, sheen: 0.5, sheenColor: new Color(16738906), sheenRoughness: 0.6, vertexColors: true, clearcoat: 0.15, clearcoatRoughness: 0.6 });
+    }
+    // blood smear: vertex colours go from skin (white) to wet blood near the cut, with drip streaks running away from it
+    bloodify(geo2, cutY, dirSign, len, skin) {
+      const pos = geo2.attributes.position, n = pos.count, col2 = new Float32Array(n * 3);
+      const sk = new Color(skin), bl = new Color(5899782);
+      const rr = Math.min(1, bl.r / Math.max(0.05, sk.r)), gg = Math.min(1, bl.g / Math.max(0.05, sk.g)), bb = Math.min(1, bl.b / Math.max(0.05, sk.b));
+      const seed = rnd2() * 100;
+      for (let i = 0; i < n; i++) {
+        const x2 = pos.getX(i), y2 = pos.getY(i), z2 = pos.getZ(i);
+        const d2 = Math.abs(y2 - cutY) / len, ang = Math.atan2(z2, x2);
+        const streak2 = Math.max(0, Math.sin(ang * 5 + seed) * Math.sin(ang * 3.1 + seed * 2)) * 0.35;
+        const f2 = Math.min(1, Math.max(0, 1 - (d2 - streak2) / (0.12 + streak2 * 0.6)) + (rnd2() < 0.04 ? 0.6 : 0));
+        col2[i * 3] = 1 + (rr - 1) * f2;
+        col2[i * 3 + 1] = 1 + (gg - 1) * f2;
+        col2[i * 3 + 2] = 1 + (bb - 1) * f2;
+      }
+      geo2.setAttribute("color", new BufferAttribute(col2, 3));
+    }
+    // anatomical limb: a lathe through a radius profile (shoulder, bicep, elbow, forearm, wrist...),
+    // slightly flattened, with a ragged torn edge at the cut
+    latheLimb(profile, len, flat = 0.86) {
+      const pts = profile.map(([t, r]) => new Vector2(r, -t * len));
+      const geo2 = new LatheGeometry(pts, 22);
+      const p2 = geo2.attributes.position;
+      for (let i = 0; i < p2.count; i++) {
+        const y2 = p2.getY(i), x2 = p2.getX(i), z2 = p2.getZ(i);
+        let k2 = 1;
+        if (y2 > -len * 0.035) k2 += (rnd2() - 0.3) * 0.28;
+        p2.setXYZ(i, x2 * k2, y2 + (y2 > -len * 0.02 ? (rnd2() - 0.5) * len * 0.03 : 0), z2 * k2 * flat);
+      }
+      geo2.computeVertexNormals();
+      return geo2;
+    }
+    hand(S3, r, g2, y2) {
+      const palm = new Mesh(new SphereGeometry(r * 1.05, 12, 10), S3);
+      palm.scale.set(1.05, 1.6, 0.5);
+      palm.position.y = y2 - r * 1.4;
+      g2.add(palm);
+      for (let i = 0; i < 4; i++) {
+        const fx = (i - 1.5) * r * 0.5, base = y2 - r * 2.9, curl = R3(0.4, 1.2);
+        const f1 = new Mesh(new CapsuleGeometry(r * 0.19, r * 0.75, 3, 8), S3);
+        f1.position.set(fx, base, r * 0.1);
+        f1.rotation.x = curl * 0.6;
+        g2.add(f1);
+        const f2 = new Mesh(new CapsuleGeometry(r * 0.17, r * 0.6, 3, 8), S3);
+        f2.position.set(fx, base - r * 0.7, r * 0.1 + Math.sin(curl) * r * 0.55);
+        f2.rotation.x = curl * 1.5;
+        g2.add(f2);
+      }
+      const th = new Mesh(new CapsuleGeometry(r * 0.22, r * 0.8, 3, 8), S3);
+      th.position.set(r * 1, y2 - r * 1.9, r * 0.35);
+      th.rotation.set(0.6, 0, 0.7);
+      g2.add(th);
+    }
+    severedPart(kind, s2, skin, hair) {
+      const M5 = this.mats(), S3 = this.partSkin(skin), g2 = new Group();
+      const limb = (profile, len, r0, end) => {
+        const geo2 = this.latheLimb(profile, len);
+        this.bloodify(geo2, 0, 1, len, skin);
+        g2.add(new Mesh(geo2, S3));
+        g2.add(this.stumpCap(r0 * 0.95, M5));
+        if (end === "hand") this.hand(S3, profile[profile.length - 1][1] * 1.05, g2, -len);
+        if (end === "foot") {
+          const r = profile[profile.length - 1][1];
+          const boot = new Mesh(new CapsuleGeometry(r * 0.95, r * 2.6, 4, 10), M5.cloth);
+          boot.rotation.x = Math.PI / 2;
+          boot.position.set(0, -len - r * 0.6, r * 1.2);
+          g2.add(boot);
+          const sole = new Mesh(new BoxGeometry(r * 1.9, r * 0.35, r * 4.4), M5.hair);
+          sole.position.set(0, -len - r * 1.45, r * 1.2);
+          g2.add(sole);
+        }
+        g2.userData.len = len;
+      };
+      if (kind === "head") {
+        const r = 0.105;
+        const hg = new SphereGeometry(r, 28, 22);
+        {
+          const p2 = hg.attributes.position;
+          for (let i = 0; i < p2.count; i++) {
+            let x2 = p2.getX(i), y2 = p2.getY(i), z2 = p2.getZ(i);
+            const low = Math.max(0, -y2 / r);
+            x2 *= 0.88 - low * 0.18;
+            z2 *= 1.05 + (z2 < 0 ? 0.06 : 0) - low * 0.1;
+            y2 *= 1.12;
+            if (z2 > r * 0.6 && Math.abs(y2) < r * 0.2) z2 += r * 0.04;
+            p2.setXYZ(i, x2, y2, z2);
+          }
+          hg.computeVertexNormals();
+        }
+        this.bloodify(hg, -r * 1.1, 1, r * 3, skin);
+        const hd = new Mesh(hg, S3);
+        hd.position.y = r * 1.25;
+        g2.add(hd);
+        const nose = new Mesh(new ConeGeometry(r * 0.14, r * 0.4, 8), S3);
+        nose.rotation.x = Math.PI / 2 - 0.25;
+        nose.position.set(0, r * 1.18, r * 1);
+        g2.add(nose);
+        const brow = new Mesh(new CapsuleGeometry(r * 0.09, r * 0.8, 3, 8), S3);
+        brow.rotation.z = Math.PI / 2;
+        brow.position.set(0, r * 1.5, r * 0.84);
+        g2.add(brow);
+        for (const sx of [-1, 1]) {
+          const ear = new Mesh(new SphereGeometry(r * 0.22, 10, 8), S3);
+          ear.scale.set(0.35, 1, 0.7);
+          ear.position.set(sx * r * 0.9, r * 1.25, 0);
+          g2.add(ear);
+          const e = new Mesh(new SphereGeometry(r * 0.13, 10, 8), M5.eye);
+          e.position.set(sx * r * 0.36, r * 1.33, r * 0.82);
+          g2.add(e);
+          const iris = new Mesh(new SphereGeometry(r * 0.065, 8, 6), M5.hair);
+          iris.position.set(sx * r * 0.36 + (rnd2() - 0.5) * r * 0.05, r * 1.3, r * 0.93);
+          g2.add(iris);
+          const lid = new Mesh(new SphereGeometry(r * 0.145, 10, 6, 0, 6.28, 0, 1.3), S3);
+          lid.position.copy(e.position);
+          lid.rotation.x = R3(0.2, 0.9);
+          g2.add(lid);
+        }
+        const mouth = new Mesh(new SphereGeometry(r * 0.2, 10, 6), M5.marrow);
+        mouth.scale.set(1.3, R3(0.25, 0.7), 0.4);
+        mouth.position.set(0, r * 0.8, r * 0.88);
+        g2.add(mouth);
+        if (hair) {
+          const hr = new Mesh(new SphereGeometry(r * 1.05, 18, 10, 0, 6.28, 0, 1.45), M5.hair);
+          hr.scale.set(0.9, 1.12, 1.1);
+          hr.position.y = r * 1.3;
+          hr.rotation.x = -0.3;
+          g2.add(hr);
+        }
+        const ng = this.latheLimb([[0, 0.5 * r], [0.5, 0.48 * r], [1, 0.55 * r]], r * 0.7);
+        this.bloodify(ng, -r * 0.7, 1, r * 0.7, skin);
+        const neck = new Mesh(ng, S3);
+        neck.rotation.x = Math.PI;
+        neck.position.y = -r * 0.25;
+        g2.add(neck);
+        const cap = this.stumpCap(r * 0.5, M5);
+        cap.rotation.x = Math.PI;
+        cap.position.y = -r * 0.25;
+        g2.add(cap);
+        const pipe2 = new Mesh(new TorusGeometry(r * 0.12, r * 0.045, 6, 12), M5.gutDark);
+        pipe2.rotation.x = Math.PI / 2;
+        pipe2.position.set(0, -r * 0.33, r * 0.2);
+        g2.add(pipe2);
+        const spine = new Mesh(new CylinderGeometry(r * 0.11, r * 0.12, r * 0.35, 8), M5.bone);
+        spine.position.set(0, -r * 0.4, -r * 0.18);
+        g2.add(spine);
+        if (rnd2() < 0.5) {
+          const br = new Mesh(this.brainGeo(r * 0.55), M5.brain);
+          br.position.set(R3(-0.3, 0.3) * r, r * 2.05, -r * 0.2);
+          g2.add(br);
+          for (let i = 0; i < 4; i++) {
+            const f2 = new Mesh(new SphereGeometry(r * 0.3, 6, 4, 0, 1.6, 0, 1), M5.bone);
+            f2.material.side = DoubleSide;
+            f2.position.set(R3(-0.6, 0.6) * r, r * 2, R3(-0.5, 0.3) * r);
+            f2.rotation.set(rnd2() * 3, rnd2() * 3, rnd2() * 3);
+            g2.add(f2);
+          }
+        }
+        g2.userData.len = r * 2.4;
+        g2.userData.round = true;
+      } else if (kind === "arm") limb([[0, 0.058], [0.08, 0.06], [0.25, 0.054], [0.4, 0.047], [0.5, 0.041], [0.62, 0.045], [0.82, 0.036], [1, 0.029]], 0.56, 0.058, "hand");
+      else if (kind === "forearm") limb([[0, 0.044], [0.25, 0.046], [0.6, 0.037], [1, 0.029]], 0.27, 0.044, "hand");
+      else if (kind === "thigh") limb([[0, 0.088], [0.12, 0.09], [0.35, 0.078], [0.52, 0.058], [0.6, 0.055], [0.72, 0.06], [0.9, 0.043], [1, 0.038]], 0.84, 0.088, "foot");
+      else if (kind === "shin") limb([[0, 0.058], [0.2, 0.062], [0.65, 0.045], [1, 0.038]], 0.44, 0.058, "foot");
+      g2.scale.setScalar(s2);
+      g2.traverse((o2) => {
+        if (o2.isMesh) o2.castShadow = true;
+      });
+      return g2;
+    }
+    // brain tissue: folded (gyri and sulci) by displacing a sphere, with dark blood in the grooves
+    brainGeo(r) {
+      const g2 = new SphereGeometry(r, 26, 20), p2 = g2.attributes.position, col2 = new Float32Array(p2.count * 3);
+      const s2 = rnd2() * 10, v2 = new Vector3();
+      for (let i = 0; i < p2.count; i++) {
+        v2.fromBufferAttribute(p2, i).normalize();
+        const f2 = Math.sin(v2.x * 17 + s2) * Math.sin(v2.y * 19 + s2 * 1.3) + Math.sin(v2.z * 21 + v2.x * 9 + s2 * 0.7) * 0.8;
+        const fold = Math.abs(f2) < 0.35 ? -0.09 : 0.03 * f2;
+        const mid = Math.abs(v2.x) < 0.06 ? -0.12 : 0;
+        const k2 = 1 + fold + mid;
+        p2.setXYZ(i, v2.x * r * k2 * 0.86, v2.y * r * k2 * 0.72, v2.z * r * k2 * 1.05);
+        const dark = fold < 0 || mid < 0 ? 0.55 : 1;
+        col2[i * 3] = dark;
+        col2[i * 3 + 1] = dark * (fold < 0 ? 0.6 : 1);
+        col2[i * 3 + 2] = dark * (fold < 0 ? 0.6 : 1);
+      }
+      g2.setAttribute("color", new BufferAttribute(col2, 3));
+      g2.computeVertexNormals();
+      return g2;
+    }
+    // a skull bursts: brain chunks, skull fragments and grey-pink spatter
+    brains(pos, from, size = 1) {
+      if (this.level < 1) return;
+      const M5 = this.mats();
+      const dir = from ? new Vector3(pos.x - from.x, 0, pos.z - from.z).normalize() : new Vector3(rnd2() - 0.5, 0, rnd2() - 0.5).normalize();
+      const n = this.mobile ? 3 : 5;
+      for (let i = 0; i < n; i++) {
+        const b2 = new Mesh(this.brainGeo(R3(0.03, 0.06) * size), M5.brain);
+        b2.castShadow = true;
+        const v2 = new Vector3(dir.x * R3(1, 4) + R3(-1.5, 1.5), R3(2.5, 5.5), dir.z * R3(1, 4) + R3(-1.5, 1.5));
+        this.addPart(b2, pos.clone(), v2, Infinity);
+      }
+      for (let i = 0; i < 6; i++) {
+        const sk = new Mesh(new SphereGeometry(R3(0.03, 0.05) * size, 6, 4, 0, R3(1, 2.2), 0, R3(0.8, 1.4)), M5.bone);
+        sk.material.side = DoubleSide;
+        this.addPart(sk, pos.clone(), new Vector3(dir.x * R3(1, 5) + R3(-2, 2), R3(2, 6), dir.z * R3(1, 5) + R3(-2, 2)), Infinity);
+      }
+      for (let i = 0; i < 4; i++) {
+        const a = Math.atan2(dir.z, dir.x) + R3(-0.7, 0.7), d2 = R3(0.4, 1.8);
+        this.splat(pos.x + Math.cos(a) * d2, pos.z + Math.sin(a) * d2, R3(0.4, 0.9), 10119784, 0.85);
+      }
+      this.hit(pos.clone().setY(pos.y - 1), "red", 1, from);
+    }
+    // flying parts are full meshes (few at a time), simulated like gibs
+    addPart(obj, p2, v2, life = 30) {
+      this.parts = this.parts || [];
+      const MAX2 = this.mobile ? 24 : 70;
+      if (this.parts.length >= MAX2) {
+        const o2 = this.parts.shift();
+        o2.obj.parent?.remove(o2.obj);
+      }
+      obj.position.copy(p2);
+      this.scene.add(obj);
+      this.parts.push({ obj, v: v2, ang: new Vector3(R3(-9, 9), R3(-6, 6), R3(-9, 9)), t: 0, life, rest: false, bounces: 0, trail: true });
+    }
+    // pumping arterial spray from a point that follows a bone
+    spurt(bone, dir, dur = 2.6, kind = "red", strength = 1) {
+      this.spurts = this.spurts || [];
+      if (this.spurts.length > 10) this.spurts.shift();
+      this.spurts.push({ bone, dir: dir.clone(), t: 0, dur, kind, strength });
+    }
+    // a tangle of intestines spilling out of a body onto the floor
+    entrails(pos, dir, size = 1) {
+      if (this.level < 1) return;
+      const M5 = this.mats();
+      const loops = this.mobile ? 2 : 3 + (rnd2() * 2 | 0);
+      for (let k2 = 0; k2 < loops; k2++) {
+        const pts = [];
+        let x2 = 0, z2 = 0;
+        const a0 = Math.atan2(dir.z, dir.x) + R3(-0.9, 0.9);
+        const n = 9 + (rnd2() * 5 | 0);
+        for (let i = 0; i < n; i++) {
+          const a = a0 + Math.sin(i * 1.3 + k2) * 1.4;
+          x2 += Math.cos(a) * 0.17 * size;
+          z2 += Math.sin(a) * 0.17 * size;
+          pts.push(new Vector3(x2, 0.05 + (i < 2 ? 0.35 - i * 0.15 : rnd2() * 0.04) * size, z2));
+        }
+        const geo2 = new TubeGeometry(new CatmullRomCurve3(pts), n * 6, R3(0.035, 0.05) * size, 8, false);
+        const m3 = new Mesh(geo2, rnd2() < 0.7 ? M5.gut : M5.gutDark);
+        m3.castShadow = true;
+        m3.position.set(pos.x, 0, pos.z);
+        this.addStatic(m3);
+        this.splat(pos.x + x2 * 0.6, pos.z + z2 * 0.6, R3(1, 1.6) * size, "red", 0.92);
+      }
+      for (let i = 0; i < 3; i++) {
+        const o2 = new Mesh(new SphereGeometry(R3(0.06, 0.11) * size, 10, 8), i === 0 ? M5.liver : i === 1 ? M5.meat : M5.gutDark);
+        o2.scale.set(1.4, 0.6, 1);
+        const a = rnd2() * 6.28, d2 = R3(0.2, 0.7) * size;
+        this.addPart(o2, new Vector3(pos.x, 0.9 * size, pos.z), new Vector3(Math.cos(a) * d2 * 4 + dir.x * 2, R3(2, 4), Math.sin(a) * d2 * 4 + dir.z * 2), Infinity);
+      }
+    }
+    addStatic(m3) {
+      this.statics = this.statics || [];
+      const MAX2 = this.mobile ? 16 : 48;
+      if (this.statics.length >= MAX2) {
+        const o2 = this.statics.shift();
+        o2.m.parent?.remove(o2.m);
+      }
+      this.scene.add(m3);
+      this.statics.push({ m: m3, t: 0 });
+    }
+    // cut parts off a RealChar. `cuts` is how many; `from` is where the blow came from.
+    dismember(rc, pos, kind, size = 1, cuts = 1, from = null, skin = 13146746, hair = true) {
+      if (!this.level || !rc || !rc.bones || kind === "none") return [];
+      const PARTS = [
+        ["Head", "head", "Neck"],
+        ["LeftArm", "arm"],
+        ["RightArm", "arm"],
+        ["LeftForeArm", "forearm"],
+        ["RightForeArm", "forearm"],
+        ["LeftUpLeg", "thigh"],
+        ["RightUpLeg", "thigh"],
+        ["LeftLeg", "shin"],
+        ["RightLeg", "shin"]
+      ].filter(([b2]) => rc.bones[b2]);
+      const done = [];
+      const dir = from ? new Vector3(pos.x - from.x, 0, pos.z - from.z).normalize() : new Vector3(rnd2() - 0.5, 0, rnd2() - 0.5).normalize();
+      const blood = kind === "bone" ? "rot" : kind;
+      rc.severed = rc.severed || /* @__PURE__ */ new Set();
+      rc.root.updateMatrixWorld(true);
+      const wp = (n) => rc.bones[n].getWorldPosition(new Vector3());
+      const unit = rc.bones.LeftArm && rc.bones.LeftForeArm ? Math.min(3, Math.max(0.5, wp("LeftArm").distanceTo(wp("LeftForeArm")) / 0.28)) : Math.max(0.6, rc.root.scale.x);
+      for (let k2 = 0; k2 < cuts && PARTS.length; k2++) {
+        const idx = rnd2() < 0.4 && PARTS[0][0] === "Head" ? 0 : rnd2() * PARTS.length | 0;
+        const [bn, type] = PARTS.splice(idx, 1)[0];
+        if ([...rc.severed].some((s2) => s2.replace("Fore", "").replace("Up", "") === bn.replace("Fore", "").replace("Up", ""))) continue;
+        const bone = rc.bones[bn];
+        rc.root.updateMatrixWorld(true);
+        const p2 = bone.getWorldPosition(new Vector3());
+        const q = bone.getWorldQuaternion(new Quaternion());
+        rc.severed.add(bn);
+        if (type === "head" && this.level >= 1 && rnd2() < 0.35) {
+          rc.severed.add(bn);
+          this.brains(p2, from, unit);
+          this.spurt(rc.bones.Neck || bone.parent, new Vector3(0, 1, 0), 3.4, blood, 1.5);
+          done.push(bn);
+          continue;
+        }
+        const part = this.severedPart(type, unit, skin, hair && type === "head");
+        part.quaternion.copy(q);
+        if (type !== "head") part.rotateX(Math.PI);
+        const v2 = new Vector3(dir.x * R3(2, 5) + R3(-1.5, 1.5), R3(3, 6.5), dir.z * R3(2, 5) + R3(-1.5, 1.5));
+        this.addPart(part, p2, v2, Infinity);
+        const stumpBone = type === "head" ? rc.bones.Neck || rc.bones.Spine2 || bone.parent : bone.parent;
+        this.spurt(stumpBone, type === "head" ? new Vector3(0, 1, 0) : dir.clone().setY(0.6), type === "head" ? 3.4 : 2.4, blood, type === "head" || type === "thigh" ? 1.4 : 1);
+        this.hit(p2, blood, 0.9, from);
+        done.push(bn);
+      }
+      if (done.length) sfx("bonecrack");
+      return done;
+    }
     clear() {
       this.drops.length = 0;
       this.gibs.length = 0;
@@ -44123,6 +44816,11 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.dropMesh.count = 0;
       this.fleshMesh.count = 0;
       this.boneMesh.count = 0;
+      for (const o2 of this.parts || []) o2.obj.parent?.remove(o2.obj);
+      for (const o2 of this.statics || []) o2.m.parent?.remove(o2.m);
+      this.parts = [];
+      this.statics = [];
+      this.spurts = [];
     }
     update(dt) {
       const m3 = this._m, q = this._q, e = this._e, s2 = this._s, p2 = this._p, c2 = this._c;
@@ -44211,6 +44909,60 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         mesh.instanceMatrix.needsUpdate = true;
         mesh.instanceColor.needsUpdate = true;
       }
+      for (let i = (this.parts || []).length - 1; i >= 0; i--) {
+        const P3 = this.parts[i], o2 = P3.obj;
+        P3.t += dt;
+        if (!P3.rest) {
+          P3.v.y -= 16 * dt;
+          o2.position.addScaledVector(P3.v, dt);
+          o2.rotation.x += P3.ang.x * dt;
+          o2.rotation.y += P3.ang.y * dt;
+          o2.rotation.z += P3.ang.z * dt;
+          if (P3.trail && rnd2() < dt * 30) this.droplet(o2.position, new Vector3(R3(-0.6, 0.6), R3(0.2, 1), R3(-0.6, 0.6)), R3(0.02, 0.05), this.pick("red"));
+          const floor = 0.06 * o2.scale.x;
+          if (o2.position.y <= floor) {
+            o2.position.y = floor;
+            if (P3.bounces < 2 && Math.abs(P3.v.y) > 1.5) {
+              P3.v.y *= -0.3;
+              P3.v.x *= 0.5;
+              P3.v.z *= 0.5;
+              P3.ang.multiplyScalar(0.4);
+              P3.bounces++;
+              this.splat(o2.position.x, o2.position.z, R3(0.6, 1.1), "red", 0.9);
+            } else {
+              P3.rest = true;
+              const yaw = rnd2() * 6.28;
+              o2.rotation.set(Math.PI / 2, 0, yaw);
+              o2.position.y = 0.05 * o2.scale.x;
+              this.pool(o2.position.x, o2.position.z, R3(0.7, 1.2), "red");
+            }
+          }
+        }
+        if (P3.t > P3.life) {
+          o2.scale.multiplyScalar(0.94);
+          if (o2.scale.x < 0.05) {
+            o2.parent?.remove(o2);
+            this.parts.splice(i, 1);
+          }
+        }
+      }
+      for (let i = (this.statics || []).length - 1; i >= 0; i--) {
+        const S3 = this.statics[i];
+        S3.t += dt;
+      }
+      for (let i = (this.spurts || []).length - 1; i >= 0; i--) {
+        const S3 = this.spurts[i];
+        S3.t += dt;
+        if (S3.t > S3.dur || !S3.bone || !S3.bone.parent) {
+          this.spurts.splice(i, 1);
+          continue;
+        }
+        const beat = Math.max(0, Math.sin(S3.t * 9)) * (1 - S3.t / S3.dur);
+        if (beat < 0.2) continue;
+        const at = S3.bone.getWorldPosition(this._p.clone());
+        const k2 = Math.ceil(3 * beat * S3.strength * (this.mobile ? 0.5 : 1));
+        for (let j2 = 0; j2 < k2; j2++) this.droplet(at, new Vector3(S3.dir.x * R3(1, 3) + R3(-0.4, 0.4), R3(1.5, 3.5) * beat * S3.strength + S3.dir.y, S3.dir.z * R3(1, 3) + R3(-0.4, 0.4)), R3(0.02, 0.05), this.pick(S3.kind));
+      }
       for (let i = this.pools.length - 1; i >= 0; i--) {
         const P3 = this.pools[i];
         P3.t += dt;
@@ -44245,7 +44997,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   function goreKind(data) {
     if (!data) return "red";
     const sh = data.shape || "";
-    if (sh.startsWith("skel")) return /Venom|Verd/.test(data.name || "") ? "ichor" : "bone";
+    if (sh.startsWith("skel")) return /Venom|Verd/.test(data.name || "") ? "ichor" : "rot";
     if (sh === "wisp") return "none";
     if (sh === "blob") return /Horror|Void/.test(data.name || "") ? "void" : "slime";
     if (/Abyssal|Void|Hollow/.test(data.name || "")) return "dark";
@@ -44495,6 +45247,12 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.lastHit = null;
       this.hitAnimCd = 0;
       this.refreshVisuals();
+      if (REAL_OK && Settings.realistic !== false) {
+        this.model.root.visible = false;
+        this.standIn = setTimeout(() => {
+          if (this.model && !this.model.isReal) this.model.root.visible = true;
+        }, 45e3);
+      }
       this.upgradeReal();
     }
     // swap the stylised stand-in for the realistic human once it has been built
@@ -44505,8 +45263,13 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls), armorKey(al)].join("|");
       if (this.realKey === key) return;
       this.realKey = key;
-      const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { armor: al, detail: typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches ? "low" : "medium" });
-      if (!res || this.realKey !== key || this.gone) return;
+      const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { armor: al, priority: 10, detail: typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches ? "low" : "medium" });
+      if (!res) {
+        if (this.model && !this.model.isReal) this.model.root.visible = true;
+        return;
+      }
+      if (this.realKey !== key || this.gone) return;
+      clearTimeout(this.standIn);
       const old = this.model;
       const rc = new RealChar(res, { scale: look.height || 1, look });
       rc.play(old.baseName || "Idle", 0);
@@ -44560,7 +45323,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       G.main.gore.hit(this.pos, "red", Math.min(1, d2 / maxHp() * 2.5), null);
       G.main.onPlayerHurt?.(d2);
       if (G.hp > 0 && G.hp / maxHp() < 0.25) Barks.hero("low", 0.5, 8);
-      else if (d2 / maxHp() > 0.12) Barks.hero("hurt", 0.4);
+      else if (d2 / maxHp() > 0.06) Barks.hero("hurt", 0.7);
       G.main.hurtFlash(d2 / maxHp());
       sfx("hurt");
       if (G.hp <= 0) {
@@ -44856,16 +45619,19 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     const fallback = () => {
       if (!e.dead && e.model) e.model.visible = true;
     };
-    const timer = setTimeout(fallback, 6e3);
-    buildEnemyReal(d2.shape, { scale: e.realScale / 1.15, tint: d2.tint, emissive: boss ? d2.final ? 3803770 : 5574912 : elite ? 3351040 : d2.emissive, emissiveIntensity: 0.5 }).then((rc) => {
+    const timer = setTimeout(fallback, 45e3);
+    const tryBuild = (n) => buildEnemyReal(d2.shape, { scale: e.realScale / 1.15, tint: d2.tint, emissive: boss ? d2.final ? 3803770 : 5574912 : elite ? 3351040 : d2.emissive, emissiveIntensity: 0.5 }).catch(() => null).then((rc) => rc || n >= 2 ? rc : new Promise((r) => setTimeout(r, 3e3)).then(() => tryBuild(n + 1)));
+    tryBuild(0).then((rc) => {
       clearTimeout(timer);
-      if (!rc || !e.root.parent && e.removed) return fallback();
+      if (!rc) return fallback();
+      if (e.gone) return;
       const old = e.char, oldModel = e.model;
       e.root.remove(oldModel);
       e.char = rc;
       e.model = rc.root;
       e.root.add(rc.root);
-      if (e.dormant) rc.once("Skeletons_Inactive_Floor_Pose", { hold: true });
+      if (e.dead) rc.once("Death_A", { hold: true });
+      else if (e.dormant) rc.once("Skeletons_Inactive_Floor_Pose", { hold: true });
       else rc.play("Idle");
       old?.dispose?.();
     }).catch(fallback);
@@ -44908,7 +45674,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.pickH = (d2.shape === "beast" || d2.shape === "blob" ? 0.5 : 1) * s2;
       this.blob(0.5 * s2 * (d2.shape === "brute" ? 1.35 : d2.shape === "beast" ? 1.2 : 1));
       if (elite || boss) {
-        ring(this.root, 0.9 * s2, boss ? 16724770 : 16763955);
+        this.ring = ring(this.root, 0.9 * s2, boss ? 16724770 : 16763955);
         this.label = { text: boss ? d2.name : `Champion ${d2.name}`, color: boss ? "#ff6644" : "#ffcc33", y: 2.4 * s2, always: true };
       }
       if (this.wantReal) upgradeEnemy(this, d2, boss, elite);
@@ -44934,8 +45700,10 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (!this.dormant) return;
       this.dormant = false;
       this.stunT = 1.4;
-      this.char.oneShot = null;
-      this.char.once("Skeletons_Awaken_Floor", { timeScale: 1.6 });
+      if (this.char) {
+        this.char.oneShot = null;
+        this.char.once("Skeletons_Awaken_Floor", { timeScale: 1.6 });
+      }
       G.main.fx.emit(this.pos.clone().setY(0.2), { count: 20, color: 10127984, speed: 2, life: 0.8, size: 0.6, rise: 1 });
     }
     // damage over time (poison, burning). Stacks by kind: a new application refreshes and keeps the stronger one.
@@ -44975,6 +45743,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (kind === "storm" && Math.random() < stunChance()) this.stunT = Math.max(this.stunT || 0, 0.5);
       this.hp -= d2;
       this.lastDmg = d2;
+      this.lastCrit = !!crit;
       this.aggro = true;
       this.hitT = 0.15;
       this.char?.flash?.(crit ? 1.6 : 1);
@@ -45025,7 +45794,22 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         if (lk) G.hp = Math.min(maxHp(), G.hp + lk);
         if (mk) G.mp = Math.min(maxMp(), G.mp + mk);
       }
-      if (big && Settings.gore === "max" && goreKind(this.data) !== "none") {
+      const gk = goreKind(this.data), real = this.char && this.char.isReal;
+      this.deathT = this.char ? this.char.isReal && Settings.gore !== "off" ? 5 : 2.6 : 0.6;
+      if (this.char && this.char.isReal && Settings.gore !== "off") this.char.twitch = 1.5 + Math.random() * 2.5;
+      if (real && Settings.gore !== "off" && gk !== "none") {
+        const max = Settings.gore === "max";
+        const from = G.player ? G.player.pos : null;
+        const cuts = big ? max ? 3 + (Math.random() * 3 | 0) : 1 : this.boss ? 2 : this.lastCrit || Math.random() < (max ? 0.45 : 0.15) ? 1 : 0;
+        if (cuts) {
+          G.main.gore.dismember(this.char, this.pos, gk, 1, cuts, from, enemySkin(this.data.shape), false);
+          G.main.sfxGore?.();
+        }
+        if (max && (big || this.boss || Math.random() < 0.25)) {
+          const d2 = from ? this.pos.clone().sub(from).setY(0).normalize() : new Vector3(1, 0, 0);
+          G.main.gore.entrails(this.pos, d2, Math.max(1, this.char.root.scale.x * 0.9));
+        }
+      } else if (big && Settings.gore === "max" && gk !== "none") {
         this.model.visible = false;
         this.deathT = 0.4;
         G.main.sfxGore?.();
@@ -45034,8 +45818,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         G.main.shake(0.6);
         G.main.fx.explosion(this.pos, 16733474, 4);
       }
-      this.deathT = this.char ? 2.6 : 0.6;
-      if (this.char) this.char.once(this.isSkel ? "Death_C_Skeletons" : "Death_A", { hold: true, timeScale: 1.2 });
+      if (this.char) this.char.once(this.char.isReal ? Math.random() < 0.5 ? "Death_A" : "Death_B" : this.isSkel ? "Death_C_Skeletons" : "Death_A", { hold: true, timeScale: this.char.isReal ? rand(0.9, 1.25) : 1.2 });
     }
     pickTarget() {
       const pl = G.player;
@@ -45057,14 +45840,18 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.char?.update(dt);
       if (this.dead) {
         this.deathT -= dt;
+        const keep = this.char && this.char.isReal && Settings.gore !== "off";
+        if (keep) {
+          if (this.deathT <= 0) G.level.keepCorpse(this);
+          return;
+        }
         if (this.char) {
           if (this.deathT < 0.8) this.model.position.y -= dt * 1.2;
-        }
-        if (this.blobM && this.deathT < 0.8) this.blobM.visible = false;
-        else {
+        } else {
           this.model.scale.multiplyScalar(0.9);
           this.model.rotation.z += dt * 4;
         }
+        if (this.blobM && this.deathT < 0.8) this.blobM.visible = false;
         if (this.deathT <= 0) G.level.remove(this);
         return;
       }
@@ -46361,7 +47148,16 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     const key = ["merchant", "quest", "healer", "blacksmith", "beastmaster"].includes(specKey);
     await new Promise((r) => setTimeout(r, phone ? key ? 4e3 : 9e3 : key ? 300 : 1500));
     if (ent.gone) return;
-    const rc = await realFor(spec.look, "Knight", null, lookOf, { kind: spec.kind, cloth: spec.cloth, scale, detail: "low" });
+    let rc = null;
+    for (let tries = 0; tries < 4 && !rc && !ent.gone; tries++) {
+      const s2 = tries < 2 ? spec : NPC_SPECS[spec.look?.sex === "f" ? "v_f1" : "v_m1"] || spec;
+      try {
+        rc = await realFor(s2.look, "Knight", null, lookOf, { kind: s2.kind, cloth: s2.cloth, scale, detail: "low", priority: key ? 5 : 1 });
+      } catch (e) {
+        rc = null;
+      }
+      if (!rc) await new Promise((r) => setTimeout(r, 2500 * (tries + 1)));
+    }
     if (!rc) {
       if (ent.char?.root) ent.char.root.visible = true;
       return;
@@ -49453,11 +50249,32 @@ float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
       });
     }
     add(e) {
+      e.gone = false;
       this.entities.push(e);
       this.root.add(e.root);
       return e;
     }
+    // dead bodies stay on the floor (frozen in their last pose, severed limbs and all); the oldest go once
+    // there are too many for the GPU
+    keepCorpse(e) {
+      const i = this.entities.indexOf(e);
+      if (i >= 0) this.entities.splice(i, 1);
+      e.gone = true;
+      if (e.ring) e.ring.visible = false;
+      e.root.traverse((o2) => {
+        if (o2.isMesh || o2.isSkinnedMesh) o2.castShadow = false;
+      });
+      this.corpses = this.corpses || [];
+      this.corpses.push(e);
+      const phone = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
+      const max = phone ? 14 : Settings.quality === "low" ? 24 : 40;
+      while (this.corpses.length > max) {
+        const o2 = this.corpses.shift();
+        this.root.remove(o2.root);
+      }
+    }
     remove(e) {
+      e.gone = true;
       const i = this.entities.indexOf(e);
       if (i >= 0) this.entities.splice(i, 1);
       this.root.remove(e.root);
@@ -50023,7 +50840,7 @@ float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
         g2.fillStyle = r % 2 ? "#5a4024" : "#7a9a3a";
         g2.fillRect(toPx(2.2 * CELL2), toPx((33.8 + r * 0.42) * CELL2), toPx(9.8 * CELL2) - toPx(2.2 * CELL2), 5);
       }
-      const cx = toPx(17 * CELL2), cz = toPx(17 * CELL2), pr = 7.5 / span * S3 * CELL2;
+      const cx = toPx(16.5 * CELL2), cz = toPx(16.5 * CELL2), pr = 7.5 / span * S3 * CELL2;
       g2.fillStyle = "#5e574e";
       g2.beginPath();
       g2.arc(cx, cz, pr, 0, 7);
@@ -50186,7 +51003,13 @@ float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
         }
       }
       this.water = this.waters[0];
-      this.placeProp("building_well_blue", this.toWorld(16.5, 16.5), 5, 0);
+      {
+        const wl = this.placeProp("building_well_blue", this.toWorld(16.5, 16.5), 5, 0);
+        wl.updateMatrixWorld(true);
+        const bc = new Box3().setFromObject(wl).getCenter(new Vector3()), want = this.toWorld(16.5, 16.5);
+        wl.position.x += want.x - bc.x;
+        wl.position.z += want.z - bc.z;
+      }
       const glow = new PointLight(6728447, 6, 6, 1.5);
       glow.position.copy(this.toWorld(16.5, 16.5)).setY(0.8);
       this.root.add(glow);
@@ -50315,10 +51138,10 @@ float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
       this.lamps = [];
       this.lampBulbs = [];
       for (const [x2, y2] of [
-        [15, 13],
-        [19, 13],
-        [15, 21.5],
-        [19, 21.5],
+        [14, 12.5],
+        [19, 12.5],
+        [14, 20.5],
+        [19, 20.5],
         [9, 21],
         [25, 21],
         [33, 10],
@@ -50718,9 +51541,14 @@ void main(){
       this.model.dress(G.equipment, G.look || {}, cls);
       this.pivot.add(this.model.root);
       if (Settings.realistic !== false) {
-        const sig = this.sig;
-        realFor(fullLook(G.look, G.cls), G.cls, G.equipment, lookOf).then((rc) => {
-          if (!rc || this.sig !== sig) return;
+        const sig = this.sig, stand = this.model;
+        stand.root.visible = false;
+        realFor(fullLook(G.look, G.cls), G.cls, G.equipment, lookOf, { priority: 8 }).then((rc) => {
+          if (!rc) {
+            stand.root.visible = true;
+            return;
+          }
+          if (this.sig !== sig) return;
           this.pivot.remove(this.model.root);
           rc.dress(G.equipment, G.look || {}, cls);
           this.model = rc;
@@ -52658,7 +53486,7 @@ void main(){
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.7.2 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.7.3 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
         if (hasSave()) this.confirmNew();
@@ -53553,11 +54381,17 @@ void main(){
       this.podium.add(this.preview.root);
       this.preview.once("Cheer", { timeScale: 1.2 });
       sfx("buff");
-      if (Settings.realistic !== false) {
+      if (Settings.realistic !== false && REAL_OK) {
+        const stand = this.preview;
+        stand.root.visible = false;
         const kit = starterKit(s2), stamp = this.previewStamp = (this.previewStamp || 0) + 1;
         clearTimeout(this.previewTimer);
-        this.previewTimer = setTimeout(() => realFor(fullLook(s2, s2.cls), s2.cls, kit, lookOf, { scale: s2.height }).then((rc) => {
-          if (!rc || stamp !== this.previewStamp || !this.podium) return;
+        this.previewTimer = setTimeout(() => realFor(fullLook(s2, s2.cls), s2.cls, kit, lookOf, { scale: s2.height, priority: 10 }).then((rc) => {
+          if (!rc) {
+            stand.root.visible = true;
+            return;
+          }
+          if (stamp !== this.previewStamp || !this.podium) return;
           this.podium.remove(this.preview.root);
           rc.dress(kit, s2, cls);
           rc.root.position.y = 0.25;
