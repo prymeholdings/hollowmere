@@ -25769,7 +25769,7 @@ void main() {
     // (0,0,0,0,1,1,1,0,0,0,0,0,0,0) --> (0,0,1,1,0,0)
     optimize() {
       const times = this.times.slice(), values = this.values.slice(), stride = this.getValueSize(), smoothInterpolation = this.getInterpolation() === InterpolateSmooth, lastIndex = times.length - 1;
-      let writeIndex = 1;
+      let writeIndex2 = 1;
       for (let i = 1; i < lastIndex; ++i) {
         let keep = false;
         const time = times[i];
@@ -25789,26 +25789,26 @@ void main() {
           }
         }
         if (keep) {
-          if (i !== writeIndex) {
-            times[writeIndex] = times[i];
-            const readOffset = i * stride, writeOffset = writeIndex * stride;
+          if (i !== writeIndex2) {
+            times[writeIndex2] = times[i];
+            const readOffset = i * stride, writeOffset = writeIndex2 * stride;
             for (let j2 = 0; j2 !== stride; ++j2) {
               values[writeOffset + j2] = values[readOffset + j2];
             }
           }
-          ++writeIndex;
+          ++writeIndex2;
         }
       }
       if (lastIndex > 0) {
-        times[writeIndex] = times[lastIndex];
-        for (let readOffset = lastIndex * stride, writeOffset = writeIndex * stride, j2 = 0; j2 !== stride; ++j2) {
+        times[writeIndex2] = times[lastIndex];
+        for (let readOffset = lastIndex * stride, writeOffset = writeIndex2 * stride, j2 = 0; j2 !== stride; ++j2) {
           values[writeOffset + j2] = values[readOffset + j2];
         }
-        ++writeIndex;
+        ++writeIndex2;
       }
-      if (writeIndex !== times.length) {
-        this.times = times.slice(0, writeIndex);
-        this.values = values.slice(0, writeIndex * stride);
+      if (writeIndex2 !== times.length) {
+        this.times = times.slice(0, writeIndex2);
+        this.values = values.slice(0, writeIndex2 * stride);
       } else {
         this.times = times;
         this.values = values;
@@ -34216,6 +34216,7 @@ void main() {
   function reset() {
     bonusCache = null;
     Object.assign(G, {
+      slotId: null,
       heroName: "Wanderer",
       cls: "Knight",
       look: { cape: "#8c1f1f", hooded: false, helm: true, gear: 0, tint: "#ffffff", height: 1, capeOn: true, pet: "fox" },
@@ -34659,23 +34660,108 @@ void main() {
   }
   var SAVE_FIELDS = ["heroName", "cls", "look", "hotbar", "lvl", "xp", "statPoints", "skillPoints", "base", "skills", "gold", "fame", "fameRank", "hp", "mp", "hpPotions", "mpPotions", "scrolls", "equipment", "backpack", "deepest", "portalFloor", "quest", "questOffer", "petName", "petForm", "petFormTime", "shopStock", "kills", "fishCaught", "fishLuck", "wellsCleared", "timeOfDay", "petSpecies", "pets", "stars"];
   var lastSaved = 0;
-  function readSaves() {
+  var IDX_KEY = "hollowmere_chars_v1";
+  var MIG_KEY = "hollowmere_chars_migrated";
+  var slotKey = (id) => "hollowmere_char_" + id;
+  var okId = (id) => /^[a-z0-9_-]{1,24}$/i.test(id || "");
+  var newSlotId = () => "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  var parseSafe = (r) => {
+    try {
+      const d2 = r ? JSON.parse(r) : null;
+      return d2 && typeof d2 === "object" ? d2 : null;
+    } catch (e) {
+      return null;
+    }
+  };
+  function readSlot(id) {
+    if (!okId(id)) return null;
     const out2 = [];
     try {
-      const r = localStorage.getItem(SAVE_KEY);
-      if (r) out2.push(JSON.parse(r));
+      const d2 = parseSafe(localStorage.getItem(slotKey(id)));
+      if (d2) out2.push(d2);
     } catch (e) {
     }
     try {
-      const r = window.hm && window.hm.loadFile && window.hm.loadFile();
-      if (r) out2.push(JSON.parse(r));
+      const d2 = parseSafe(window.hm && window.hm.slotLoad && window.hm.slotLoad(id));
+      if (d2) out2.push(d2);
     } catch (e) {
     }
     out2.sort((a, b2) => (b2.savedAt || 0) - (a.savedAt || 0));
-    return out2;
+    return out2[0] || null;
+  }
+  function slotIds() {
+    const ids = /* @__PURE__ */ new Set();
+    try {
+      for (const i of JSON.parse(localStorage.getItem(IDX_KEY) || "[]")) if (okId(i)) ids.add(i);
+    } catch (e) {
+    }
+    try {
+      for (const i of window.hm && window.hm.slotList && window.hm.slotList() || []) if (okId(i)) ids.add(i);
+    } catch (e) {
+    }
+    return [...ids];
+  }
+  function writeIndex(ids) {
+    try {
+      localStorage.setItem(IDX_KEY, JSON.stringify([...new Set(ids)]));
+    } catch (e) {
+    }
+  }
+  function writeSlot(id, json) {
+    let ok = false;
+    try {
+      localStorage.setItem(slotKey(id), json);
+      ok = localStorage.getItem(slotKey(id)) === json;
+    } catch (e) {
+    }
+    try {
+      if (window.hm && window.hm.slotSave) ok = window.hm.slotSave(id, json) === true || ok;
+    } catch (e) {
+    }
+    if (ok) writeIndex([...slotIds(), id]);
+    return ok;
+  }
+  function migrateLegacy() {
+    try {
+      if (localStorage.getItem(MIG_KEY)) return;
+      localStorage.setItem(MIG_KEY, "1");
+    } catch (e) {
+      return;
+    }
+    const old = [];
+    try {
+      const d2 = parseSafe(localStorage.getItem(SAVE_KEY));
+      if (d2) old.push(d2);
+    } catch (e) {
+    }
+    try {
+      const d2 = parseSafe(window.hm && window.hm.loadFile && window.hm.loadFile());
+      if (d2) old.push(d2);
+    } catch (e) {
+    }
+    old.sort((a, b2) => (b2.savedAt || 0) - (a.savedAt || 0));
+    if (old[0] && old[0].heroName && old[0].cls) writeSlot(newSlotId(), JSON.stringify(old[0]));
+  }
+  function listChars() {
+    migrateLegacy();
+    return slotIds().map((id) => ({ id, d: readSlot(id) })).filter((x2) => x2.d && x2.d.heroName && x2.d.cls).map(({ id, d: d2 }) => ({ id, name: d2.heroName, cls: d2.cls, lvl: d2.lvl || 1, race: d2.look && d2.look.race, savedAt: d2.savedAt || 0, loc: d2.loc, deepest: d2.deepest || 0, fame: d2.fameRank })).sort((a, b2) => b2.savedAt - a.savedAt);
+  }
+  var MAX_CHARS = 12;
+  function deleteChar(id) {
+    if (!okId(id)) return;
+    try {
+      localStorage.removeItem(slotKey(id));
+    } catch (e) {
+    }
+    try {
+      if (window.hm && window.hm.slotDel) window.hm.slotDel(id);
+    } catch (e) {
+    }
+    writeIndex(slotIds().filter((i) => i !== id));
   }
   function saveGame() {
     if (!G.heroName || !G.cls) return false;
+    if (!okId(G.slotId)) G.slotId = newSlotId();
     const d2 = { v: 2, savedAt: Date.now() };
     for (const k2 of SAVE_FIELDS) d2[k2] = G[k2];
     d2.gold += G.petPendingGold || 0;
@@ -34690,24 +34776,14 @@ void main() {
       msg("Could not save the game!", "#ff5555");
       return false;
     }
-    let ok = false;
-    try {
-      localStorage.setItem(SAVE_KEY, json);
-      ok = localStorage.getItem(SAVE_KEY) === json;
-    } catch (e) {
-    }
-    try {
-      if (window.hm && window.hm.saveFile) ok = window.hm.saveFile(json) === true || ok;
-    } catch (e) {
-    }
-    if (!ok) {
+    if (!writeSlot(G.slotId, json)) {
       msg("Could not save the game!", "#ff5555");
       return false;
     }
     lastSaved = d2.savedAt;
     return true;
   }
-  var hasSave = () => readSaves().length > 0;
+  var hasSave = () => listChars().length > 0;
   var b64u = (bytes) => {
     let s2 = "";
     for (let i = 0; i < bytes.length; i += 32768) s2 += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
@@ -34722,7 +34798,7 @@ void main() {
   var pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
   async function exportSaveCode() {
     if (G.player) saveGame();
-    const d2 = readSaves()[0];
+    const d2 = G.slotId && readSlot(G.slotId) || listChars()[0] && readSlot(listChars()[0].id);
     if (!d2) return null;
     const json = new TextEncoder().encode(JSON.stringify(d2));
     if (typeof CompressionStream === "undefined") return "HM0:" + b64u(json);
@@ -34740,27 +34816,18 @@ void main() {
   }
   function storeImportedSave(d2) {
     d2 = { ...d2, savedAt: Date.now() };
-    const json = JSON.stringify(d2);
-    let ok = false;
-    try {
-      localStorage.setItem(SAVE_KEY, json);
-      ok = localStorage.getItem(SAVE_KEY) === json;
-    } catch (e) {
-    }
-    try {
-      if (window.hm && window.hm.saveFile) ok = window.hm.saveFile(json) === true || ok;
-    } catch (e) {
-    }
-    return ok;
+    return writeSlot(newSlotId(), JSON.stringify(d2));
   }
-  function savedLoc() {
-    const d2 = readSaves()[0];
+  function savedLoc(id) {
+    const d2 = readSlot(id || (listChars()[0] || {}).id);
     return d2 && d2.loc;
   }
-  function loadGame() {
-    const d2 = readSaves()[0];
+  function loadGame(id) {
+    id = id || (listChars()[0] || {}).id;
+    const d2 = readSlot(id);
     if (!d2) return false;
     reset();
+    G.slotId = id;
     const look0 = { ...G.look };
     for (const k2 of SAVE_FIELDS) if (k2 in d2) G[k2] = d2[k2];
     G.look = { ...look0, ...d2.look || {} };
@@ -54806,6 +54873,7 @@ void main(){
     if (html !== void 0) e.innerHTML = html;
     return e;
   };
+  var esc = (t) => String(t).replace(/[&<>"']/g, (c2) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c2]);
   var SLOTKEYS = ["rmb", "q", "w", "e", "r"];
   var KEYLABEL = { rmb: "RMB", q: "Q", w: "W", e: "E", r: "R" };
   var ALIEN_TINTS = [["#ffffff", "Grey-green"], ["#9ec8ff", "Teal"], ["#d0a8ff", "Violet"], ["#ffb98a", "Ember"], ["#c9c9c9", "Ash"]];
@@ -56715,21 +56783,38 @@ void main(){
       const m3 = $("#menu");
       m3.classList.remove("hidden");
       this.open.menu = true;
+      const chars = listChars();
       m3.innerHTML = `<div class="logo-wrap"><img class="logo-glow" src="assets/ui/logo.webp" alt=""><img class="logo" src="assets/ui/logo.webp" alt="HOLLOWMERE"></div><div class="subtitle">THE SUNKEN WELLS</div>
-      <button id="m-cont" class="primary" ${hasSave() ? "" : "disabled"}>Continue</button>
-      <button id="m-new">New Hero</button>
+      ${chars.length ? `<div id="m-chars">${chars.map((c2, i) => {
+        const where = c2.loc && c2.loc.kind === "dungeon" ? `Floor ${c2.loc.floor}` : "Hollowmere";
+        const ago = c2.savedAt ? new Date(c2.savedAt).toLocaleDateString(void 0, { month: "short", day: "numeric" }) : "";
+        return `<div class="charcard ${i === 0 ? "last" : ""}" data-id="${c2.id}"><div class="cbadge">${(CLASSES[c2.cls] ? CLASSES[c2.cls].title : c2.cls)[0]}</div>
+          <div class="cinfo"><b>${esc(c2.name)}</b><span>Level ${c2.lvl} ${CLASSES[c2.cls] ? CLASSES[c2.cls].title : c2.cls}${c2.race === "alien" ? " \xB7 Grey Alien" : ""}</span><span class="muted">${where}${ago ? " \xB7 " + ago : ""}${i === 0 ? " \xB7 last played" : ""}</span></div>
+          <button class="cplay primary" data-play="${c2.id}">Play</button><button class="cdel" data-del="${c2.id}" title="Delete this hero">\u2715</button></div>`;
+      }).join("")}</div>` : ""}
+      <button id="m-new">${chars.length ? "New Hero" : "New Hero"}</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.7.8 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.7.9 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
-        if (hasSave()) this.confirmNew();
+        if (chars.length >= MAX_CHARS) this.toast(`You can keep ${MAX_CHARS} heroes. Delete one first.`, true);
         else this.main.openCreation();
       };
-      $("#m-cont").onclick = () => {
+      m3.querySelectorAll("[data-play]").forEach((b2) => b2.onclick = () => {
         sfx("ui");
-        this.main.continueGame();
-      };
+        this.main.continueGame(b2.dataset.play);
+      });
+      m3.querySelectorAll("[data-del]").forEach((b2) => b2.onclick = () => {
+        sfx("ui");
+        const c2 = chars.find((x2) => x2.id === b2.dataset.del);
+        if (!c2) return;
+        m3.classList.add("hidden");
+        this.choice(`Delete ${c2.name}?`, `${c2.name}, level ${c2.lvl} ${CLASSES[c2.cls] ? CLASSES[c2.cls].title : c2.cls}, will be gone for good.`, [["Delete hero", () => {
+          deleteChar(c2.id);
+          this.showMenu();
+        }], ["Keep", () => this.showMenu()]]);
+      });
       $("#m-set").onclick = () => {
         sfx("ui");
         m3.classList.add("hidden");
@@ -57695,9 +57780,9 @@ void main(){
       msg(`Left-click to move and attack. Right-click for ${first.name}. Press K to learn new skills.`, "#b8a888");
       saveGame();
     }
-    continueGame() {
-      const loc = savedLoc();
-      if (!loadGame()) {
+    continueGame(id) {
+      const loc = savedLoc(id);
+      if (!loadGame(id)) {
         this.ui.toast("No save found", true);
         return;
       }
