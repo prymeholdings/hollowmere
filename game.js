@@ -39510,6 +39510,36 @@ void main() {
     });
     return g2;
   }
+  function modelFlash(m3, s2 = 1) {
+    if (!m3._fm) {
+      m3._fm = [];
+      m3.root.traverse((o2) => {
+        if (!o2.isMesh || !o2.material || Array.isArray(o2.material)) return;
+        if (!o2.userData.ownMat && !o2.userData.own) {
+          o2.material = o2.material.clone();
+          o2.userData.ownMat = true;
+        }
+        const mat4 = o2.material;
+        if (mat4.emissive) m3._fm.push({ m: mat4, e: mat4.emissive.clone(), i: mat4.emissiveIntensity });
+      });
+      m3._fbase = m3.root.scale.clone();
+    }
+    m3._fd = 0.14;
+    m3._ft = m3._fd;
+    m3._fs = Math.min(2, s2);
+  }
+  var FLASH_WHITE = new Color(1, 0.94, 0.85);
+  function modelFlashTick(m3, dt) {
+    if (!(m3._ft > 0)) return;
+    m3._ft = Math.max(0, m3._ft - dt);
+    const k2 = m3._ft / m3._fd, ks = k2 * m3._fs;
+    for (const f2 of m3._fm) {
+      f2.m.emissive.copy(f2.e).lerp(FLASH_WHITE, Math.min(1, ks * 0.85));
+      f2.m.emissiveIntensity = f2.i + ks * 0.9;
+    }
+    const b2 = m3._fbase;
+    m3.root.scale.set(b2.x * (1 + 0.06 * ks), b2.y * (1 - 0.1 * ks), b2.z * (1 + 0.06 * ks));
+  }
   var CharModel = class _CharModel {
     constructor(name, opts = {}) {
       this.name = name;
@@ -39754,8 +39784,12 @@ void main() {
       this.current = a;
       return a.getClip().duration / timeScale;
     }
+    flash(s2 = 1) {
+      modelFlash(this, s2);
+    }
     update(dt) {
       this.mixer.update(dt);
+      modelFlashTick(this, dt);
     }
   };
 
@@ -40095,8 +40129,12 @@ void main() {
       this.current = a;
       return a.getClip().duration / timeScale;
     }
+    flash(s2 = 1) {
+      modelFlash(this, s2);
+    }
     update(dt) {
       this.mixer.update(dt);
+      modelFlashTick(this, dt);
     }
     applyLook() {
     }
@@ -43461,7 +43499,34 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   // src/entities.js
   var tmp2 = new Vector3();
   var DMG_COLORS = { phys: "#ffffff", fire: "#ffa040", frost: "#9fdcff", storm: "#c6b8ff", poison: "#9dff7a", arcane: "#b8a0ff", light: "#fff0a0", dark: "#c070e0", bleed: "#ff4a4a" };
+  var BLOB_MAT = null;
+  var BLOB_GEO = new PlaneGeometry(1, 1);
+  function blobMat() {
+    if (BLOB_MAT) return BLOB_MAT;
+    const c2 = document.createElement("canvas");
+    c2.width = c2.height = 64;
+    const x2 = c2.getContext("2d"), g2 = x2.createRadialGradient(32, 32, 2, 32, 32, 31);
+    g2.addColorStop(0, "rgba(0,0,0,0.75)");
+    g2.addColorStop(0.55, "rgba(0,0,0,0.38)");
+    g2.addColorStop(1, "rgba(0,0,0,0)");
+    x2.fillStyle = g2;
+    x2.fillRect(0, 0, 64, 64);
+    const t = new CanvasTexture(c2);
+    t.colorSpace = SRGBColorSpace;
+    BLOB_MAT = new MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: Settings.quality === "low" ? 1 : 0.55 });
+    return BLOB_MAT;
+  }
   var Entity = class {
+    blob(r) {
+      const m3 = new Mesh(BLOB_GEO, blobMat());
+      m3.rotation.x = -Math.PI / 2;
+      m3.position.y = 0.025;
+      m3.scale.set(r * 2, r * 2, 1);
+      m3.renderOrder = -1;
+      this.root.add(m3);
+      this.blobM = m3;
+      return m3;
+    }
     constructor(type) {
       this.type = type;
       this.root = new Group();
@@ -43524,6 +43589,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   var Player = class extends Entity {
     constructor() {
       super("player");
+      this.blob(0.5);
       const cls = CLASSES[G.cls] || CLASSES.Knight;
       this.model = new CharModel(cls.model, { scale: 0.72 * (G.look?.height || 1) });
       this.model.applyLook(cls, G.look || {});
@@ -43590,6 +43656,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         return;
       }
       G.hp -= d2;
+      this.model.flash?.(0.6);
       {
         const th = itemBonus("thorns");
         if (th > 0) {
@@ -43719,7 +43786,9 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       const moving = this.castLock <= 0 && this.followPath(this.path, speed, dt);
       if (moving && this.model.oneShot && !this.dead) {
       }
-      this.model.play(moving ? "Running_A" : "Idle", 0.15, moving ? 1.1 : 1);
+      this.model.play(moving ? "Running_A" : "Idle", 0.15, moving ? 1.1 * speed / 6.2 : 1);
+      const mr = this.model.root;
+      if (mr) mr.rotation.x += ((moving ? 0.07 : 0) - mr.rotation.x) * Math.min(1, dt * 8);
     }
   };
   function buildEnemyModel(shape, color, s2) {
@@ -43856,6 +43925,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.root.add(this.model);
       this.pickR = (d2.shape === "brute" ? 0.85 : sk ? 0.6 : 0.65) * s2;
       this.pickH = (d2.shape === "beast" || d2.shape === "blob" ? 0.5 : 1) * s2;
+      this.blob(0.5 * s2 * (d2.shape === "brute" ? 1.35 : d2.shape === "beast" ? 1.2 : 1));
       if (elite || boss) {
         ring(this.root, 0.9 * s2, boss ? 16724770 : 16763955);
         this.label = { text: boss ? d2.name : `Champion ${d2.name}`, color: boss ? "#ff6644" : "#ffcc33", y: 2.4 * s2, always: true };
@@ -43925,6 +43995,15 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.lastDmg = d2;
       this.aggro = true;
       this.hitT = 0.15;
+      this.char?.flash?.(crit ? 1.6 : 1);
+      if (G.player && !this.boss && this.hp > 0) {
+        const v2 = this.pos.clone().sub(G.player.pos).setY(0);
+        if (v2.lengthSq() > 0.01) {
+          v2.normalize().multiplyScalar(crit ? 0.32 : 0.14);
+          const to = this.pos.clone().add(v2);
+          if (G.level.walkable(to)) this.pos.copy(to);
+        }
+      }
       G.main.gore.hit(this.pos, goreKind(this.data), Math.min(1, d2 / this.maxHp * 2.2 + (crit ? 0.25 : 0)), G.player ? G.player.pos : null);
       if (Settings.damageNumbers) G.main.floatText(this.pos, Math.round(d2) + (crit ? "!" : ""), crit ? "#ffdd33" : DMG_COLORS[kind] || "#fff", crit ? 30 : 22, this.pickH * 2.2);
       sfx(crit ? "crit" : "hit");
@@ -43990,7 +44069,9 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         this.deathT -= dt;
         if (this.char) {
           if (this.deathT < 0.8) this.model.position.y -= dt * 1.2;
-        } else {
+        }
+        if (this.blobM && this.deathT < 0.8) this.blobM.visible = false;
+        else {
           this.model.scale.multiplyScalar(0.9);
           this.model.rotation.z += dt * 4;
         }
@@ -44114,6 +44195,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   var Ally = class extends Entity {
     constructor() {
       super("ally");
+      this.blob(0.45);
       this.char = new CharModel("Skeleton_Minion", { tint: 10092475, emissive: 1135906, emissiveIntensity: 0.7 });
       this.char.attach("Skeleton_Blade");
       this.root.add(this.char.root);
@@ -44400,6 +44482,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   var Pet = class extends Entity {
     constructor() {
       super("pet");
+      this.blob(0.4);
       ensurePets();
       this.path = [];
       this.repath = 0;
@@ -45220,7 +45303,12 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   };
   async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false) {
     const spec = NPC_SPECS[specKey];
-    if (!REAL_OK || Settings.realistic === false || !spec || typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches) return;
+    if (!REAL_OK || Settings.realistic === false || !spec) return;
+    if (typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches) {
+      if (!["merchant", "quest", "healer", "blacksmith", "beastmaster"].includes(specKey)) return;
+      await new Promise((r) => setTimeout(r, 6e3));
+      if (ent.gone) return;
+    }
     const rc = await realFor(spec.look, "Knight", null, lookOf, { kind: spec.kind, cloth: spec.cloth, scale, detail: "low" });
     if (!rc || ent.gone || !ent.root.parent && !ent.root) return;
     if (spec.armor) {
@@ -45238,6 +45326,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
   var Villager = class extends Entity {
     constructor(d2) {
       super("interact");
+      this.blob(0.45);
       this.kind = "villager";
       this.data = d2;
       this.mode = d2.mode || "wander";
@@ -46859,6 +46948,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         if (!e.target.closest(".panel, #create, #menu")) e.preventDefault();
       }, { passive: false });
       document.addEventListener("gesturestart", (e) => e.preventDefault());
+      this.pinch();
       const first = () => {
         if (!isStandalone()) toggleFullscreen(true);
       };
@@ -46883,6 +46973,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       <div id="t-top">
         <button data-p="inv">Bag</button><button data-p="skills">Skills</button><button data-p="zodiac">Stars</button><button data-p="char">Hero</button><button data-p="pet">Pet</button><button data-p="quest">Quest</button><button data-p="map">Map</button><button data-p="auto">Auto</button><button data-p="fs" class="fsbtn">\u26F6</button><button data-p="pause">\u2630</button>
       </div>
+      <div id="t-zoom"><button class="tz" data-z="in">+</button><button class="tz" data-z="out">\u2212</button></div>
       <div id="t-rotate">Turn your phone sideways for the best view</div>`;
       document.body.appendChild(root);
       this.root = root;
@@ -46930,6 +47021,46 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         b2.addEventListener("touchcancel", up, { passive: false });
       }
       for (const b2 of root.querySelectorAll("#t-top button")) b2.addEventListener("click", () => this.panel(b2.dataset.p));
+    }
+    // two-finger pinch on the game view zooms the camera (also +/- buttons); remembered between sessions
+    pinch() {
+      const m3 = this.main, cv = m3.renderer.domElement;
+      const P3 = { a: null, b: null, d0: 0, z0: 0 };
+      const dist = (t1, t2) => Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const find = (list, id) => {
+        for (const t of list) if (t.identifier === id) return t;
+        return null;
+      };
+      cv.addEventListener("touchstart", (e) => {
+        for (const t of e.changedTouches) {
+          if (P3.a === null) P3.a = t.identifier;
+          else if (P3.b === null && t.identifier !== P3.a) P3.b = t.identifier;
+        }
+        if (P3.a !== null && P3.b !== null) {
+          const t1 = find(e.touches, P3.a), t2 = find(e.touches, P3.b);
+          if (t1 && t2) {
+            P3.d0 = dist(t1, t2);
+            P3.z0 = m3.zoom;
+          }
+        }
+      }, { passive: true });
+      cv.addEventListener("touchmove", (e) => {
+        if (P3.a === null || P3.b === null || !P3.d0) return;
+        const t1 = find(e.touches, P3.a), t2 = find(e.touches, P3.b);
+        if (!t1 || !t2) return;
+        e.preventDefault();
+        m3.setZoom(P3.z0 * P3.d0 / Math.max(20, dist(t1, t2)));
+      }, { passive: false });
+      const end = (e) => {
+        for (const t of e.changedTouches) {
+          if (t.identifier === P3.a) P3.a = null;
+          if (t.identifier === P3.b) P3.b = null;
+        }
+        if (P3.a === null || P3.b === null) P3.d0 = 0;
+      };
+      cv.addEventListener("touchend", end);
+      cv.addEventListener("touchcancel", end);
+      for (const b2 of this.root.querySelectorAll(".tz")) b2.addEventListener("click", () => m3.setZoom(m3.zoom * (b2.dataset.z === "in" ? 0.85 : 1.18)));
     }
     moveStick(t) {
       const S3 = this.stick;
@@ -50761,7 +50892,7 @@ void main(){
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.6 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music mostly made in code, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.6.1 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music mostly made in code, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
         if (hasSave()) this.confirmNew();
@@ -51270,6 +51401,22 @@ void main(){
       loadSettings();
       applyUI();
       this.renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      this.renderer.domElement.addEventListener("webglcontextlost", (e) => {
+        e.preventDefault();
+        try {
+          if (G.player && !this.menuMode) saveGame();
+        } catch (err) {
+        }
+        try {
+          if (Settings.realistic !== false) {
+            Settings.realistic = false;
+            saveSettings();
+            localStorage.setItem("hollowmere_ctxlost", "1");
+          }
+        } catch (err) {
+        }
+        setTimeout(() => location.reload(), 400);
+      });
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = PCFSoftShadowMap;
       this.renderer.toneMapping = ACESFilmicToneMapping;
@@ -51280,7 +51427,7 @@ void main(){
       this.camera = new PerspectiveCamera(40, 1, 0.5, 260);
       this.fx = new FX(this.scene);
       this.gore = new Gore(this.scene);
-      this.zoom = 0.82;
+      this.zoom = Math.min(1.5, Math.max(0.3, +localStorage.getItem("hollowmere_zoom") || 0.82));
       this.keys = {};
       this.mouse = new Vector2();
       this.raycaster = new Raycaster();
@@ -51318,6 +51465,10 @@ void main(){
       this.ui.showMenu();
       this.menuScene();
       playMusic("menu");
+      if (localStorage.getItem("hollowmere_ctxlost")) {
+        localStorage.removeItem("hollowmere_ctxlost");
+        setTimeout(() => this.flash("Your graphics card reset, so Hollowmere switched to the classic character models. You can turn Realistic characters back on in Settings."), 2e3);
+      }
     }
     applyQuality() {
       const q = Settings.quality;
@@ -51332,7 +51483,7 @@ void main(){
         this.envTex = pm2.fromScene(new RoomEnvironment(), 0.04).texture;
         pm2.dispose();
       }
-      this.scene.environment = q === "low" ? null : this.envTex;
+      this.scene.environment = this.envTex;
       this.applyShadowRes();
       this.scene.traverse((o2) => {
         if (o2.material) {
@@ -51654,6 +51805,14 @@ void main(){
     flash(t) {
       this.ui.flash(t);
     }
+    // camera distance: 0.3 is close behind the hero, 1.5 is far out
+    setZoom(z2) {
+      this.zoom = Math.min(1.5, Math.max(0.3, z2));
+      try {
+        localStorage.setItem("hollowmere_zoom", this.zoom.toFixed(3));
+      } catch (e) {
+      }
+    }
     floatText(pos, text2, color, size = 20, yOff = 2) {
       if (!Settings.damageNumbers && /^\d+!?$/.test(String(text2))) return;
       this.ui.floatText(pos, text2, color, size, yOff);
@@ -51970,8 +52129,8 @@ void main(){
         if (e.button === 0) this.holding = false;
       });
       cv.addEventListener("wheel", (e) => {
-        this.zoom = Math.min(1.5, Math.max(0.55, this.zoom + Math.sign(e.deltaY) * 0.08));
-      });
+        this.setZoom(this.zoom + Math.sign(e.deltaY) * 0.08);
+      }, { passive: true });
       window.addEventListener("keydown", (e) => {
         this.keys[e.key] = true;
         if (e.key === "Alt" || e.key === "Tab") e.preventDefault();
@@ -52178,14 +52337,15 @@ void main(){
         const k2 = this.camCatch > 0 ? 1 : Math.min(1, dt * 7);
         this.camCatch = (this.camCatch || 0) - dt;
         this.camFocus.lerp(G.player.pos, k2);
-        const off = new Vector3(0, 21, 14).multiplyScalar(this.zoom);
+        const za = MathUtils.smoothstep(this.zoom, 0.3, 0.8);
+        const off = new Vector3(0, 11 + 10 * za, 16 - 2 * za).multiplyScalar(this.zoom);
         this.camera.position.copy(this.camFocus).add(off);
         if (this.shakeAmt > 0) {
           this.camera.position.x += rand(-1, 1) * this.shakeAmt;
           this.camera.position.y += rand(-1, 1) * this.shakeAmt * 0.5;
           this.shakeAmt = Math.max(0, this.shakeAmt - dt * 1.8);
         }
-        this.camera.lookAt(this.camFocus.clone().add(new Vector3(0, 0.8, 0)));
+        this.camera.lookAt(this.camFocus.clone().add(new Vector3(0, 0.8 + 0.5 * (1 - za), 0)));
         L3.sun.position.copy(this.camFocus).add(new Vector3(14, 26, 10));
         L3.sun.target.position.copy(this.camFocus);
         if (this.sky) this.sky.update(dt, L3, this.camFocus, this.fx, !(this.ui.open.pause || this.ui.open.death || this.ui.open.settings));
