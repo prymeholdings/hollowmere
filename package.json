@@ -31,6 +31,21 @@
       "target": "dir",
       "signAndEditExecutable": false,
       "icon": "installer/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "installer/icon-mac.png",
+      "category": "public.app-category.role-playing-games",
+      "identity": null,
+      "artifactName": "HollowmereMac-${version}-${arch}.${ext}"
     }
   },
   "devDependencies": {
