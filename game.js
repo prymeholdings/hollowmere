@@ -34608,6 +34608,7 @@ void main() {
       Object.assign(Settings, JSON.parse(saved || "{}"));
     } catch (e) {
     }
+    Settings.realistic = true;
     if (!Settings.gpuTuned) {
       Settings.gpuTuned = 1;
       const gpu = gpuName();
@@ -44216,7 +44217,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     constructor(scene2) {
       this.scene = scene2;
       this.mobile = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
-      const MAXD = this.mobile ? 220 : 520, MAXP = this.mobile ? 320 : 800, MAXG = this.mobile ? 70 : 150;
+      const MAXD = this.mobile ? 2e3 : 6e3, MAXP = this.mobile ? 320 : 800, MAXG = this.mobile ? 1200 : 4e3;
       this.MAXD = MAXD;
       this.MAXP = MAXP;
       this.MAXG = MAXG;
@@ -44242,7 +44243,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.dropMesh.count = 0;
       scene2.add(this.dropMesh);
       this.drops = [];
-      const fg = new IcosahedronGeometry(1, 2);
+      const fg = new SphereGeometry(1, 16, 12);
       {
         const p2 = fg.attributes.position, v2 = new Vector3();
         for (let i = 0; i < p2.count; i++) {
@@ -44332,9 +44333,14 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.addGib({ bone: true, p: p2, v: v2, s: size * R3(1.5, 3), col: BONE[rnd2() * BONE.length | 0], long: R3(1.5, 4) });
     }
     addGib(g2) {
-      if (this.gibs.length >= this.MAXG) this.gibs.shift();
+      const mesh = g2.bone ? this.boneMesh : this.fleshMesh;
+      mesh.userData.next = mesh.userData.next || 0;
+      g2.slot = mesh.userData.next;
+      mesh.userData.next = (mesh.userData.next + 1) % this.MAXG;
+      mesh.count = Math.min(this.MAXG, Math.max(mesh.count, g2.slot + 1));
+      const old = this.gibs.findIndex((o2) => o2.bone === g2.bone && o2.slot === g2.slot);
+      if (old >= 0) this.gibs.splice(old, 1);
       g2.t = 0;
-      g2.life = R3(14, 24);
       g2.rot = new Vector3(rnd2() * 6, rnd2() * 6, rnd2() * 6);
       g2.ang = new Vector3(R3(-12, 12), R3(-12, 12), R3(-12, 12));
       g2.bounces = 0;
@@ -44701,7 +44707,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     // flying parts are full meshes (few at a time), simulated like gibs
     addPart(obj, p2, v2, life = 30) {
       this.parts = this.parts || [];
-      const MAX2 = this.mobile ? 24 : 70;
+      const MAX2 = this.mobile ? 260 : 900;
       if (this.parts.length >= MAX2) {
         const o2 = this.parts.shift();
         o2.obj.parent?.remove(o2.obj);
@@ -44739,20 +44745,97 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         this.addStatic(m3);
         this.splat(pos.x + x2 * 0.6, pos.z + z2 * 0.6, R3(1, 1.6) * size, "red", 0.92);
       }
-      for (let i = 0; i < 3; i++) {
-        const o2 = new Mesh(new SphereGeometry(R3(0.06, 0.11) * size, 10, 8), i === 0 ? M5.liver : i === 1 ? M5.meat : M5.gutDark);
-        o2.scale.set(1.4, 0.6, 1);
-        const a = rnd2() * 6.28, d2 = R3(0.2, 0.7) * size;
-        this.addPart(o2, new Vector3(pos.x, 0.9 * size, pos.z), new Vector3(Math.cos(a) * d2 * 4 + dir.x * 2, R3(2, 4), Math.sin(a) * d2 * 4 + dir.z * 2), Infinity);
+      this.organs(pos, dir, size, 3);
+    }
+    track(obj) {
+      (this.tracked = this.tracked || []).push(obj);
+    }
+    // anatomical organs, each its own wet model
+    organGeo(kind, s2) {
+      const lumpy = (g2, amt, sx = 1, sy = 1, sz = 1) => {
+        const p2 = g2.attributes.position, v2 = new Vector3();
+        const k0 = rnd2() * 9;
+        for (let i = 0; i < p2.count; i++) {
+          v2.fromBufferAttribute(p2, i);
+          const k2 = 1 + Math.sin(v2.x * 23 + k0) * Math.sin(v2.y * 19) * amt + Math.sin(v2.z * 31 + k0) * amt * 0.5;
+          p2.setXYZ(i, v2.x * k2 * sx, v2.y * k2 * sy, v2.z * k2 * sz);
+        }
+        g2.computeVertexNormals();
+        return g2;
+      };
+      if (kind === "heart") {
+        const g2 = lumpy(new SphereGeometry(s2, 18, 14), 0.05, 0.85, 1.1, 0.8);
+        const p2 = g2.attributes.position;
+        for (let i = 0; i < p2.count; i++) {
+          const y2 = p2.getY(i);
+          if (y2 < 0) {
+            const k2 = 1 + y2 / s2 * 0.55;
+            p2.setX(i, p2.getX(i) * k2);
+            p2.setZ(i, p2.getZ(i) * k2);
+          }
+        }
+        g2.computeVertexNormals();
+        return g2;
       }
+      if (kind === "lung") return lumpy(new SphereGeometry(s2, 18, 14), 0.08, 0.6, 1.25, 0.75);
+      if (kind === "kidney") {
+        const g2 = new TorusGeometry(s2 * 0.7, s2 * 0.5, 10, 14, Math.PI * 1.3);
+        return lumpy(g2, 0.03);
+      }
+      if (kind === "stomach") {
+        const g2 = new TorusGeometry(s2, s2 * 0.6, 12, 16, Math.PI * 1.1);
+        return lumpy(g2, 0.06, 1, 1, 0.8);
+      }
+      if (kind === "liver") return lumpy(new SphereGeometry(s2, 18, 12), 0.04, 1.5, 0.55, 1);
+      return lumpy(new SphereGeometry(s2, 12, 10), 0.12);
+    }
+    ribcage(size, M5) {
+      const g2 = new Group();
+      const spine = new Mesh(new CylinderGeometry(0.025 * size, 0.03 * size, 0.42 * size, 8), M5.bone);
+      g2.add(spine);
+      for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) {
+        if (rnd2() < 0.25) continue;
+        const rib = new Mesh(new TorusGeometry(0.12 * size * (1 - i * 0.05), 9e-3 * size, 5, 12, Math.PI * R3(0.55, 0.95)), M5.bone);
+        rib.position.y = 0.16 * size - i * 0.06 * size;
+        rib.rotation.set(Math.PI / 2 + 0.2, 0, sx > 0 ? -0.2 : Math.PI + 0.2);
+        g2.add(rib);
+      }
+      const meat = new Mesh(this.organGeo("chunk", 0.07 * size), M5.meat);
+      meat.position.set(0.04 * size, -0.05 * size, 0.05 * size);
+      g2.add(meat);
+      g2.traverse((o2) => {
+        if (o2.isMesh) o2.castShadow = true;
+      });
+      return g2;
+    }
+    organs(pos, dir, size = 1, n = 4) {
+      if (this.level < 1) return;
+      const M5 = this.mats();
+      const list = [["heart", 0.06, M5.meat], ["lung", 0.09, M5.gut], ["lung", 0.09, M5.gut], ["liver", 0.09, M5.liver], ["kidney", 0.035, M5.liver], ["kidney", 0.035, M5.liver], ["stomach", 0.06, M5.gutDark], ["chunk", 0.06, M5.meat], ["chunk", 0.05, M5.fat]];
+      for (let i = 0; i < n; i++) {
+        const [k2, s2, mat5] = list[rnd2() * list.length | 0];
+        const o2 = new Mesh(this.organGeo(k2, s2 * size), mat5);
+        o2.castShadow = true;
+        const a = Math.atan2(dir.z, dir.x) + R3(-1.4, 1.4), sp = R3(1.5, 5);
+        this.addPart(o2, new Vector3(pos.x, R3(0.6, 1.2) * size, pos.z), new Vector3(Math.cos(a) * sp, R3(2, 5), Math.sin(a) * sp), Infinity);
+      }
+    }
+    // a full mess for an overkill: ribs, spine, organs, guts
+    carnage(pos, dir, size = 1) {
+      if (this.level < 1) return;
+      const M5 = this.mats();
+      const rc = this.ribcage(size, M5);
+      this.addPart(rc, new Vector3(pos.x, 1 * size, pos.z), new Vector3(dir.x * R3(1, 3), R3(3, 5), dir.z * R3(1, 3)), Infinity);
+      this.organs(pos, dir, size, this.mobile ? 4 : 7);
+      this.entrails(pos, dir, size);
+      for (let i = 0; i < 6; i++) {
+        const a = rnd2() * 6.28, d2 = R3(0.5, 2.5) * size;
+        this.splat(pos.x + Math.cos(a) * d2, pos.z + Math.sin(a) * d2, R3(1, 2.2) * size, "red", 0.92);
+      }
+      this.pool(pos.x, pos.z, R3(2.5, 3.5) * size, "red");
     }
     addStatic(m3) {
       this.statics = this.statics || [];
-      const MAX2 = this.mobile ? 16 : 48;
-      if (this.statics.length >= MAX2) {
-        const o2 = this.statics.shift();
-        o2.m.parent?.remove(o2.m);
-      }
       this.scene.add(m3);
       this.statics.push({ m: m3, t: 0 });
     }
@@ -44816,11 +44899,16 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.dropMesh.count = 0;
       this.fleshMesh.count = 0;
       this.boneMesh.count = 0;
+      this.fleshMesh.userData.next = 0;
+      this.boneMesh.userData.next = 0;
       for (const o2 of this.parts || []) o2.obj.parent?.remove(o2.obj);
       for (const o2 of this.statics || []) o2.m.parent?.remove(o2.m);
+      for (const o2 of this.settled || []) o2.parent?.remove(o2);
       this.parts = [];
       this.statics = [];
       this.spurts = [];
+      this.settled = [];
+      this.tracked = [];
     }
     update(dt) {
       const m3 = this._m, q = this._q, e = this._e, s2 = this._s, p2 = this._p, c2 = this._c;
@@ -44856,56 +44944,43 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         this.dropMesh.instanceMatrix.needsUpdate = true;
         this.dropMesh.instanceColor.needsUpdate = true;
       }
-      let nf = 0, nb = 0;
+      let dirtyF = false, dirtyB = false;
       for (let i = this.gibs.length - 1; i >= 0; i--) {
         const g2 = this.gibs[i];
         g2.t += dt;
-        if (!g2.rest) {
-          g2.v.y -= 16 * dt;
-          g2.p.addScaledVector(g2.v, dt);
-          g2.rot.addScaledVector(g2.ang, dt);
-          if (g2.trail && rnd2() < dt * 22) this.droplet(g2.p, new Vector3(R3(-0.5, 0.5), 0.5, R3(-0.5, 0.5)), R3(0.02, 0.045), g2.blood);
-          if (g2.p.y <= g2.s * 0.6) {
-            g2.p.y = g2.s * 0.6;
-            if (g2.bounces < 3 && Math.abs(g2.v.y) > 1.2) {
-              g2.v.y *= -0.38;
-              g2.v.x *= 0.6;
-              g2.v.z *= 0.6;
-              g2.ang.multiplyScalar(0.5);
-              g2.bounces++;
-              if (!g2.bone) this.splat(g2.p.x, g2.p.z, R3(0.5, 1.1), g2.blood || "red", 0.85);
-            } else {
-              g2.rest = true;
-              g2.rot.set(g2.bone ? Math.PI / 2 : g2.rot.x, g2.rot.y, g2.bone ? g2.rot.z : g2.rot.z);
-            }
+        g2.v.y -= 16 * dt;
+        g2.p.addScaledVector(g2.v, dt);
+        g2.rot.addScaledVector(g2.ang, dt);
+        if (g2.trail && rnd2() < dt * 22) this.droplet(g2.p, new Vector3(R3(-0.5, 0.5), 0.5, R3(-0.5, 0.5)), R3(0.02, 0.045), g2.blood);
+        if (g2.p.y <= g2.s * 0.6) {
+          g2.p.y = g2.s * 0.6;
+          if (g2.bounces < 3 && Math.abs(g2.v.y) > 1.2) {
+            g2.v.y *= -0.38;
+            g2.v.x *= 0.6;
+            g2.v.z *= 0.6;
+            g2.ang.multiplyScalar(0.5);
+            g2.bounces++;
+            if (!g2.bone) this.splat(g2.p.x, g2.p.z, R3(0.5, 1.1), g2.blood || "red", 0.85);
+          } else {
+            g2.rest = true;
+            if (g2.bone) g2.rot.x = Math.PI / 2;
+            if (!g2.bone) this.splat(g2.p.x, g2.p.z, R3(0.3, 0.6), g2.blood || "red", 0.9);
           }
         }
-        if (g2.t > g2.life) {
-          this.gibs.splice(i, 1);
-          continue;
-        }
-      }
-      for (const g2 of this.gibs) {
-        const fade = g2.t > g2.life - 2 ? Math.max(0.01, (g2.life - g2.t) / 2) : 1;
         e.set(g2.rot.x, g2.rot.y, g2.rot.z);
         q.setFromEuler(e);
-        if (g2.bone) s2.set(g2.s, g2.s * (g2.long || 3), g2.s).multiplyScalar(fade);
-        else s2.set(g2.s * 1.3, g2.s * 0.8, g2.s).multiplyScalar(fade);
+        if (g2.bone) s2.set(g2.s, g2.s * (g2.long || 3), g2.s);
+        else s2.set(g2.s * 1.3, g2.s * 0.8, g2.s);
         m3.compose(g2.p, q, s2);
         c2.setHex(g2.col);
-        if (g2.bone) {
-          this.boneMesh.setMatrixAt(nb, m3);
-          this.boneMesh.setColorAt(nb, c2);
-          nb++;
-        } else {
-          this.fleshMesh.setMatrixAt(nf, m3);
-          this.fleshMesh.setColorAt(nf, c2);
-          nf++;
-        }
+        const mesh = g2.bone ? this.boneMesh : this.fleshMesh;
+        mesh.setMatrixAt(g2.slot, m3);
+        mesh.setColorAt(g2.slot, c2);
+        if (g2.bone) dirtyB = true;
+        else dirtyF = true;
+        if (g2.rest) this.gibs.splice(i, 1);
       }
-      this.boneMesh.count = nb;
-      this.fleshMesh.count = nf;
-      for (const [mesh, k2] of [[this.boneMesh, nb], [this.fleshMesh, nf]]) if (k2) {
+      for (const [mesh, k2] of [[this.boneMesh, dirtyB], [this.fleshMesh, dirtyF]]) if (k2) {
         mesh.instanceMatrix.needsUpdate = true;
         mesh.instanceColor.needsUpdate = true;
       }
@@ -44938,12 +45013,12 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
             }
           }
         }
-        if (P3.t > P3.life) {
-          o2.scale.multiplyScalar(0.94);
-          if (o2.scale.x < 0.05) {
-            o2.parent?.remove(o2);
-            this.parts.splice(i, 1);
-          }
+        if (P3.rest) {
+          o2.matrixAutoUpdate = false;
+          o2.updateMatrix();
+          this.settled = this.settled || [];
+          this.settled.push(o2);
+          this.parts.splice(i, 1);
         }
       }
       for (let i = (this.statics || []).length - 1; i >= 0; i--) {
@@ -44962,6 +45037,22 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         const at = S3.bone.getWorldPosition(this._p.clone());
         const k2 = Math.ceil(3 * beat * S3.strength * (this.mobile ? 0.5 : 1));
         for (let j2 = 0; j2 < k2; j2++) this.droplet(at, new Vector3(S3.dir.x * R3(1, 3) + R3(-0.4, 0.4), R3(1.5, 3.5) * beat * S3.strength + S3.dir.y, S3.dir.z * R3(1, 3) + R3(-0.4, 0.4)), R3(0.02, 0.05), this.pick(S3.kind));
+      }
+      this._cullT = (this._cullT || 0) - dt;
+      if (this._cullT <= 0 && this.focus) {
+        this._cullT = 0.4;
+        const f2 = this.focus, R22 = (this.mobile ? 24 : 34) ** 2;
+        const vis = (o2, x2, z2) => {
+          const v2 = (x2 - f2.x) ** 2 + (z2 - f2.z) ** 2 < R22;
+          if (o2.visible !== v2) o2.visible = v2;
+        };
+        for (const o2 of this.settled || []) vis(o2, o2.position.x, o2.position.z);
+        for (const S3 of this.statics || []) vis(S3.m, S3.m.position.x, S3.m.position.z);
+        for (const o2 of this.tracked || []) {
+          if (!o2.parent) continue;
+          o2.getWorldPosition(this._p);
+          vis(o2, this._p.x, this._p.z);
+        }
       }
       for (let i = this.pools.length - 1; i >= 0; i--) {
         const P3 = this.pools[i];
@@ -44983,10 +45074,10 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
           const di = this.dinfo[i];
           if (!di) continue;
           di.t += 2;
-          if (di.t > 90) {
+          if (di.t > 120) {
             const a = this.dalpha.getX(i);
-            if (a > 0.35) {
-              this.dalpha.setX(i, a - 0.03);
+            if (a > 0.7) {
+              this.dalpha.setX(i, a - 0.01);
               this.dalpha.needsUpdate = true;
             }
           }
@@ -45800,14 +45891,19 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (real && Settings.gore !== "off" && gk !== "none") {
         const max = Settings.gore === "max";
         const from = G.player ? G.player.pos : null;
-        const cuts = big ? max ? 3 + (Math.random() * 3 | 0) : 1 : this.boss ? 2 : this.lastCrit || Math.random() < (max ? 0.45 : 0.15) ? 1 : 0;
+        const cuts = big ? max ? 3 + (Math.random() * 4 | 0) : 1 : this.boss ? 3 : max ? 1 + (this.lastCrit || Math.random() < 0.45 ? 1 : 0) : Math.random() < 0.3 ? 1 : 0;
         if (cuts) {
           G.main.gore.dismember(this.char, this.pos, gk, 1, cuts, from, enemySkin(this.data.shape), false);
           G.main.sfxGore?.();
         }
-        if (max && (big || this.boss || Math.random() < 0.25)) {
+        if (max) {
           const d2 = from ? this.pos.clone().sub(from).setY(0).normalize() : new Vector3(1, 0, 0);
-          G.main.gore.entrails(this.pos, d2, Math.max(1, this.char.root.scale.x * 0.9));
+          const sz = Math.max(1, this.char.root.scale.x * 0.9);
+          if (big || this.boss) G.main.gore.carnage(this.pos, d2, sz);
+          else if (Math.random() < 0.6) {
+            G.main.gore.entrails(this.pos, d2, sz);
+          } else G.main.gore.organs(this.pos, d2, sz, 2);
+          G.main.gore.pool(this.pos.x, this.pos.z, 2.2 * sz, gk === "bone" ? "rot" : gk);
         }
       } else if (big && Settings.gore === "max" && gk !== "none") {
         this.model.visible = false;
@@ -50264,14 +50360,8 @@ float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
       e.root.traverse((o2) => {
         if (o2.isMesh || o2.isSkinnedMesh) o2.castShadow = false;
       });
-      this.corpses = this.corpses || [];
-      this.corpses.push(e);
-      const phone = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
-      const max = phone ? 14 : Settings.quality === "low" ? 24 : 40;
-      while (this.corpses.length > max) {
-        const o2 = this.corpses.shift();
-        this.root.remove(o2.root);
-      }
+      (this.corpses = this.corpses || []).push(e);
+      G.main?.gore?.track(e.root);
     }
     remove(e) {
       e.gone = true;
@@ -52840,7 +52930,6 @@ void main(){
       <div class="setrow"><span>Fullscreen</span><button class="small" id="set-fs">Toggle (F11)</button></div>
       <h3><span>Mature content</span></h3>
       <div class="setrow"><span>Art style</span><select id="set-grit"><option value="gritty">Gritty (dark, grainy)</option><option value="classic">Classic (bright)</option></select></div>
-      <div class="setrow"><span>Realistic characters</span><input type="checkbox" id="set-real"></div>
       <div class="setrow"><span>Blood and gore</span><select id="set-gore"><option value="off">Off</option><option value="low">Light</option><option value="max">Maximum</option></select></div>
       ${check("profanity", "Strong language")}${check("barks", "Characters talk while you play")}
       <div class="muted" style="font-size:12px">This game is rated Mature (violence, gore, strong language). You can tone it down here at any time.</div>
@@ -52871,12 +52960,6 @@ void main(){
         saveSettings();
         this.main.applyGrit?.();
         msg("Art style applies fully the next time you enter a level.", "#9fd8a0");
-      };
-      $("#set-real", body).checked = Settings.realistic !== false;
-      $("#set-real", body).onchange = (e) => {
-        Settings.realistic = e.target.checked;
-        saveSettings();
-        msg("Character models change the next time you enter a level.", "#9fd8a0");
       };
       $("#set-gore", body).value = Settings.gore || "max";
       $("#set-gore", body).onchange = (e) => {
@@ -53486,7 +53569,7 @@ void main(){
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.7.3 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.7.4 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
         if (hasSave()) this.confirmNew();
@@ -54167,14 +54250,19 @@ void main(){
         } catch (err) {
         }
         try {
-          if (Settings.realistic !== false) {
-            Settings.realistic = false;
-            saveSettings();
-            localStorage.setItem("hollowmere_ctxlost", "1");
-          }
+          Settings.quality = "low";
+          Settings.renderScale = Math.min(Settings.renderScale || 1, 0.75);
+          saveSettings();
+          localStorage.setItem("hollowmere_ctxlost", "1");
         } catch (err) {
         }
-        setTimeout(() => location.reload(), 400);
+        let n = 0;
+        try {
+          n = +(sessionStorage.getItem("hm_ctx_reloads") || 0) + 1;
+          sessionStorage.setItem("hm_ctx_reloads", n);
+        } catch (err) {
+        }
+        if (n <= 3) setTimeout(() => location.reload(), 400);
       });
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = PCFSoftShadowMap;
@@ -54233,7 +54321,7 @@ void main(){
       playMusic("menu");
       if (localStorage.getItem("hollowmere_ctxlost")) {
         localStorage.removeItem("hollowmere_ctxlost");
-        setTimeout(() => this.flash("Your graphics card reset, so Hollowmere switched to the classic character models. You can turn Realistic characters back on in Settings."), 2e3);
+        setTimeout(() => this.flash("Your graphics card reset, so Hollowmere lowered the graphics quality to keep things smooth. You can raise it again in Settings."), 2e3);
       }
     }
     applyQuality() {
@@ -55089,6 +55177,7 @@ void main(){
         }
         this.ambientFx(dt, t);
         this.fx.update(dt);
+        this.gore.focus = G.player ? G.player.pos : null;
         this.gore.update(dt);
         this.render();
         return;
@@ -55116,6 +55205,7 @@ void main(){
           updateZones(dt);
           if (!G.player.dead) G.player.hover = this.canPlay() ? this.pick() : null;
           this.fx.update(dt);
+          this.gore.focus = G.player ? G.player.pos : null;
           this.gore.update(dt);
           if (L3.kind === "dungeon") {
             const boss = L3.entities.find((e) => e.type === "enemy" && e.boss && !e.dead && flatDist(e.pos, G.player.pos) < 16);

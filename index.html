@@ -15,7 +15,7 @@
 <body>
 <div id="view"></div>
 <div id="ui"></div>
-<script>window.HM_PACKED = true; if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));</script>
+<script>window.HM_PACKED = true; if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {})); if ("serviceWorker" in navigator) { let r = false; const had = !!navigator.serviceWorker.controller; navigator.serviceWorker.addEventListener("controllerchange", () => { if (!r && had && (!window.game || window.game.menuMode)) { r = true; location.reload(); } }); }</script>
 <script src="game.js"></script>
 </body>
 </html>
