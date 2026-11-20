@@ -180,6 +180,7 @@ export class RealChar {
       if (o.isBone) this.bones[o.name] = o;
       if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; if (o.material && o.material.map) o.material.map.anisotropy = 4; this.parts[o.name] = o; }
     });
+    this.shareSkeletons();
     this.handR = this.bones.WeaponR || this.bones.RightHand; this.handL = this.bones.LeftHand;
     // clips keyed by the stylised names so game code can ask for them by those names
     this.clips = new Proxy({}, { get: (_, n) => { const c = this.clipFor(n); return c || undefined; } });
@@ -195,6 +196,28 @@ export class RealChar {
       }
     });
     this.play(opts.idle || 'Idle', 0);
+  }
+  // Every body part arrives with its own Skeleton over the same bones. Three.js recomputes and uploads
+  // each Skeleton every frame, so 20+ copies per character cost a lot of CPU. Parts whose bind data is
+  // identical can share one Skeleton, which is then updated once per frame.
+  shareSkeletons() {
+    const shared = [];
+    const same = (a, b) => {
+      if (a.bones.length !== b.bones.length) return false;
+      for (let i = 0; i < a.bones.length; i++) {
+        if (a.bones[i] !== b.bones[i]) return false;
+        const x = a.boneInverses[i].elements, y = b.boneInverses[i].elements;
+        for (let k = 0; k < 16; k++) if (Math.abs(x[k] - y[k]) > 1e-5) return false;
+      }
+      return true;
+    };
+    this.scene.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      const hit = shared.find((s) => s.bind.equals(o.bindMatrix) && same(s.skel, o.skeleton));
+      if (hit) o.skeleton = hit.skel;
+      else shared.push({ skel: o.skeleton, bind: o.bindMatrix });
+    });
+    this.skeletonCount = shared.length;
   }
   tuneMaterials() {
     this.scene.traverse((o) => {
@@ -274,6 +297,13 @@ export class RealChar {
   }
   flash(s = 1, c = null) { modelFlash(this, s, c); }
   update(dt) {
+    // characters the renderer skipped last frame (off screen / over the crowd cap) animate at a low
+    // rate, far ones at half rate; the skipped time is caught up so nobody drifts out of step
+    this._acc = (this._acc || 0) + dt;
+    const lod = this.lod || 0;
+    if (lod === 2 && this._acc < 0.25 && !this.twitch) return;
+    if (lod === 1 && this._acc < 0.03 && !this.twitch) return;
+    dt = this._acc; this._acc = 0;
     this.mixer.update(dt); modelFlashTick(this, dt);
     if (this.twitch > 0) {
       // death spasms: limbs jerk and shudder, fading out

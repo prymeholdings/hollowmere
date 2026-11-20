@@ -4,7 +4,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 
 // Serve the game from app:// so GLB models can be fetched like on the web.
-protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
+protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const ROOT = path.join(__dirname, '..', 'app');
 
 function createWindow() {

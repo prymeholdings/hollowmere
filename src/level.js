@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Settings } from './settings.js';
+import { bakeStatic } from './perf.js';
 import { makeWater, tickWater } from './water.js';
 import { G, MAX_FLOOR } from './state.js';
 import { ENEMIES, BOSSES, QUEST_GIVER, FINAL_BOSS } from './data.js';
@@ -180,6 +181,7 @@ export class Level {
     if (e.ring) e.ring.visible = false;
     e.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.castShadow = false; });
     (this.corpses = this.corpses || []).push(e);
+    if (e.char && e.char.isReal) { e.char.lod = 0; bakeStatic(e.char); } // frozen pose becomes plain static meshes
     G.main?.gore?.track(e.root); // never removed; hidden only while far away
   }
   remove(e) { e.gone = true; const i = this.entities.indexOf(e); if (i >= 0) this.entities.splice(i, 1); this.root.remove(e.root); }
@@ -487,6 +489,8 @@ export class Level {
     }
     for (const k in walls) this.instancedProp(k, walls[k]);
     this.instancedProp('wall', low);
+    // which cells are open floor, as the walls were built (gore uses it to stop at the walls)
+    this.wallMask = new Uint8Array(this.w * this.h); for (let i = 0; i < this.w * this.h; i++) this.wallMask[i] = this.cells[i] === 1 ? 1 : 0;
     const pillars = [], lowP = [];
     for (const v of verts.values()) (v.low ? lowP : pillars).push({ p: new THREE.Vector3(v.x, 0, v.z), s: new THREE.Vector3(0.38, v.low ? 0.1 : 0.52, 0.38), c: tint });
     this.instancedProp('pillar', pillars);

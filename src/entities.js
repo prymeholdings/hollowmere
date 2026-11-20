@@ -485,7 +485,23 @@ export class Enemy extends Entity {
       }
     } else if (big && Settings.gore === 'max' && gk !== 'none') { this.model.visible = false; this.deathT = 0.4; G.main.sfxGore?.(); }
     if (this.boss) { G.main.shake(0.6); G.main.fx.explosion(this.pos, 0xff5522, 4); }
-    if (this.char) this.char.once(this.char.isReal ? (Math.random() < 0.5 ? 'Death_A' : 'Death_B') : this.isSkel ? 'Death_C_Skeletons' : 'Death_A', { hold: true, timeScale: this.char.isReal ? rand(0.9, 1.25) : 1.2 });
+    let deathAnim = this.isSkel && !this.char?.isReal ? 'Death_C_Skeletons' : 'Death_A';
+    if (this.char?.isReal) {
+      // fall forward or backward, whichever way has room, so the body never sinks into a wall
+      const gore = G.main.gore, ry = this.root.rotation.y + (this.body ? this.body.rotation.y : 0);
+      const fx = Math.sin(ry), fz = Math.cos(ry), x = this.pos.x, z = this.pos.z;
+      const free = (k) => gore.floorAt(x + fx * k, z + fz * k) && gore.floorAt(x + fx * k * 0.5, z + fz * k * 0.5);
+      const fwd = free(1.7), back = free(-1.7);
+      if (fwd && back) deathAnim = Math.random() < 0.5 ? 'Death_A' : 'Death_B';
+      else if (fwd) deathAnim = 'Death_A';
+      else if (back) deathAnim = 'Death_B';
+      else {
+        // boxed in: turn to lie along whichever axis is open
+        for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) { const sx = Math.sin(a), sz = Math.cos(a); if (gore.floorAt(x + sx * 1.7, z + sz * 1.7)) { this.root.rotation.y = a; break; } }
+        deathAnim = 'Death_A';
+      }
+    }
+    if (this.char) this.char.once(deathAnim, { hold: true, timeScale: this.char.isReal ? rand(0.9, 1.25) : 1.2 });
   }
   pickTarget() {
     const pl = G.player;

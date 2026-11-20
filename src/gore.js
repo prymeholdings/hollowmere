@@ -3,6 +3,10 @@
 import * as THREE from 'three';
 import { Settings } from './settings.js';
 import { sfx } from './audio.js';
+import { G } from './state.js';
+import { flattenGroup } from './perf.js';
+
+const CELL = 2; // matches level.js
 
 const rnd = Math.random;
 const R = (a, b) => a + rnd() * (b - a);
@@ -97,9 +101,123 @@ export class Gore {
   get level() { return Settings.gore === 'off' ? 0 : Settings.gore === 'low' ? 0.4 : 1; }
   pick(kind) { const l = COLORS[kind] || COLORS.red; return l[(rnd() * l.length) | 0]; }
 
+
+  // ---------------------------------------------------------------- walls
+  // Gore never passes through dungeon walls: it sticks to them or piles up against them.
+  // level.wallMask is a snapshot of the floor cells taken when the walls were built.
+  floorAt(x, z) {
+    const L = G.level;
+    if (!L || !L.wallMask) return true;
+    const cx = Math.floor(x / CELL + 0.5), cy = Math.floor(z / CELL + 0.5);
+    if (cx < 0 || cy < 0 || cx >= L.w || cy >= L.h) return false;
+    return L.wallMask[cy * L.w + cx] === 1;
+  }
+  // moving from (ox,oz) to (x,z): which wall did it hit? { axis, b (wall plane), n (normal pointing back into the room), low }
+  wallHit(ox, oz, x, z) {
+    if (this.floorAt(x, z) || !this.floorAt(ox, oz)) return null;
+    const cxo = Math.floor(ox / CELL + 0.5), czo = Math.floor(oz / CELL + 0.5);
+    const cxn = Math.floor(x / CELL + 0.5), czn = Math.floor(z / CELL + 0.5);
+    if (cxn !== cxo && !this.floorAt(x, oz)) { const s = Math.sign(cxn - cxo); return { axis: 'x', b: (cxo + s * 0.5) * CELL, n: -s, low: false }; }
+    if (czn !== czo) { const s = Math.sign(czn - czo); return { axis: 'z', b: (czo + s * 0.5) * CELL, n: -s, low: s > 0 }; } // south walls are the low ones
+    const s = Math.sign(cxn - cxo) || 1; return { axis: 'x', b: (cxo + s * 0.5) * CELL, n: -s, low: false };
+  }
+  // keep a point (and an optional radius) inside the room it is in or nearest to
+  clampIn(x, z, r = 0) {
+    const L = G.level;
+    if (!L || !L.wallMask) return [x, z, r];
+    let cx = Math.floor(x / CELL + 0.5), cy = Math.floor(z / CELL + 0.5);
+    if (!this.floorAt(x, z)) {
+      let best = null, bd = 1e9;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = cx + dx, ny = cy + dy;
+        if (!this.floorAt(nx * CELL, ny * CELL)) continue;
+        const d = (nx * CELL - x) ** 2 + (ny * CELL - z) ** 2;
+        if (d < bd) { bd = d; best = [nx, ny]; }
+      }
+      if (!best) return null;
+      [cx, cy] = best;
+      x = Math.min(cx * CELL + CELL / 2 - 0.05, Math.max(cx * CELL - CELL / 2 + 0.05, x));
+      z = Math.min(cy * CELL + CELL / 2 - 0.05, Math.max(cy * CELL - CELL / 2 + 0.05, z));
+    }
+    if (r > 0) {
+      // the wall covers about 0.45 m beyond its plane; a splat may reach under it but not past it
+      const H = CELL / 2, reach = 0.45;
+      let lim = r;
+      if (!this.floorAt((cx + 1) * CELL, cy * CELL)) lim = Math.min(lim, cx * CELL + H - x + reach);
+      if (!this.floorAt((cx - 1) * CELL, cy * CELL)) lim = Math.min(lim, x - (cx * CELL - H) + reach);
+      if (!this.floorAt(cx * CELL, (cy + 1) * CELL)) lim = Math.min(lim, cy * CELL + H - z + reach);
+      if (!this.floorAt(cx * CELL, (cy - 1) * CELL)) lim = Math.min(lim, z - (cy * CELL - H) + reach);
+      // outside corners: a wall cell touching only diagonally
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+        if (this.floorAt((cx + sx) * CELL, (cy + sy) * CELL)) continue;
+        lim = Math.min(lim, Math.hypot(cx * CELL + sx * H - x, cy * CELL + sy * H - z) + reach);
+      }
+      r = Math.max(0.08, lim);
+    }
+    return [x, z, r];
+  }
+  // a splatter stuck to a wall, with blood running down from it
+  wallSplat(hit, y, along, size, kind, alpha = 0.92) {
+    if (!this.level) return;
+    // dungeon walls are 2 m tall (the low south walls 0.72 m): nothing is drawn above them
+    const top = hit.low ? 0.72 : 2.0;
+    if (y > top) return false;
+    size = Math.min(size, top * 0.9);
+    y = Math.min(top - size * 0.5, Math.max(size * 0.3, y));
+    // and nothing hangs past the end of a wall (doorways, corners)
+    const H = CELL / 2, fc = Math.round((hit.b + hit.n * H) / CELL), wc = fc - hit.n;
+    const ac = Math.round(along / CELL);
+    const cont = (d) => hit.axis === 'x' ? this.floorAt(fc * CELL, (ac + d) * CELL) && !this.floorAt(wc * CELL, (ac + d) * CELL) : this.floorAt((ac + d) * CELL, fc * CELL) && !this.floorAt((ac + d) * CELL, wc * CELL);
+    let lo = cont(-1) ? -1e9 : ac * CELL - H, hi = cont(1) ? 1e9 : ac * CELL + H;
+    size = Math.min(size, (hi - lo) * 0.95);
+    along = Math.min(hi - size / 2, Math.max(lo + size / 2, along));
+    const put = (yy, sz, sy, a) => {
+      const i = this.dnext; this.dnext = (this.dnext + 1) % this.MAXD;
+      const col = this._c.setHex(typeof kind === 'number' ? kind : this.pick(kind));
+      const face = new THREE.Quaternion();
+      if (hit.axis === 'x') face.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -hit.n * Math.PI / 2);
+      else face.setFromAxisAngle(new THREE.Vector3(1, 0, 0), hit.n * Math.PI / 2);
+      const spin = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), sy !== 1 ? 0 : rnd() * 6.28);
+      face.multiply(spin);
+      const off = hit.n * 0.03;
+      if (hit.axis === 'x') this._p.set(hit.b + off, yy, along); else this._p.set(along, yy, hit.b + off);
+      // stretched drips: the plane's local Z runs up and down the wall for x walls, local X for z walls
+      if (hit.axis === 'x') this._s.set(sy, 1, sz); else this._s.set(sz, 1, sy);
+      this._m.compose(this._p, face, this._s);
+      this.decals.setMatrixAt(i, this._m);
+      this.cell.setX(i, (rnd() * 16) | 0);
+      this.dcol.setXYZ(i, col.r, col.g, col.b);
+      this.dalpha.setX(i, a);
+      this.dinfo[i] = { t: 0 };
+      this.decals.count = Math.min(this.MAXD, Math.max(this.decals.count, i + 1));
+    };
+    put(y, size, 1, alpha);
+    // runs of blood down the wall to the floor
+    if (rnd() < 0.7) { const len = Math.min(y, R(0.3, 1.2)); put(y - len / 2, size * 0.18, len, alpha * 0.85); }
+    this.decals.instanceMatrix.needsUpdate = true;
+    for (const a of [this.cell, this.dcol, this.dalpha]) a.needsUpdate = true;
+    return true;
+  }
+  // what to do when gore reaches a wall: stick to it and collect at its foot
+  hitWall(hit, x, y, z, size, kind) {
+    const along = hit.axis === 'x' ? z : x;
+    const stuck = this.wallSplat(hit, y, along, size, kind);
+    const fx = hit.axis === 'x' ? hit.b + hit.n * R(0.1, 0.35) : x, fz = hit.axis === 'x' ? z : hit.b + hit.n * R(0.1, 0.35);
+    if (!stuck || rnd() < 0.5) this.splat(fx, fz, size * R(0.6, 1.1), kind, 0.9);
+  }
+  // a chunk slams into a wall: it smears the wall, drops and slides down to rest against it
+  bounceWall(hit, p, v, r, kind) {
+    if (kind) this.wallSplat(hit, p.y, hit.axis === 'x' ? p.z : p.x, R(0.4, 0.8), kind);
+    if (hit.axis === 'x') { p.x = hit.b + hit.n * (r + 0.03); v.x = -v.x * 0.15; }
+    else { p.z = hit.b + hit.n * (r + 0.03); v.z = -v.z * 0.15; }
+    v.y = Math.min(v.y, 0);
+  }
   // a splatter on the floor
   splat(x, z, size, kind = 'red', alpha = 0.9) {
     if (!this.level) return;
+    const cl = this.clampIn(x, z, size / 2);
+    if (!cl) return;
+    [x, z] = cl; size = Math.min(size, cl[2] * 2);
     const i = this.dnext; this.dnext = (this.dnext + 1) % this.MAXD;
     const col = this._c.setHex(typeof kind === 'number' ? kind : this.pick(kind));
     this._e.set(0, rnd() * 6.28, 0); this._q.setFromEuler(this._e);
@@ -118,6 +236,9 @@ export class Gore {
   // a pool that spreads slowly under a corpse
   pool(x, z, size, kind = 'red') {
     if (this.level < 1 || !kind || kind === 'bone') return;
+    const cl = this.clampIn(x, z, size / 2);
+    if (!cl) return;
+    [x, z] = cl; size = Math.min(size, cl[2] * 2);
     const i = this.splat(x, z, 0.1, kind, 0.95);
     if (i != null) this.pools.push({ i, x, z, t: 0, to: size, rot: rnd() * 6.28 });
   }
@@ -339,7 +460,8 @@ export class Gore {
     else if (kind === 'thigh') limb([[0, 0.088], [0.12, 0.09], [0.35, 0.078], [0.52, 0.058], [0.6, 0.055], [0.72, 0.06], [0.9, 0.043], [1, 0.038]], 0.84, 0.088, 'foot');
     else if (kind === 'shin') limb([[0, 0.058], [0.2, 0.062], [0.65, 0.045], [1, 0.038]], 0.44, 0.058, 'foot');
     g.scale.setScalar(s);
-    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    // the skin material uses vertex colours (blood smears); parts without them would render black
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; if (o.material.vertexColors && !o.geometry.attributes.color) o.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(o.geometry.attributes.position.count * 3).fill(1), 3)); } });
     return g;
   }
 
@@ -404,6 +526,8 @@ export class Gore {
       const pts = []; let x = 0, z = 0; const a0 = Math.atan2(dir.z, dir.x) + R(-0.9, 0.9);
       const n = 9 + ((rnd() * 5) | 0);
       for (let i = 0; i < n; i++) { const a = a0 + Math.sin(i * 1.3 + k) * 1.4; x += Math.cos(a) * 0.17 * size; z += Math.sin(a) * 0.17 * size; pts.push(new THREE.Vector3(x, 0.05 + (i < 2 ? 0.35 - i * 0.15 : rnd() * 0.04) * size, z)); }
+      // the guts slump against a wall rather than through it
+      for (const q of pts) { const cl = this.clampIn(pos.x + q.x, pos.z + q.z, 0); if (cl) { q.x = cl[0] - pos.x; q.z = cl[1] - pos.z; } }
       const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 6, R(0.035, 0.05) * size, 8, false);
       const m = new THREE.Mesh(geo, rnd() < 0.7 ? M.gut : M.gutDark); m.castShadow = true;
       m.position.set(pos.x, 0, pos.z);
@@ -528,7 +652,10 @@ export class Gore {
       const d = D[i];
       d.t += dt;
       d.vy -= 15 * dt;
+      const ox = d.x, oz = d.z;
       d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+      const wh = this.wallHit(ox, oz, d.x, d.z);
+      if (wh) { this.hitWall(wh, d.x, d.y, d.z, d.s * R(9, 18), d.c); D[i] = D[D.length - 1]; D.pop(); continue; }
       if (d.y <= 0.05 || d.t > 3) {
         if (d.y <= 0.05 && rnd() < 0.55) this.splat(d.x, d.z, d.s * R(9, 20), d.c, 0.85);
         D[i] = D[D.length - 1]; D.pop();
@@ -552,7 +679,10 @@ export class Gore {
       const g = this.gibs[i];
       g.t += dt;
       g.v.y -= 16 * dt;
+      const gox = g.p.x, goz = g.p.z;
       g.p.addScaledVector(g.v, dt);
+      const gw = this.wallHit(gox, goz, g.p.x, g.p.z);
+      if (gw) this.bounceWall(gw, g.p, g.v, g.s, g.bone ? null : g.blood || 'red');
       g.rot.addScaledVector(g.ang, dt);
       if (g.trail && rnd() < dt * 22) this.droplet(g.p, new THREE.Vector3(R(-0.5, 0.5), 0.5, R(-0.5, 0.5)), R(0.02, 0.045), g.blood);
       if (g.p.y <= g.s * 0.6) {
@@ -577,7 +707,10 @@ export class Gore {
       P.t += dt;
       if (!P.rest) {
         P.v.y -= 16 * dt;
+        const pox = o.position.x, poz = o.position.z;
         o.position.addScaledVector(P.v, dt);
+        const pw = this.wallHit(pox, poz, o.position.x, o.position.z);
+        if (pw) this.bounceWall(pw, o.position, P.v, 0.12 * o.scale.x, 'red');
         o.rotation.x += P.ang.x * dt; o.rotation.y += P.ang.y * dt; o.rotation.z += P.ang.z * dt;
         if (P.trail && rnd() < dt * 30) this.droplet(o.position, new THREE.Vector3(R(-0.6, 0.6), R(0.2, 1), R(-0.6, 0.6)), R(0.02, 0.05), this.pick('red'));
         const floor = 0.06 * o.scale.x;
@@ -592,7 +725,7 @@ export class Gore {
           }
         }
       }
-      if (P.rest) { o.matrixAutoUpdate = false; o.updateMatrix(); this.settled = this.settled || []; this.settled.push(o); this.parts.splice(i, 1); }
+      if (P.rest) { o.updateMatrix(); const f = flattenGroup(o); f.matrixAutoUpdate = false; f.updateMatrix(); this.settled = this.settled || []; this.settled.push(f); this.parts.splice(i, 1); }
     }
     for (let i = (this.statics || []).length - 1; i >= 0; i--) { const S = this.statics[i]; S.t += dt;  }
     // arterial spray: pulses with the heartbeat, weakening as it bleeds out

@@ -57,8 +57,9 @@ import { QUEST_GIVER } from './data.js';
 import { loadAll, CharModel } from './assets.js';
 import { FX } from './fx.js';
 import { Gore } from './gore.js';
+import { beforeRender, afterRender } from './perf.js';
 import { Atmos } from './atmos.js';
-import { sfx, playMusic, unlockAudio, Audio as AudioState } from './audio.js';
+import { sfx, playMusic, unlockAudio, preloadMusic, Audio as AudioState } from './audio.js';
 import { Settings, loadSettings, saveSettings } from './settings.js';
 import { CLASSES, SKILLS, PET_COATS, cast, canCast, updateZones, clearZones } from './skills.js';
 import { box, sphere, cone } from './util.js';
@@ -411,7 +412,7 @@ class Main {
       Barks.reset();
       setTimeout(() => Barks.hero(floor % 5 === 0 ? 'boss' : 'down', 0.8, 0), 1500);
     } else if (kind === 'interior') { this.ui.banner(L.title, 'Hollowmere'); playMusic(daylight() < 0.25 ? 'town_night' : 'town'); }
-    else { if (arrive !== 'door') this.ui.banner('Hollowmere', 'A lantern-lit town above the Wells'); playMusic(daylight() < 0.25 ? 'town_night' : 'town'); Barks.reset(); if (arrive !== 'door') setTimeout(() => Barks.hero('town', 0.5, 0), 1500); }
+    else { if (arrive !== 'door') this.ui.banner('Hollowmere', 'A lantern-lit town above the Wells'); playMusic(daylight() < 0.25 ? 'town_night' : 'town'); setTimeout(() => preloadMusic('dungeon'), 4000); Barks.reset(); if (arrive !== 'door') setTimeout(() => Barks.hero('town', 0.5, 0), 1500); }
     sfx('door');
     saveGame();
   }
@@ -743,7 +744,12 @@ class Main {
 
   // ---------------- loop ----------------
   snapCamera() { this.camFocus = G.player ? G.player.pos.clone() : new THREE.Vector3(34, 0, 34); }
-  render() { if (this.grade) this.grade.uniforms.time.value = performance.now() / 1000; if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
+  render() {
+    if (this.grade) this.grade.uniforms.time.value = performance.now() / 1000;
+    if (!this.menuMode) beforeRender(this.camera);
+    if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
+    afterRender();
+  }
 
   ambientFx(dt, t) {
     const L = G.level;

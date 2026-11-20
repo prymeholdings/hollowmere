@@ -28,7 +28,7 @@ export function applyVolumes() {
   Audio.music.gain.value = Audio.vol.music * 0.5;
   Audio.sfxBus.gain.value = Audio.vol.sfx;
 }
-export function unlockAudio() { const C = ctx(); if (C.state === 'suspended') C.resume(); }
+export function unlockAudio() { const C = ctx(); if (C.state === 'suspended') C.resume(); if (pendingEl && pendingEl === fileSrc) { pendingEl.play().catch(() => {}); pendingEl = null; } }
 
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
@@ -80,28 +80,41 @@ const TRACKS = {
 const FILE_TRACKS = { boss: 'assets/music/battle_theme_a.mp3', boss_deep: 'assets/music/battle_theme_a.mp3', final: 'assets/music/battle_theme_a.mp3',
   // supplied by the owner (generated music plays if a file is missing)
   menu: 'assets/music/private/jacobs_prayer.mp3', town: 'assets/music/private/jacobs_prayer.mp3', town_night: 'assets/music/private/chopin_nocturne_72_1.mp3',
-  dungeon: 'assets/music/private/lobotomy.mp3', crypt: 'assets/music/private/lobotomy.mp3', ember: 'assets/music/private/lobotomy.mp3',
-  abyss: 'assets/music/private/lobotomy.mp3', void: 'assets/music/private/lobotomy.mp3' };
+  dungeon: 'assets/music/private/forbidden_library.mp3', crypt: 'assets/music/private/forbidden_library.mp3', ember: 'assets/music/private/forbidden_library.mp3',
+  abyss: 'assets/music/private/forbidden_library.mp3', void: 'assets/music/private/forbidden_library.mp3' };
 const fileBuf = {};
 let fileSrc = null;
-function stopFile() { if (fileSrc) { try { fileSrc.stop(); } catch (e) { /* already stopped */ } fileSrc = null; } }
+function stopFile() { if (fileSrc) { try { fileSrc.pause(); } catch (e) { /* already stopped */ } fileSrc = null; } }
+// Recorded tracks stream from an <audio> element (no full decode up front: starts at once, uses little memory
+// and never stalls a frame), routed through the music bus so the volume slider still applies.
+const fileEls = {};
+let pendingEl = null;
 function playFile(name, url) {
   const C = Audio.ctx;
-  const go = (buf) => {
-    if (Audio.track !== name) return;
-    stopFile();
-    const s = C.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(Audio.music); s.start();
-    fileSrc = s; Audio.fileTrack = name;
-  };
-  if (fileBuf[url]) return go(fileBuf[url]);
-  if (fileBuf[url] === false) return;
-  fetch(new URL(url, document.baseURI).href).then((r) => r.arrayBuffer()).then((ab) => C.decodeAudioData(ab)).then((b) => { fileBuf[url] = b; go(b); })
-    .catch(() => { fileBuf[url] = false; Audio.fileFailed = name; });
+  stopFile();
+  let el = fileEls[url];
+  if (!el) {
+    el = document.createElement('audio');
+    el.src = new URL(url, document.baseURI).href;
+    el.loop = true; el.preload = 'auto';
+    try { C.createMediaElementSource(el).connect(Audio.music); } catch (e) { /* plays straight to the speakers */ }
+    el.addEventListener('error', () => { Audio.fileFailed = name; if (Audio.fileTrack === name) Audio.fileTrack = null; });
+    fileEls[url] = el;
+  }
+  try { el.currentTime = 0; } catch (e) { /* not loaded yet */ }
+  fileSrc = el; Audio.fileTrack = name;
+  const pr = el.play();
+  if (pr && pr.catch) pr.catch(() => { pendingEl = el; }); // autoplay blocked until the first tap
 }
+// warm the next track so switching floors or entering a dungeon starts instantly
+export function preloadMusic(name) { const url = FILE_TRACKS[name]; if (!url || fileEls[url] || !Audio.ctx) return; const el = document.createElement('audio'); el.preload = 'auto'; el.src = new URL(url, document.baseURI).href; el.loop = true; try { Audio.ctx.createMediaElementSource(el).connect(Audio.music); } catch (e) { /* ignore */ } fileEls[url] = el; }
 
 export function playMusic(name) {
   ctx();
   if (Audio.track === name) return;
+  // the same recording under another name (e.g. a new depth band): keep it playing, no restart
+  const url = FILE_TRACKS[name];
+  if (url && fileSrc && fileSrc === fileEls[url] && !fileSrc.paused) { Audio.track = name; Audio.fileTrack = name; return; }
   Audio.track = name;
   stopFile(); Audio.fileTrack = null;
   Audio.beat = 0;
@@ -233,3 +246,5 @@ export function sfx(kind) {
     case 'legend': [523, 659, 784, 1046, 1318].forEach((f, i) => voice(t + i * 0.05, f, 1.2, { dest: D, gain: 0.07, type: 'sine', rev: 0.8 })); break;
   }
 }
+// debug handle (tests read the streamed music state)
+if (typeof window !== 'undefined') window.__hmAudio = { Audio, els: fileEls, cur: () => fileSrc };
