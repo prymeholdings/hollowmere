@@ -61,9 +61,11 @@ export class HeroView {
     this.model.dress(G.equipment, G.look || {}, cls);
     this.pivot.add(this.model.root);
     if (Settings.realistic !== false) {
-      const sig = this.sig;
-      realFor(fullLook(G.look, G.cls), G.cls, G.equipment, lookOf).then((rc) => {
-        if (!rc || this.sig !== sig) return;
+      const sig = this.sig, stand = this.model;
+      stand.root.visible = false;
+      realFor(fullLook(G.look, G.cls), G.cls, G.equipment, lookOf, { priority: 8 }).then((rc) => {
+        if (!rc) { stand.root.visible = true; return; }
+        if (this.sig !== sig) return;
         this.pivot.remove(this.model.root);
         rc.dress(G.equipment, G.look || {}, cls);
         this.model = rc; this.pivot.add(rc.root);

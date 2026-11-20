@@ -171,8 +171,21 @@ export class Level {
     this.root.traverse((o) => { if (o.material && o.material.map && o.material.map.isCanvasTexture) o.material.map.dispose(); });
   }
 
-  add(e) { this.entities.push(e); this.root.add(e.root); return e; }
-  remove(e) { const i = this.entities.indexOf(e); if (i >= 0) this.entities.splice(i, 1); this.root.remove(e.root); }
+  add(e) { e.gone = false; this.entities.push(e); this.root.add(e.root); return e; }
+  // dead bodies stay on the floor (frozen in their last pose, severed limbs and all); the oldest go once
+  // there are too many for the GPU
+  keepCorpse(e) {
+    const i = this.entities.indexOf(e); if (i >= 0) this.entities.splice(i, 1);
+    e.gone = true;
+    if (e.ring) e.ring.visible = false;
+    e.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.castShadow = false; });
+    this.corpses = this.corpses || [];
+    this.corpses.push(e);
+    const phone = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+    const max = phone ? 14 : Settings.quality === 'low' ? 24 : 40;
+    while (this.corpses.length > max) { const o = this.corpses.shift(); this.root.remove(o.root); }
+  }
+  remove(e) { e.gone = true; const i = this.entities.indexOf(e); if (i >= 0) this.entities.splice(i, 1); this.root.remove(e.root); }
 
   idx(x, y) { return y * this.w + x; }
   isFloor(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h && this.cells[y * this.w + x] === 1; }
@@ -612,7 +625,7 @@ export class Level {
     g.fillStyle = '#6a4e2e'; g.fillRect(toPx(2 * CELL), toPx(33.5 * CELL), toPx(10 * CELL) - toPx(2 * CELL), toPx(37.5 * CELL) - toPx(33.5 * CELL));
     for (let r = 0; r < 9; r++) { g.fillStyle = r % 2 ? '#5a4024' : '#7a9a3a'; g.fillRect(toPx(2.2 * CELL), toPx((33.8 + r * 0.42) * CELL), toPx(9.8 * CELL) - toPx(2.2 * CELL), 5); }
     // cobbled plaza
-    const cx = toPx(17 * CELL), cz = toPx(17 * CELL), pr = (7.5 / span) * S * CELL;
+    const cx = toPx(16.5 * CELL), cz = toPx(16.5 * CELL), pr = (7.5 / span) * S * CELL;
     g.fillStyle = '#5e574e'; g.beginPath(); g.arc(cx, cz, pr, 0, 7); g.fill();
     // concentric rings of cobbles, one muted stone tone each
     const stone = 9 * S / 1024;
@@ -735,7 +748,12 @@ export class Level {
     }
     this.water = this.waters[0];
     // well
-    this.placeProp('building_well_blue', this.toWorld(16.5, 16.5), 5, 0);
+    { // centre the well model exactly in the middle of the cobbled circle, whatever the model's own origin
+      const wl = this.placeProp('building_well_blue', this.toWorld(16.5, 16.5), 5, 0);
+      wl.updateMatrixWorld(true);
+      const bc = new THREE.Box3().setFromObject(wl).getCenter(new THREE.Vector3()), want = this.toWorld(16.5, 16.5);
+      wl.position.x += want.x - bc.x; wl.position.z += want.z - bc.z;
+    }
     const glow = new THREE.PointLight(0x66aaff, 6, 6, 1.5); glow.position.copy(this.toWorld(16.5, 16.5)).setY(0.8); this.root.add(glow);
     // trees inside
     for (const [x, y] of this.trees) this.placeProp(pick(['tree_single_A', 'tree_single_B']), this.toWorld(x, y), rand(4.5, 6), rand(0, 6));
@@ -793,7 +811,7 @@ export class Level {
     for (let y = 33; y <= 38; y++) for (let x = 2; x <= 10; x++) if (this.cells[this.idx(x, y)] === 1) this.cells[this.idx(x, y)] = 2;
     // lamps
     this.lamps = []; this.lampBulbs = [];
-    for (const [x, y] of [[15, 13], [19, 13], [15, 21.5], [19, 21.5], [9, 21], [25, 21], [33, 10], [39, 18], [39, 29], [16, 36.5], [26, 37.5], [36, 37.5], [8, 37.5],
+    for (const [x, y] of [[14, 12.5], [19, 12.5], [14, 20.5], [19, 20.5], [9, 21], [25, 21], [33, 10], [39, 18], [39, 29], [16, 36.5], [26, 37.5], [36, 37.5], [8, 37.5],
       [48.5, 13], [48.5, 25], [48.5, 37], [10, 48], [24, 48], [36, 48], [47, 48.5],
       [69.5, 9], [72.5, 16], [69.5, 23], [72.5, 29], [69.5, 36], [72.5, 43], [69.5, 49], [72.5, 55], [60, 13.5], [8, 66.4], [20, 67.6], [30, 66.4], [37, 66], [46.5, 66], [55, 67.6], [64, 66.4], [74, 67.6], [37, 76.2], [46.5, 76.2]]) {
       if (this.cells[this.idx(Math.round(x), Math.round(y))] === 0 || this.decoObjs.some((o) => Math.hypot(o.x - x, o.y - y) < 0.9)) continue;

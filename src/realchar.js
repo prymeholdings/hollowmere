@@ -130,13 +130,22 @@ export const fullLook = (look, cls) => ({ ...defaultLook(cls, (look && look.sex)
 
 const CLEAN = new Map();
 const cache = new Map();
-let queue = Promise.resolve();
+// one build at a time; the hero (priority) jumps ahead of townsfolk and monsters
+const jobs = []; let busy = false;
+function pump() {
+  if (busy || !jobs.length) return;
+  jobs.sort((a, b) => b.pri - a.pri);
+  const j = jobs.shift(); busy = true;
+  j.run().then(j.ok, j.fail).finally(() => { busy = false; pump(); });
+}
+const enqueue = (run, pri) => new Promise((ok, fail) => { jobs.push({ run, pri, ok, fail }); pump(); });
 export function buildReal(look, cls, kind, extra = {}) {
   const p = paramsFor(look, cls, kind, extra.garmentStyles, extra.armor);
   Object.assign(p, extra.params || {});
   const key = JSON.stringify([p.gender, p.muscle, p.weight, p.height, p.african, p.asian, p.caucasian, p.skinTint, p.eyes, p.hair, p.hairTint, p.facialHair, p.top, p.bottom, p.shoes, p.accessories, p.garmentStyles, p.seed, p.age, p.breastSize, extra.detail]);
-  if (cache.has(key)) return cache.get(key);
-  const pr = (queue = queue.then(() => createCharacter(p, { animations: CLIPS, detail: extra.detail || 'medium', assetsUrl: ASSET_URL }), () => createCharacter(p, { animations: CLIPS, detail: extra.detail || 'medium', assetsUrl: ASSET_URL })));
+  if (cache.has(key)) { if (extra.priority) { const j = jobs.find((x) => x.key === key); if (j) j.pri = Math.max(j.pri, extra.priority); } return cache.get(key); }
+  const pr = enqueue(() => createCharacter(p, { animations: CLIPS, detail: extra.detail || 'medium', assetsUrl: ASSET_URL }), extra.priority || 0);
+  if (jobs.length) jobs[jobs.length - 1].key = key;
   const out = pr.then((res) => res).catch((e) => { cache.delete(key); console.warn('realistic character failed', e); return null; });
   cache.set(key, out);
   return out;
@@ -266,6 +275,18 @@ export class RealChar {
   flash(s = 1, c = null) { modelFlash(this, s, c); }
   update(dt) {
     this.mixer.update(dt); modelFlashTick(this, dt);
+    if (this.twitch > 0) {
+      // death spasms: limbs jerk and shudder, fading out
+      this.twitch -= dt;
+      const k = Math.min(1, this.twitch / 2) * 0.22;
+      for (const n of ['LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm', 'LeftHand', 'RightHand', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot', 'Head']) {
+        const b = this.bones[n]; if (!b) continue;
+        if (Math.random() < 0.25) { b.userData.tw = (Math.random() - 0.5) * 2; }
+        const w = b.userData.tw || 0;
+        b.rotation.x += w * k; b.rotation.z += w * k * 0.6;
+      }
+    }
+    if (this.severed) for (const b of this.severed) this.bones[b]?.scale.setScalar(0.0001);
     if (this.anims && this.anims.length && dt > 0) {
       // how fast the hero is moving drives cloth sway and footstep dust
       const hb = this.bones.Hips;
@@ -466,7 +487,7 @@ export async function realFor(look, cls, equipment, lookOf, opts = {}) {
   if (!REAL_OK) return null;
   const al = equipment && equipment.armor ? lookOf(equipment.armor) : null;
   const kind = opts.kind || ARMOR_KIND(al, cls);
-  const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || 'medium', garmentStyles: opts.cloth, armor: al });
+  const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || 'medium', garmentStyles: opts.cloth, armor: al, priority: opts.priority || 0 });
   return res ? new RealChar(res, { scale: opts.scale ?? ((look && look.height) || 1), look }) : null;
 }
 
@@ -479,6 +500,7 @@ const ENEMY_BUILDS = {
   skel_mage: { look: EL({ weight: 0.1, muscle: 0.15 }), kind: 'robe', cloth: {}, params: { hair: 'none', skinTint: '#a0a498', age: 0.85, facialHair: 'none' }, scale: 1.12, weapon: 'Skeleton_Staff', helm: 'Skeleton_Mage_Hat' },
   brute: { look: EL({ weight: 0.9, muscle: 1 }), kind: 'furs', cloth: {}, params: { hair: 'none', skinTint: '#7e9a6c', age: 0.55, facialHair: 'none' }, scale: 1.62, weapon: 'Skeleton_Axe' },
 };
+export const enemySkin = (shape) => parseInt((ENEMY_BUILDS[shape]?.params.skinTint || '#c89a7a').slice(1), 16);
 export async function buildEnemyReal(shape, o = {}) {
   const spec = ENEMY_BUILDS[shape];
   if (!REAL_OK || !spec) return null;

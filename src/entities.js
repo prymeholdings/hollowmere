@@ -8,7 +8,7 @@ import { Vortex } from './vortex.js';
 import { buildPetModel, petStage, petCoatColor, PET_SPECIES, PET_SKILLS, petRank, ensurePets, addPetXp, petBonus } from './pets.js';
 import { Settings } from './settings.js';
 import { Barks } from './barks.js';
-import { buildEnemyReal } from './realchar.js';
+import { buildEnemyReal, enemySkin } from './realchar.js';
 import { REAL_OK, buildReal, RealChar, ARMOR_KIND, armorKey, fullLook, realFor, NPC_SPECS } from './realchar.js';
 import { goreKind } from './gore.js';
 import { ENEMIES } from './data.js';
@@ -112,6 +112,8 @@ export class Player extends Entity {
     this.lastHit = null;
     this.hitAnimCd = 0;
     this.refreshVisuals();
+    // no blocky stand-in: the hero stays hidden for the moment it takes to build the realistic body
+    if (REAL_OK && Settings.realistic !== false) { this.model.root.visible = false; this.standIn = setTimeout(() => { if (this.model && !this.model.isReal) this.model.root.visible = true; }, 45000); }
     this.upgradeReal();
   }
   // swap the stylised stand-in for the realistic human once it has been built
@@ -122,8 +124,10 @@ export class Player extends Entity {
     const key = [JSON.stringify(look), ARMOR_KIND(al, G.cls), armorKey(al)].join('|');
     if (this.realKey === key) return;
     this.realKey = key;
-    const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { armor: al, detail: (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) ? 'low' : 'medium' });
-    if (!res || this.realKey !== key || this.gone) return;
+    const res = await buildReal(look, G.cls, ARMOR_KIND(al, G.cls), { armor: al, priority: 10, detail: (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) ? 'low' : 'medium' });
+    if (!res) { if (this.model && !this.model.isReal) this.model.root.visible = true; return; }
+    if (this.realKey !== key || this.gone) return;
+    clearTimeout(this.standIn);
     const old = this.model;
     const rc = new RealChar(res, { scale: look.height || 1, look });
     rc.play(old.baseName || 'Idle', 0);
@@ -155,7 +159,7 @@ export class Player extends Entity {
     G.main.floatText(this.pos, Math.round(d), '#ff5555', 20, 2.2);
     G.main.gore.hit(this.pos, 'red', Math.min(1, d / maxHp() * 2.5), null);
     G.main.onPlayerHurt?.(d);
-    if (G.hp > 0 && G.hp / maxHp() < 0.25) Barks.hero('low', 0.5, 8); else if (d / maxHp() > 0.12) Barks.hero('hurt', 0.4);
+    if (G.hp > 0 && G.hp / maxHp() < 0.25) Barks.hero('low', 0.5, 8); else if (d / maxHp() > 0.06) Barks.hero('hurt', 0.7);
     G.main.hurtFlash(d / maxHp());
     sfx('hurt');
     if (G.hp <= 0) {
@@ -316,14 +320,17 @@ const SKEL = {
 // Swap the stylised skeleton for the realistic human model once it is built; show the old one if it fails.
 function upgradeEnemy(e, d, boss, elite) {
   const fallback = () => { if (!e.dead && e.model) e.model.visible = true; };
-  const timer = setTimeout(fallback, 6000);
-  buildEnemyReal(d.shape, { scale: e.realScale / 1.15, tint: d.tint, emissive: boss ? (d.final ? 0x3a0a7a : 0x551100) : elite ? 0x332200 : d.emissive, emissiveIntensity: 0.5 }).then((rc) => {
+  const timer = setTimeout(fallback, 45000); // only if the realistic build never arrives
+  const tryBuild = (n) => buildEnemyReal(d.shape, { scale: e.realScale / 1.15, tint: d.tint, emissive: boss ? (d.final ? 0x3a0a7a : 0x551100) : elite ? 0x332200 : d.emissive, emissiveIntensity: 0.5 }).catch(() => null).then((rc) => (rc || n >= 2 ? rc : new Promise((r) => setTimeout(r, 3000)).then(() => tryBuild(n + 1))));
+  tryBuild(0).then((rc) => {
     clearTimeout(timer);
-    if (!rc || !e.root.parent && e.removed) return fallback();
+    if (!rc) return fallback();
+    if (e.gone) return;
     const old = e.char, oldModel = e.model;
     e.root.remove(oldModel);
     e.char = rc; e.model = rc.root; e.root.add(rc.root);
-    if (e.dormant) rc.once('Skeletons_Inactive_Floor_Pose', { hold: true });
+    if (e.dead) rc.once('Death_A', { hold: true });
+    else if (e.dormant) rc.once('Skeletons_Inactive_Floor_Pose', { hold: true });
     else rc.play('Idle');
     old?.dispose?.();
   }).catch(fallback);
@@ -364,7 +371,7 @@ export class Enemy extends Entity {
     this.pickH = (d.shape === 'beast' || d.shape === 'blob' ? 0.5 : 1.0) * s;
     this.blob(0.5 * s * (d.shape === 'brute' ? 1.35 : d.shape === 'beast' ? 1.2 : 1));
     if (elite || boss) {
-      ring(this.root, 0.9 * s, boss ? 0xff3322 : 0xffcc33);
+      this.ring = ring(this.root, 0.9 * s, boss ? 0xff3322 : 0xffcc33);
       this.label = { text: boss ? d.name : `Champion ${d.name}`, color: boss ? '#ff6644' : '#ffcc33', y: 2.4 * s, always: true };
     }
     if (this.wantReal) upgradeEnemy(this, d, boss, elite);
@@ -388,8 +395,7 @@ export class Enemy extends Entity {
     if (!this.dormant) return;
     this.dormant = false;
     this.stunT = 1.4;
-    this.char.oneShot = null;
-    this.char.once('Skeletons_Awaken_Floor', { timeScale: 1.6 });
+    if (this.char) { this.char.oneShot = null; this.char.once('Skeletons_Awaken_Floor', { timeScale: 1.6 }); }
     G.main.fx.emit(this.pos.clone().setY(0.2), { count: 20, color: 0x9a8a70, speed: 2, life: 0.8, size: 0.6, rise: 1 });
   }
   // damage over time (poison, burning). Stacks by kind: a new application refreshes and keeps the stronger one.
@@ -424,7 +430,7 @@ export class Enemy extends Entity {
     if (kind === 'fire' && burnPct() > 0) this.applyDot(d * burnPct() / 3, 3, 'fire');
     if (kind === 'storm' && Math.random() < stunChance()) this.stunT = Math.max(this.stunT || 0, 0.5);
     this.hp -= d;
-    this.lastDmg = d;
+    this.lastDmg = d; this.lastCrit = !!crit;
     this.aggro = true;
     this.hitT = 0.15;
     this.char?.flash?.(crit ? 1.6 : 1);
@@ -459,10 +465,22 @@ export class Enemy extends Entity {
     G.main.gore.death(this.pos, goreKind(this.data), (this.boss ? 2.2 : this.elite ? 1.4 : 1) * (this.pickR > 0.8 ? 1.3 : 1), big, G.player ? G.player.pos : null);
     Barks.kill(this, big);
     { const lk = itemBonus('life_kill'), mk = itemBonus('mana_kill'); if (lk) G.hp = Math.min(maxHp(), G.hp + lk); if (mk) G.mp = Math.min(maxMp(), G.mp + mk); }
-    if (big && Settings.gore === 'max' && goreKind(this.data) !== 'none') { this.model.visible = false; this.deathT = 0.4; G.main.sfxGore?.(); }
+    const gk = goreKind(this.data), real = this.char && this.char.isReal;
+    this.deathT = this.char ? (this.char.isReal && Settings.gore !== 'off' ? 5 : 2.6) : 0.6;
+    if (this.char && this.char.isReal && Settings.gore !== 'off') this.char.twitch = 1.5 + Math.random() * 2.5;
+    if (real && Settings.gore !== 'off' && gk !== 'none') {
+      // dismemberment: heads, arms and legs come off; heavy blows spill the guts
+      const max = Settings.gore === 'max';
+      const from = G.player ? G.player.pos : null;
+      const cuts = big ? (max ? 3 + ((Math.random() * 3) | 0) : 1) : this.boss ? 2 : (this.lastCrit || Math.random() < (max ? 0.45 : 0.15)) ? 1 : 0;
+      if (cuts) { G.main.gore.dismember(this.char, this.pos, gk, 1, cuts, from, enemySkin(this.data.shape), false); G.main.sfxGore?.(); }
+      if (max && (big || this.boss || Math.random() < 0.25)) {
+        const d = from ? this.pos.clone().sub(from).setY(0).normalize() : new THREE.Vector3(1, 0, 0);
+        G.main.gore.entrails(this.pos, d, Math.max(1, this.char.root.scale.x * 0.9));
+      }
+    } else if (big && Settings.gore === 'max' && gk !== 'none') { this.model.visible = false; this.deathT = 0.4; G.main.sfxGore?.(); }
     if (this.boss) { G.main.shake(0.6); G.main.fx.explosion(this.pos, 0xff5522, 4); }
-    this.deathT = this.char ? 2.6 : 0.6;
-    if (this.char) this.char.once(this.isSkel ? 'Death_C_Skeletons' : 'Death_A', { hold: true, timeScale: 1.2 });
+    if (this.char) this.char.once(this.char.isReal ? (Math.random() < 0.5 ? 'Death_A' : 'Death_B') : this.isSkel ? 'Death_C_Skeletons' : 'Death_A', { hold: true, timeScale: this.char.isReal ? rand(0.9, 1.25) : 1.2 });
   }
   pickTarget() {
     const pl = G.player;
@@ -481,9 +499,15 @@ export class Enemy extends Entity {
     this.char?.update(dt);
     if (this.dead) {
       this.deathT -= dt;
+      const keep = this.char && this.char.isReal && Settings.gore !== 'off';
+      if (keep) {
+        // the mutilated body stays where it fell for the rest of the floor
+        if (this.deathT <= 0) G.level.keepCorpse(this);
+        return;
+      }
       if (this.char) { if (this.deathT < 0.8) this.model.position.y -= dt * 1.2; }
-      if (this.blobM && this.deathT < 0.8) this.blobM.visible = false;
       else { this.model.scale.multiplyScalar(0.9); this.model.rotation.z += dt * 4; }
+      if (this.blobM && this.deathT < 0.8) this.blobM.visible = false;
       if (this.deathT <= 0) G.level.remove(this);
       return;
     }
@@ -1359,8 +1383,15 @@ async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false, d 
   // let the hero build first on phones; the shopkeepers go next, then everyone else
   await new Promise((r) => setTimeout(r, phone ? (key ? 4000 : 9000) : key ? 300 : 1500));
   if (ent.gone) return;
-  const rc = await realFor(spec.look, 'Knight', null, lookOf, { kind: spec.kind, cloth: spec.cloth, scale, detail: 'low' });
-  if (!rc) { if (ent.char?.root) ent.char.root.visible = true; return; } // build failed: fall back to the simple model
+  // build the realistic model; if the device runs out of memory, retry, then use a plainer townsperson.
+  // The old blocky model only comes back if every attempt fails.
+  let rc = null;
+  for (let tries = 0; tries < 4 && !rc && !ent.gone; tries++) {
+    const s = tries < 2 ? spec : NPC_SPECS[spec.look?.sex === 'f' ? 'v_f1' : 'v_m1'] || spec;
+    try { rc = await realFor(s.look, 'Knight', null, lookOf, { kind: s.kind, cloth: s.cloth, scale, detail: 'low', priority: key ? 5 : 1 }); } catch (e) { rc = null; }
+    if (!rc) await new Promise((r) => setTimeout(r, 2500 * (tries + 1)));
+  }
+  if (!rc) { if (ent.char?.root) ent.char.root.visible = true; return; }
   if (ent.gone) return;
   if (spec.armor) { rc.wearPlates({ tint: 0xdfe8f4, glow: 0, rarity: 0 }, 'plate'); if (helm) rc.wearHelm({ vis: 'Knight_Helmet', tint: 0xdfe8f4 }); }
   for (const g of (gear && gear.weapon) || []) rc.holdItem({ vis: g, tint: 0xdfe8f4 }, 'right');

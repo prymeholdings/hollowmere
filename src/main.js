@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Barks } from './barks.js';
-import { setRealItemLook, defaultLook, realFor, fullLook, buildReal, NPC_SPECS, prewarmEnemies } from './realchar.js';
+import { setRealItemLook, defaultLook, realFor, fullLook, buildReal, NPC_SPECS, prewarmEnemies, REAL_OK } from './realchar.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
@@ -289,11 +289,13 @@ class Main {
     this.podium.add(this.preview.root);
     this.preview.once('Cheer', { timeScale: 1.2 });
     sfx('buff');
-    if (Settings.realistic !== false) {
+    if (Settings.realistic !== false && REAL_OK) {
+      const stand = this.preview; stand.root.visible = false;
       const kit = starterKit(s), stamp = (this.previewStamp = (this.previewStamp || 0) + 1);
       clearTimeout(this.previewTimer);
-      this.previewTimer = setTimeout(() => realFor(fullLook(s, s.cls), s.cls, kit, lookOf, { scale: s.height }).then((rc) => {
-        if (!rc || stamp !== this.previewStamp || !this.podium) return;
+      this.previewTimer = setTimeout(() => realFor(fullLook(s, s.cls), s.cls, kit, lookOf, { scale: s.height, priority: 10 }).then((rc) => {
+        if (!rc) { stand.root.visible = true; return; }
+        if (stamp !== this.previewStamp || !this.podium) return;
         this.podium.remove(this.preview.root);
         rc.dress(kit, s, cls);
         rc.root.position.y = 0.25; rc.root.rotation.y = 0.35;
