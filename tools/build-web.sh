@@ -14,7 +14,7 @@ import sys, re
 s = open(sys.argv[1]).read()
 s = re.sub(r'<meta http-equiv="Content-Security-Policy"[^>]*>\n?', '', s).replace(', viewport-fit=cover', '')
 s = re.sub(r'<title>.*?</title>', '<title>Hollowmere: The Sunken Wells</title>\n<link rel="manifest" href="manifest.webmanifest">\n<meta name="theme-color" content="#120e0b">\n<link rel="icon" href="icon-192.png">\n<link rel="apple-touch-icon" href="icon-192.png">', s)
-s = s.replace('<script src="game.js">', '<script>window.HM_PACKED = true; if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));</script>\n<script src="game.js">')
+s = s.replace('<script src="game.js">', '<script>window.HM_PACKED = true; if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {})); if ("serviceWorker" in navigator) { let r = false; const had = !!navigator.serviceWorker.controller; navigator.serviceWorker.addEventListener("controllerchange", () => { if (!r && had && (!window.game || window.game.menuMode)) { r = true; location.reload(); } }); }</script>\n<script src="game.js">')
 open(sys.argv[2], 'w').write(s)
 PY
 for f in app/assets/*/*.glb; do

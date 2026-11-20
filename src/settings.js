@@ -27,6 +27,8 @@ export function loadSettings() {
   // phones and tablets start on the fastest settings
   if (!saved && typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) Object.assign(Settings, { quality: 'low', renderScale: 0.8, showHelp: false });
   try { Object.assign(Settings, JSON.parse(saved || '{}')); } catch (e) { /* defaults */ }
+  // realistic characters are always on (older versions could switch them off after a graphics hiccup)
+  Settings.realistic = true;
   // laptops with integrated graphics (shared video memory) start one step lower; done once, the player can raise it again
   if (!Settings.gpuTuned) {
     Settings.gpuTuned = 1;

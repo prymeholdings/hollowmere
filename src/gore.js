@@ -64,7 +64,7 @@ export class Gore {
   constructor(scene) {
     this.scene = scene;
     this.mobile = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-    const MAXD = this.mobile ? 220 : 520, MAXP = this.mobile ? 320 : 800, MAXG = this.mobile ? 70 : 150;
+    const MAXD = this.mobile ? 2000 : 6000, MAXP = this.mobile ? 320 : 800, MAXG = this.mobile ? 1200 : 4000;
     this.MAXD = MAXD; this.MAXP = MAXP; this.MAXG = MAXG;
     // ground decals
     const dg = new THREE.PlaneGeometry(1, 1); dg.rotateX(-Math.PI / 2);
@@ -85,7 +85,7 @@ export class Gore {
     this.drops = [];
     // gibs: flesh lumps and bone shards
     // lumpy, wet chunks of meat (smooth-shaded, displaced so no two faces look alike)
-    const fg = new THREE.IcosahedronGeometry(1, 2);
+    const fg = new THREE.SphereGeometry(1, 16, 12);
     { const p = fg.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const k = 1 + Math.sin(v.x * 5.1) * 0.12 + Math.sin(v.y * 6.3 + v.z * 4) * 0.1 + Math.sin(v.z * 7.7) * 0.06; p.setXYZ(i, v.x * k, v.y * k * 0.8, v.z * k); } fg.computeVertexNormals(); }
     this.fleshMesh = new THREE.InstancedMesh(fg, new THREE.MeshPhysicalMaterial({ roughness: 0.3, clearcoat: 0.9, clearcoatRoughness: 0.25, sheen: 0.4, sheenColor: new THREE.Color(0xff5050) }), MAXG);
     this.boneMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.35, 0.5, 1, 8), new THREE.MeshStandardMaterial({ roughness: 0.6 }), MAXG);
@@ -149,8 +149,13 @@ export class Gore {
     this.addGib({ bone: true, p, v, s: size * R(1.5, 3), col: BONE[(rnd() * BONE.length) | 0], long: R(1.5, 4) });
   }
   addGib(g) {
-    if (this.gibs.length >= this.MAXG) this.gibs.shift();
-    g.t = 0; g.life = R(14, 24); g.rot = new THREE.Vector3(rnd() * 6, rnd() * 6, rnd() * 6); g.ang = new THREE.Vector3(R(-12, 12), R(-12, 12), R(-12, 12)); g.bounces = 0; g.rest = false;
+    // every chunk keeps its own instance slot and stays on the floor for the rest of the level
+    const mesh = g.bone ? this.boneMesh : this.fleshMesh;
+    mesh.userData.next = mesh.userData.next || 0;
+    g.slot = mesh.userData.next; mesh.userData.next = (mesh.userData.next + 1) % this.MAXG;
+    mesh.count = Math.min(this.MAXG, Math.max(mesh.count, g.slot + 1));
+    const old = this.gibs.findIndex((o) => o.bone === g.bone && o.slot === g.slot); if (old >= 0) this.gibs.splice(old, 1);
+    g.t = 0; g.rot = new THREE.Vector3(rnd() * 6, rnd() * 6, rnd() * 6); g.ang = new THREE.Vector3(R(-12, 12), R(-12, 12), R(-12, 12)); g.bounces = 0; g.rest = false;
     this.gibs.push(g);
   }
   // a creature dies. size scales the spray, big = overkill: the body bursts into pieces.
@@ -378,7 +383,7 @@ export class Gore {
   // flying parts are full meshes (few at a time), simulated like gibs
   addPart(obj, p, v, life = 30) {
     this.parts = this.parts || [];
-    const MAX = this.mobile ? 24 : 70;
+    const MAX = this.mobile ? 260 : 900;
     if (this.parts.length >= MAX) { const o = this.parts.shift(); o.obj.parent?.remove(o.obj); }
     obj.position.copy(p);
     this.scene.add(obj);
@@ -405,17 +410,57 @@ export class Gore {
       this.addStatic(m);
       this.splat(pos.x + x * 0.6, pos.z + z * 0.6, R(1, 1.6) * size, 'red', 0.92);
     }
-    // organs: liver, a heart, stomach
-    for (let i = 0; i < 3; i++) {
-      const o = new THREE.Mesh(new THREE.SphereGeometry(R(0.06, 0.11) * size, 10, 8), i === 0 ? M.liver : i === 1 ? M.meat : M.gutDark);
-      o.scale.set(1.4, 0.6, 1); const a = rnd() * 6.28, d = R(0.2, 0.7) * size;
-      this.addPart(o, new THREE.Vector3(pos.x, 0.9 * size, pos.z), new THREE.Vector3(Math.cos(a) * d * 4 + dir.x * 2, R(2, 4), Math.sin(a) * d * 4 + dir.z * 2), Infinity);
+    this.organs(pos, dir, size, 3);
+  }
+  track(obj) { (this.tracked = this.tracked || []).push(obj); }
+
+  // anatomical organs, each its own wet model
+  organGeo(kind, s) {
+    const lumpy = (g, amt, sx = 1, sy = 1, sz = 1) => { const p = g.attributes.position, v = new THREE.Vector3(); const k0 = rnd() * 9; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const k = 1 + Math.sin(v.x * 23 + k0) * Math.sin(v.y * 19) * amt + Math.sin(v.z * 31 + k0) * amt * 0.5; p.setXYZ(i, v.x * k * sx, v.y * k * sy, v.z * k * sz); } g.computeVertexNormals(); return g; };
+    if (kind === 'heart') { const g = lumpy(new THREE.SphereGeometry(s, 18, 14), 0.05, 0.85, 1.1, 0.8); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y < 0) { const k = 1 + y / s * 0.55; p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); } } g.computeVertexNormals(); return g; }
+    if (kind === 'lung') return lumpy(new THREE.SphereGeometry(s, 18, 14), 0.08, 0.6, 1.25, 0.75);
+    if (kind === 'kidney') { const g = new THREE.TorusGeometry(s * 0.7, s * 0.5, 10, 14, Math.PI * 1.3); return lumpy(g, 0.03); }
+    if (kind === 'stomach') { const g = new THREE.TorusGeometry(s, s * 0.6, 12, 16, Math.PI * 1.1); return lumpy(g, 0.06, 1, 1, 0.8); }
+    if (kind === 'liver') return lumpy(new THREE.SphereGeometry(s, 18, 12), 0.04, 1.5, 0.55, 1);
+    return lumpy(new THREE.SphereGeometry(s, 12, 10), 0.12);
+  }
+  ribcage(size, M) {
+    const g = new THREE.Group();
+    const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.025 * size, 0.03 * size, 0.42 * size, 8), M.bone); g.add(spine);
+    for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) {
+      if (rnd() < 0.25) continue; // some ribs snapped off
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(0.12 * size * (1 - i * 0.05), 0.009 * size, 5, 12, Math.PI * R(0.55, 0.95)), M.bone);
+      rib.position.y = 0.16 * size - i * 0.06 * size; rib.rotation.set(Math.PI / 2 + 0.2, 0, sx > 0 ? -0.2 : Math.PI + 0.2); g.add(rib);
     }
+    const meat = new THREE.Mesh(this.organGeo('chunk', 0.07 * size), M.meat); meat.position.set(0.04 * size, -0.05 * size, 0.05 * size); g.add(meat);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    return g;
+  }
+  organs(pos, dir, size = 1, n = 4) {
+    if (this.level < 1) return;
+    const M = this.mats();
+    const list = [['heart', 0.06, M.meat], ['lung', 0.09, M.gut], ['lung', 0.09, M.gut], ['liver', 0.09, M.liver], ['kidney', 0.035, M.liver], ['kidney', 0.035, M.liver], ['stomach', 0.06, M.gutDark], ['chunk', 0.06, M.meat], ['chunk', 0.05, M.fat]];
+    for (let i = 0; i < n; i++) {
+      const [k, s, mat] = list[(rnd() * list.length) | 0];
+      const o = new THREE.Mesh(this.organGeo(k, s * size), mat); o.castShadow = true;
+      const a = Math.atan2(dir.z, dir.x) + R(-1.4, 1.4), sp = R(1.5, 5);
+      this.addPart(o, new THREE.Vector3(pos.x, R(0.6, 1.2) * size, pos.z), new THREE.Vector3(Math.cos(a) * sp, R(2, 5), Math.sin(a) * sp), Infinity);
+    }
+  }
+  // a full mess for an overkill: ribs, spine, organs, guts
+  carnage(pos, dir, size = 1) {
+    if (this.level < 1) return;
+    const M = this.mats();
+    const rc = this.ribcage(size, M);
+    this.addPart(rc, new THREE.Vector3(pos.x, 1.0 * size, pos.z), new THREE.Vector3(dir.x * R(1, 3), R(3, 5), dir.z * R(1, 3)), Infinity);
+    this.organs(pos, dir, size, this.mobile ? 4 : 7);
+    this.entrails(pos, dir, size);
+    for (let i = 0; i < 6; i++) { const a = rnd() * 6.28, d = R(0.5, 2.5) * size; this.splat(pos.x + Math.cos(a) * d, pos.z + Math.sin(a) * d, R(1, 2.2) * size, 'red', 0.92); }
+    this.pool(pos.x, pos.z, R(2.5, 3.5) * size, 'red');
   }
   addStatic(m) {
     this.statics = this.statics || [];
-    const MAX = this.mobile ? 16 : 48;
-    if (this.statics.length >= MAX) { const o = this.statics.shift(); o.m.parent?.remove(o.m); }
+    
     this.scene.add(m); this.statics.push({ m, t: 0 });
   }
   // cut parts off a RealChar. `cuts` is how many; `from` is where the blow came from.
@@ -468,9 +513,11 @@ export class Gore {
   clear() {
     this.drops.length = 0; this.gibs.length = 0; this.pools.length = 0; this.dinfo.length = 0; this.dnext = 0;
     this.decals.count = 0; this.dropMesh.count = 0; this.fleshMesh.count = 0; this.boneMesh.count = 0;
+    this.fleshMesh.userData.next = 0; this.boneMesh.userData.next = 0;
     for (const o of this.parts || []) o.obj.parent?.remove(o.obj);
     for (const o of this.statics || []) o.m.parent?.remove(o.m);
-    this.parts = []; this.statics = []; this.spurts = [];
+    for (const o of this.settled || []) o.parent?.remove(o);
+    this.parts = []; this.statics = []; this.spurts = []; this.settled = []; this.tracked = [];
   }
   update(dt) {
     const m = this._m, q = this._q, e = this._e, s = this._s, p = this._p, c = this._c;
@@ -499,37 +546,31 @@ export class Gore {
     }
     this.dropMesh.count = n;
     if (n) { this.dropMesh.instanceMatrix.needsUpdate = true; this.dropMesh.instanceColor.needsUpdate = true; }
-    // gibs
-    let nf = 0, nb = 0;
+    // gibs: only moving chunks are simulated; resting ones are written once and left alone
+    let dirtyF = false, dirtyB = false;
     for (let i = this.gibs.length - 1; i >= 0; i--) {
       const g = this.gibs[i];
       g.t += dt;
-      if (!g.rest) {
-        g.v.y -= 16 * dt;
-        g.p.addScaledVector(g.v, dt);
-        g.rot.addScaledVector(g.ang, dt);
-        if (g.trail && rnd() < dt * 22) this.droplet(g.p, new THREE.Vector3(R(-0.5, 0.5), 0.5, R(-0.5, 0.5)), R(0.02, 0.045), g.blood);
-        if (g.p.y <= g.s * 0.6) {
-          g.p.y = g.s * 0.6;
-          if (g.bounces < 3 && Math.abs(g.v.y) > 1.2) {
-            g.v.y *= -0.38; g.v.x *= 0.6; g.v.z *= 0.6; g.ang.multiplyScalar(0.5); g.bounces++;
-            if (!g.bone) this.splat(g.p.x, g.p.z, R(0.5, 1.1), g.blood || 'red', 0.85);
-          } else { g.rest = true; g.rot.set(g.bone ? Math.PI / 2 : g.rot.x, g.rot.y, g.bone ? g.rot.z : g.rot.z); }
-        }
+      g.v.y -= 16 * dt;
+      g.p.addScaledVector(g.v, dt);
+      g.rot.addScaledVector(g.ang, dt);
+      if (g.trail && rnd() < dt * 22) this.droplet(g.p, new THREE.Vector3(R(-0.5, 0.5), 0.5, R(-0.5, 0.5)), R(0.02, 0.045), g.blood);
+      if (g.p.y <= g.s * 0.6) {
+        g.p.y = g.s * 0.6;
+        if (g.bounces < 3 && Math.abs(g.v.y) > 1.2) {
+          g.v.y *= -0.38; g.v.x *= 0.6; g.v.z *= 0.6; g.ang.multiplyScalar(0.5); g.bounces++;
+          if (!g.bone) this.splat(g.p.x, g.p.z, R(0.5, 1.1), g.blood || 'red', 0.85);
+        } else { g.rest = true; if (g.bone) g.rot.x = Math.PI / 2; if (!g.bone) this.splat(g.p.x, g.p.z, R(0.3, 0.6), g.blood || 'red', 0.9); }
       }
-      if (g.t > g.life) { this.gibs.splice(i, 1); continue; }
-    }
-    for (const g of this.gibs) {
-      const fade = g.t > g.life - 2 ? Math.max(0.01, (g.life - g.t) / 2) : 1;
       e.set(g.rot.x, g.rot.y, g.rot.z); q.setFromEuler(e);
-      if (g.bone) s.set(g.s, g.s * (g.long || 3), g.s).multiplyScalar(fade);
-      else s.set(g.s * 1.3, g.s * 0.8, g.s).multiplyScalar(fade);
-      m.compose(g.p, q, s);
-      c.setHex(g.col);
-      if (g.bone) { this.boneMesh.setMatrixAt(nb, m); this.boneMesh.setColorAt(nb, c); nb++; } else { this.fleshMesh.setMatrixAt(nf, m); this.fleshMesh.setColorAt(nf, c); nf++; }
+      if (g.bone) s.set(g.s, g.s * (g.long || 3), g.s); else s.set(g.s * 1.3, g.s * 0.8, g.s);
+      m.compose(g.p, q, s); c.setHex(g.col);
+      const mesh = g.bone ? this.boneMesh : this.fleshMesh;
+      mesh.setMatrixAt(g.slot, m); mesh.setColorAt(g.slot, c);
+      if (g.bone) dirtyB = true; else dirtyF = true;
+      if (g.rest) this.gibs.splice(i, 1); // settled for good
     }
-    this.boneMesh.count = nb; this.fleshMesh.count = nf;
-    for (const [mesh, k] of [[this.boneMesh, nb], [this.fleshMesh, nf]]) if (k) { mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true; }
+    for (const [mesh, k] of [[this.boneMesh, dirtyB], [this.fleshMesh, dirtyF]]) if (k) { mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true; }
     // severed parts tumbling and coming to rest
     for (let i = (this.parts || []).length - 1; i >= 0; i--) {
       const P = this.parts[i], o = P.obj;
@@ -551,7 +592,7 @@ export class Gore {
           }
         }
       }
-      if (P.t > P.life) { o.scale.multiplyScalar(0.94); if (o.scale.x < 0.05) { o.parent?.remove(o); this.parts.splice(i, 1); } }
+      if (P.rest) { o.matrixAutoUpdate = false; o.updateMatrix(); this.settled = this.settled || []; this.settled.push(o); this.parts.splice(i, 1); }
     }
     for (let i = (this.statics || []).length - 1; i >= 0; i--) { const S = this.statics[i]; S.t += dt;  }
     // arterial spray: pulses with the heartbeat, weakening as it bleeds out
@@ -564,6 +605,16 @@ export class Gore {
       const at = S.bone.getWorldPosition(this._p.clone());
       const k = Math.ceil(3 * beat * S.strength * (this.mobile ? 0.5 : 1));
       for (let j = 0; j < k; j++) this.droplet(at, new THREE.Vector3(S.dir.x * R(1, 3) + R(-0.4, 0.4), R(1.5, 3.5) * beat * S.strength + S.dir.y, S.dir.z * R(1, 3) + R(-0.4, 0.4)), R(0.02, 0.05), this.pick(S.kind));
+    }
+    // nothing is ever removed, but far-away remains are hidden so a floor full of bodies stays smooth
+    this._cullT = (this._cullT || 0) - dt;
+    if (this._cullT <= 0 && this.focus) {
+      this._cullT = 0.4;
+      const f = this.focus, R2 = (this.mobile ? 24 : 34) ** 2;
+      const vis = (o, x, z) => { const v = (x - f.x) ** 2 + (z - f.z) ** 2 < R2; if (o.visible !== v) o.visible = v; };
+      for (const o of this.settled || []) vis(o, o.position.x, o.position.z);
+      for (const S of this.statics || []) vis(S.m, S.m.position.x, S.m.position.z);
+      for (const o of this.tracked || []) { if (!o.parent) continue; o.getWorldPosition(this._p); vis(o, this._p.x, this._p.z); }
     }
     // spreading pools
     for (let i = this.pools.length - 1; i >= 0; i--) {
@@ -583,7 +634,7 @@ export class Gore {
       for (let i = 0; i < this.decals.count; i++) {
         const di = this.dinfo[i]; if (!di) continue;
         di.t += 2;
-        if (di.t > 90) { const a = this.dalpha.getX(i); if (a > 0.35) { this.dalpha.setX(i, a - 0.03); this.dalpha.needsUpdate = true; } }
+        if (di.t > 120) { const a = this.dalpha.getX(i); if (a > 0.7) { this.dalpha.setX(i, a - 0.01); this.dalpha.needsUpdate = true; } } // dries darker, never goes
       }
     }
   }

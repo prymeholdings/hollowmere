@@ -9,8 +9,12 @@ self.addEventListener('activate', (e) => {
 });
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
-  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request).then((res) => {
-    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
-    return res;
-  })));
+  const path = new URL(e.request.url).pathname;
+  const save = (res) => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); } return res; };
+  // the game code and page always come fresh when online, so an update shows up straight away
+  if (path === '/' || /\.(html|js|css|webmanifest)$/.test(path)) {
+    e.respondWith(fetch(e.request, { cache: 'no-store' }).then(save).catch(() => caches.match(e.request, { ignoreSearch: true })));
+    return;
+  }
+  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request).then(save)));
 });

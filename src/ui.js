@@ -895,7 +895,6 @@ export class UI {
       <div class="setrow"><span>Fullscreen</span><button class="small" id="set-fs">Toggle (F11)</button></div>
       <h3><span>Mature content</span></h3>
       <div class="setrow"><span>Art style</span><select id="set-grit"><option value="gritty">Gritty (dark, grainy)</option><option value="classic">Classic (bright)</option></select></div>
-      <div class="setrow"><span>Realistic characters</span><input type="checkbox" id="set-real"></div>
       <div class="setrow"><span>Blood and gore</span><select id="set-gore"><option value="off">Off</option><option value="low">Light</option><option value="max">Maximum</option></select></div>
       ${check('profanity', 'Strong language')}${check('barks', 'Characters talk while you play')}
       <div class="muted" style="font-size:12px">This game is rated Mature (violence, gore, strong language). You can tone it down here at any time.</div>
@@ -922,8 +921,6 @@ export class UI {
     $('#set-q', body).value = Settings.quality;
     $('#set-grit', body).value = Settings.grit || 'gritty';
     $('#set-grit', body).onchange = (e) => { Settings.grit = e.target.value; saveSettings(); this.main.applyGrit?.(); msg('Art style applies fully the next time you enter a level.', '#9fd8a0'); };
-    $('#set-real', body).checked = Settings.realistic !== false;
-    $('#set-real', body).onchange = (e) => { Settings.realistic = e.target.checked; saveSettings(); msg('Character models change the next time you enter a level.', '#9fd8a0'); };
     $('#set-gore', body).value = Settings.gore || 'max';
     $('#set-gore', body).onchange = (e) => { Settings.gore = e.target.value; saveSettings(); };
     $('#set-am', body).value = Settings.autoMode;
@@ -1304,7 +1301,7 @@ export class UI {
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.7.3 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG · v0.7.4 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
     $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
     $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };

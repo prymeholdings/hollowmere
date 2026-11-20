@@ -104,12 +104,14 @@ class Main {
     loadSettings();
     applyUI();
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    // if the graphics driver drops the context (white screen), save, switch to the lighter stylised models and restart
+    // if the graphics driver drops the context (white screen), save, drop to the lightest settings and restart
     this.renderer.domElement.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       try { if (G.player && !this.menuMode) saveGame(); } catch (err) { /* keep going */ }
-      try { if (Settings.realistic !== false) { Settings.realistic = false; saveSettings(); localStorage.setItem('hollowmere_ctxlost', '1'); } } catch (err) { /* storage off */ }
-      setTimeout(() => location.reload(), 400);
+      // lighten the load (never swap to the old models): lowest quality and a smaller render size
+      try { Settings.quality = 'low'; Settings.renderScale = Math.min(Settings.renderScale || 1, 0.75); saveSettings(); localStorage.setItem('hollowmere_ctxlost', '1'); } catch (err) { /* storage off */ }
+      let n = 0; try { n = +(sessionStorage.getItem('hm_ctx_reloads') || 0) + 1; sessionStorage.setItem('hm_ctx_reloads', n); } catch (err) { /* ignore */ }
+      if (n <= 3) setTimeout(() => location.reload(), 400);
     });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -161,7 +163,7 @@ class Main {
     playMusic('menu');
     if (localStorage.getItem('hollowmere_ctxlost')) {
       localStorage.removeItem('hollowmere_ctxlost');
-      setTimeout(() => this.flash('Your graphics card reset, so Hollowmere switched to the classic character models. You can turn Realistic characters back on in Settings.'), 2000);
+      setTimeout(() => this.flash('Your graphics card reset, so Hollowmere lowered the graphics quality to keep things smooth. You can raise it again in Settings.'), 2000);
     }
   }
 
@@ -791,7 +793,7 @@ class Main {
       }
       this.ambientFx(dt, t);
       this.fx.update(dt);
-      this.gore.update(dt);
+      this.gore.focus = G.player ? G.player.pos : null; this.gore.update(dt);
       this.render();
       return;
     }
@@ -812,7 +814,7 @@ class Main {
         updateZones(dt);
         if (!G.player.dead) G.player.hover = this.canPlay() ? this.pick() : null;
         this.fx.update(dt);
-        this.gore.update(dt);
+        this.gore.focus = G.player ? G.player.pos : null; this.gore.update(dt);
         // boss music when a living guardian is close
         if (L.kind === 'dungeon') {
           const boss = L.entities.find((e) => e.type === 'enemy' && e.boss && !e.dead && flatDist(e.pos, G.player.pos) < 16);

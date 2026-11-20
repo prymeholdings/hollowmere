@@ -179,11 +179,8 @@ export class Level {
     e.gone = true;
     if (e.ring) e.ring.visible = false;
     e.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.castShadow = false; });
-    this.corpses = this.corpses || [];
-    this.corpses.push(e);
-    const phone = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-    const max = phone ? 14 : Settings.quality === 'low' ? 24 : 40;
-    while (this.corpses.length > max) { const o = this.corpses.shift(); this.root.remove(o.root); }
+    (this.corpses = this.corpses || []).push(e);
+    G.main?.gore?.track(e.root); // never removed; hidden only while far away
   }
   remove(e) { e.gone = true; const i = this.entities.indexOf(e); if (i >= 0) this.entities.splice(i, 1); this.root.remove(e.root); }
 

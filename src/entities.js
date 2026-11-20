@@ -472,11 +472,16 @@ export class Enemy extends Entity {
       // dismemberment: heads, arms and legs come off; heavy blows spill the guts
       const max = Settings.gore === 'max';
       const from = G.player ? G.player.pos : null;
-      const cuts = big ? (max ? 3 + ((Math.random() * 3) | 0) : 1) : this.boss ? 2 : (this.lastCrit || Math.random() < (max ? 0.45 : 0.15)) ? 1 : 0;
+      // every kill on max gore leaves something: at least one limb or the head, often guts and organs
+      const cuts = big ? (max ? 3 + ((Math.random() * 4) | 0) : 1) : this.boss ? 3 : max ? 1 + (this.lastCrit || Math.random() < 0.45 ? 1 : 0) : Math.random() < 0.3 ? 1 : 0;
       if (cuts) { G.main.gore.dismember(this.char, this.pos, gk, 1, cuts, from, enemySkin(this.data.shape), false); G.main.sfxGore?.(); }
-      if (max && (big || this.boss || Math.random() < 0.25)) {
+      if (max) {
         const d = from ? this.pos.clone().sub(from).setY(0).normalize() : new THREE.Vector3(1, 0, 0);
-        G.main.gore.entrails(this.pos, d, Math.max(1, this.char.root.scale.x * 0.9));
+        const sz = Math.max(1, this.char.root.scale.x * 0.9);
+        if (big || this.boss) G.main.gore.carnage(this.pos, d, sz);
+        else if (Math.random() < 0.6) { G.main.gore.entrails(this.pos, d, sz); }
+        else G.main.gore.organs(this.pos, d, sz, 2);
+        G.main.gore.pool(this.pos.x, this.pos.z, 2.2 * sz, gk === 'bone' ? 'rot' : gk);
       }
     } else if (big && Settings.gore === 'max' && gk !== 'none') { this.model.visible = false; this.deathT = 0.4; G.main.sfxGore?.(); }
     if (this.boss) { G.main.shake(0.6); G.main.fx.explosion(this.pos, 0xff5522, 4); }
