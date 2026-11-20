@@ -22073,10 +22073,10 @@ void main() {
       let i = 0;
       while (i < curveLengths.length) {
         if (curveLengths[i] >= d2) {
-          const diff = curveLengths[i] - d2;
+          const diff2 = curveLengths[i] - d2;
           const curve = this.curves[i];
           const segmentLength = curve.getLength();
-          const u2 = segmentLength === 0 ? 0 : 1 - diff / segmentLength;
+          const u2 = segmentLength === 0 ? 0 : 1 - diff2 / segmentLength;
           return curve.getPointAt(u2, optionalTarget);
         }
         i++;
@@ -28366,18 +28366,18 @@ void main() {
       return this.elapsedTime;
     }
     getDelta() {
-      let diff = 0;
+      let diff2 = 0;
       if (this.autoStart && !this.running) {
         this.start();
         return 0;
       }
       if (this.running) {
         const newTime = now();
-        diff = (newTime - this.oldTime) / 1e3;
+        diff2 = (newTime - this.oldTime) / 1e3;
         this.oldTime = newTime;
-        this.elapsedTime += diff;
+        this.elapsedTime += diff2;
       }
-      return diff;
+      return diff2;
     }
   };
   function now() {
@@ -33982,6 +33982,108 @@ void main() {
     return v3;
   }
 
+  // src/settings.js
+  var KEY = "hollowmere_settings_v1";
+  var Settings = {
+    master: 0.8,
+    music: 0.55,
+    sfx: 0.8,
+    quality: "high",
+    // low | medium | high | ultra
+    renderScale: 1,
+    adaptiveRes: true,
+    // lower the 3D resolution a little whenever the frame rate dips below 60
+    sharpen: 0.35,
+    damageNumbers: true,
+    showHelp: true,
+    screenShake: true,
+    autoLoot: true,
+    autoEquip: true,
+    // better armour goes on as you pick it up (never weapons)
+    difficulty: "normal",
+    // easy | normal | hard | nightmare | hell
+    autoAttack: false,
+    // attack nearby foes on your own
+    autoMode: "basic",
+    // 'basic' or a hotbar slot: rmb q w e r
+    autoRange: 8,
+    // mature content (both on by default, both can be switched off)
+    gore: "max",
+    // off | low | max
+    profanity: true,
+    barks: true,
+    grit: "gritty",
+    // gritty | classic
+    realistic: true,
+    // realistic human models (off = the stylised heroes)
+    // interface
+    uiScale: 1,
+    hudScale: 1,
+    showPortrait: true,
+    hudOpacity: 1,
+    theme: "bronze",
+    showMinimap: true,
+    showLog: true,
+    pcStick: true,
+    touchSize: 1,
+    touchOpacity: 0.9,
+    leftHanded: false
+  };
+  function loadSettings() {
+    let saved = null;
+    try {
+      saved = localStorage.getItem(KEY);
+    } catch (e) {
+    }
+    if (!saved && typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches) Object.assign(Settings, { quality: "low", renderScale: 0.8, showHelp: false });
+    try {
+      Object.assign(Settings, JSON.parse(saved || "{}"));
+    } catch (e) {
+    }
+    Settings.realistic = true;
+    if (!Settings.gpuTuned) {
+      Settings.gpuTuned = 1;
+      const gpu = gpuName();
+      Settings.gpu = gpu;
+      if (/Radeon\(TM\) Graphics|Radeon Graphics|Vega|Intel|UHD|Iris|Mali|Adreno|PowerVR|SwiftShader|llvmpipe/i.test(gpu) && !/RX|Pro W|Arc/i.test(gpu)) {
+        if (Settings.quality === "high" || Settings.quality === "ultra") Settings.quality = "medium";
+        Settings.renderScale = Math.min(Settings.renderScale || 1, 0.9);
+        Settings.integratedGpu = true;
+      }
+      try {
+        localStorage.setItem(KEY, JSON.stringify(Settings));
+      } catch (e) {
+      }
+    }
+    syncAudio();
+  }
+  function saveSettings() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(Settings));
+    } catch (e) {
+    }
+    syncAudio();
+  }
+  function syncAudio() {
+    Audio2.vol.master = Settings.master;
+    Audio2.vol.music = Settings.music;
+    Audio2.vol.sfx = Settings.sfx;
+    applyVolumes();
+  }
+  function gpuName() {
+    try {
+      const c2 = document.createElement("canvas");
+      const gl = c2.getContext("webgl2") || c2.getContext("webgl");
+      if (!gl) return "";
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      const n = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      return String(n || "");
+    } catch (e) {
+      return "";
+    }
+  }
+
   // src/state.js
   var SAVE_KEY = "hollowmere_save_v2";
   var SKILL_ZERO = {
@@ -34314,6 +34416,25 @@ void main() {
     }
     G.backpack = out2;
   }
+  var SCORE_W = { str: 2, dex: 2, vit: 2, mag: 2, life: 0.8, mana: 0.4, dmg: 3, dmg_pct: 2, armor: 1, aspd: 2.5, leech: 3, crit: 3, spell: 2, regen: 1.5, fire: 1, cold: 1, light: 1, poison: 1, gold_find: 0.5, magic_find: 0.8 };
+  function gearScore(it) {
+    if (!it) return 0;
+    let s2 = (it.armor || 0) * 1.2 + (it.rarity || 0) * 2;
+    for (const k2 in it.affixes || {}) s2 += (it.affixes[k2] || 0) * (SCORE_W[k2] ?? 1);
+    for (const g2 of it.gems || []) if (g2) s2 += 4 + g2.tier * 3;
+    return s2;
+  }
+  var AUTO_SLOTS = /* @__PURE__ */ new Set(["helm", "armor", "shoulders", "gloves", "shirt", "belt", "pants", "boots", "ring", "amulet"]);
+  function autoEquip(it) {
+    if (Settings.autoEquip === false) return;
+    if (!it || !AUTO_SLOTS.has(it.slot) || !(it.slot in G.equipment) || (it.req || 0) > G.lvl) return;
+    const cur = G.equipment[it.slot];
+    if (cur && gearScore(it) <= gearScore(cur) * 1.05 + 0.5) return;
+    const i = G.backpack.indexOf(it);
+    if (i < 0) return;
+    equipFromPack(i);
+    if (G.equipment[it.slot] === it) msg(`Auto-equipped ${displayName(it)}${cur ? ` (better than your ${displayName(cur)})` : ""}`, "#9fd8a0");
+  }
   function pickupItem(it) {
     if (!packRoom(it)) {
       msg("Your backpack is full!", "#ff6666");
@@ -34322,6 +34443,7 @@ void main() {
     packAdd(it);
     msg(`Picked up ${displayName(it)}`, "#" + itemColor(it).toString(16).padStart(6, "0"));
     sfx("pick");
+    autoEquip(it);
     if ((it.rarity || 0) >= 2) G.main?.barkLoot?.();
     return true;
   }
@@ -34589,100 +34711,6 @@ void main() {
     G.hp = Math.max(1, Math.min(G.hp, maxHp()));
     G.mp = Math.min(G.mp, maxMp());
     return true;
-  }
-
-  // src/settings.js
-  var KEY = "hollowmere_settings_v1";
-  var Settings = {
-    master: 0.8,
-    music: 0.55,
-    sfx: 0.8,
-    quality: "high",
-    // low | medium | high | ultra
-    renderScale: 1,
-    sharpen: 0.35,
-    damageNumbers: true,
-    showHelp: true,
-    screenShake: true,
-    autoLoot: true,
-    autoAttack: false,
-    // attack nearby foes on your own
-    autoMode: "basic",
-    // 'basic' or a hotbar slot: rmb q w e r
-    autoRange: 8,
-    // mature content (both on by default, both can be switched off)
-    gore: "max",
-    // off | low | max
-    profanity: true,
-    barks: true,
-    grit: "gritty",
-    // gritty | classic
-    realistic: true,
-    // realistic human models (off = the stylised heroes)
-    // interface
-    uiScale: 1,
-    hudOpacity: 1,
-    theme: "bronze",
-    showMinimap: true,
-    showLog: true,
-    pcStick: true,
-    touchSize: 1,
-    touchOpacity: 0.9,
-    leftHanded: false
-  };
-  function loadSettings() {
-    let saved = null;
-    try {
-      saved = localStorage.getItem(KEY);
-    } catch (e) {
-    }
-    if (!saved && typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches) Object.assign(Settings, { quality: "low", renderScale: 0.8, showHelp: false });
-    try {
-      Object.assign(Settings, JSON.parse(saved || "{}"));
-    } catch (e) {
-    }
-    Settings.realistic = true;
-    if (!Settings.gpuTuned) {
-      Settings.gpuTuned = 1;
-      const gpu = gpuName();
-      Settings.gpu = gpu;
-      if (/Radeon\(TM\) Graphics|Radeon Graphics|Vega|Intel|UHD|Iris|Mali|Adreno|PowerVR|SwiftShader|llvmpipe/i.test(gpu) && !/RX|Pro W|Arc/i.test(gpu)) {
-        if (Settings.quality === "high" || Settings.quality === "ultra") Settings.quality = "medium";
-        Settings.renderScale = Math.min(Settings.renderScale || 1, 0.9);
-        Settings.integratedGpu = true;
-      }
-      try {
-        localStorage.setItem(KEY, JSON.stringify(Settings));
-      } catch (e) {
-      }
-    }
-    syncAudio();
-  }
-  function saveSettings() {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(Settings));
-    } catch (e) {
-    }
-    syncAudio();
-  }
-  function syncAudio() {
-    Audio2.vol.master = Settings.master;
-    Audio2.vol.music = Settings.music;
-    Audio2.vol.sfx = Settings.sfx;
-    applyVolumes();
-  }
-  function gpuName() {
-    try {
-      const c2 = document.createElement("canvas");
-      const gl = c2.getContext("webgl2") || c2.getContext("webgl");
-      if (!gl) return "";
-      const ext = gl.getExtension("WEBGL_debug_renderer_info");
-      const n = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
-      return String(n || "");
-    } catch (e) {
-      return "";
-    }
   }
 
   // src/barks.js
@@ -35037,6 +35065,121 @@ void main() {
   for (const k2 in MORE_NPC) (NPC[k2] ||= []).push(...MORE_NPC[k2]);
   FOE.push(...MORE_FOE);
   FOE_DEATH.push(...MORE_FOE_DEATH);
+  var MORE2_HERO = {
+    kill: [
+      ["Down you go, you crusty ballsack.", "Down you go."],
+      ["Died like he fucked: fast and disappointing.", "Died fast and disappointing."],
+      ["I have had more fight out of a wet fart.", "I have had more fight out of a wet sock."],
+      ["Tell the devil I said suck it.", "Tell the devil I said hello."],
+      ["You smelled like a dead tramp's jockstrap anyway.", "You smelled awful anyway."],
+      ["Another bellend for the pile.", "Another one for the pile."],
+      ["Should have stayed in your mum's basement, you sweaty bollock.", "Should have stayed home."],
+      ["That was quicker than my wedding night.", "That was quick."],
+      ["Bye bye, fuckface. Nobody will miss you.", "Bye bye. Nobody will miss you."],
+      ["I would piss on your grave but you are not worth the water.", "Not worth the effort."],
+      ["Your corpse is the only useful thing you ever made, twat.", "Your corpse is useful at last."],
+      ["Lights out, knob jockey.", "Lights out."]
+    ],
+    bigkill: [
+      ["CRIT! Look at that, his arse is over there and his face is over here!", "CRIT! He went everywhere!"],
+      ["Exploded like a fat priest at an all-you-can-eat buffet.", "Exploded like a melon."],
+      ["Somebody get a mop. And a bucket. And a fucking shovel.", "Somebody get a mop."],
+      ["I just turned that prick into soup.", "I just turned that into soup."],
+      ["Splattered him like a bird shitting on a statue.", "Splattered him everywhere."],
+      ["Guts on the wall, dick on the ceiling. Beautiful.", "Guts on the wall. Beautiful."],
+      ["That's not a corpse, that's a fucking jigsaw puzzle.", "That's a jigsaw puzzle now."],
+      ["Critical hit, critical shit. He shat himself into orbit.", "Critical hit! Into orbit!"],
+      ["I think I just found his spleen in my boot.", "I found something in my boot."],
+      ["Rained bollocks. Literally.", "It rained bits."]
+    ],
+    idle: [
+      ["I need a drink, a bath and a woman who doesn't ask questions. In any order.", "I need a drink and a bath."],
+      ["My arse crack has been sweating since floor one.", "I have been sweating since floor one."],
+      ["Who designs a dungeon without a fucking toilet?", "Who designs a dungeon without a privy?"],
+      ["Why do I always end up knee-deep in some poor bastard's colon?", "Why am I always knee-deep in this?"],
+      ["Saw a rat humping a skull back there. Even the rats are depressed.", "Saw a rat chewing a skull back there."],
+      ["I could murder a pie. And then a goblin. Then another pie.", "I could murder a pie."],
+      ["These boots smell like a troll's taint.", "These boots smell awful."],
+      ["I'm so bored I could lick a torch.", "I'm so bored."],
+      ["What's the difference between a goblin and a bag of shit? The bag.", "Goblins. Ugh."],
+      ["Why did the skeleton not fuck anyone? He had no balls. And no friends..", "Why are skeletons lonely? No body."],
+      ["I once shagged a barmaid so hard the tavern changed its name.", "I once caused a tavern to change its name."],
+      ["If I die down here, bury me with my boots on and my cock out.", "If I die down here, bury me with my boots on."]
+    ],
+    town: [
+      ["Hollowmere: where the ale is warm and the whores are warmer.", "Hollowmere: where the ale is warm."],
+      ["Smells like piss and regret. Home sweet home.", "Smells like home."],
+      ["The mayor has a face like a bulldog licking piss off a nettle.", "The mayor looks permanently cross."],
+      ["I've seen more life in a dead hooker's handbag.", "This town is very quiet."]
+    ],
+    hurt: [
+      ["OW, you fucking ballbag!", "OW!"],
+      ["That went right in my piss flaps!", "That hurt!"],
+      ["Hit me again and I'll skull-fuck your corpse!", "Hit me again and you'll regret it!"],
+      ["Right in the knackers, you cheating shit!", "Low blow!"]
+    ],
+    low: [
+      ["I'm leaking like a cheap whore's bucket!", "I'm leaking badly!"],
+      ["Shit shit shit shit SHIT!", "Oh no no no!"],
+      ["If I die, delete my browser history!", "If I die, burn my diary!"]
+    ],
+    loot: [
+      ["Ooh, shiny. Better than sex. Well, better than sex with you.", "Ooh, shiny."],
+      ["Finders keepers, dead fuckers weepers.", "Finders keepers."],
+      ["Came out of his arse, still counts.", "Still counts."]
+    ],
+    level: [
+      ["I just got harder than a priest in a choir.", "I just got stronger."],
+      ["Stronger, faster, and my dick is probably bigger too.", "Stronger and faster."]
+    ],
+    potion: [
+      ["Tastes like a goat pissed in honey. Delicious.", "Tastes awful. Delicious."],
+      ["Down the hatch, up the arse.", "Down the hatch."]
+    ]
+  };
+  var MORE2_NPC = {
+    villager: [
+      ["Mind the shit on the cobbles. Some of it is the mayor's.", "Mind the cobbles."],
+      ["My husband went into the Wells and came back with crabs. The other kind.", "My husband came back from the Wells itchy."],
+      ["Oi, hero! My wife says you're handsome. I say you look like a ballsack in a cape.", "My wife says you're handsome."],
+      ["I'd offer you a drink but you look like you'd drink your own piss.", "You look thirsty."],
+      ["Last hero who came through shagged my sheep. Keep your hands where I can see them.", "Keep away from my sheep."],
+      ["Heard you made a ghoul explode. My mother-in-law next, please.", "Heard you made a ghoul explode."],
+      ["What do you call a hero with no money? A fucking peasant. Welcome home.", "Welcome home."]
+    ],
+    merchant: [
+      ["Buy something or fuck off, I'm not a museum.", "Buy something or move along."],
+      ["That price? I'd sooner sell my arsehole. Actually, make an offer.", "That price? No chance."]
+    ],
+    blacksmith: [
+      ["I hammer steel all day. Your mum says I hammer other things too.", "I hammer steel all day."],
+      ["This blade could cut a fart in half.", "This blade is very sharp."]
+    ],
+    healer: [
+      ["Drop your trousers. No, not for that. Okay, a little for that.", "Let me look at those wounds."],
+      ["I've stitched up worse. Mostly from your last trip.", "I've stitched up worse."]
+    ]
+  };
+  var MORE2_FOE = [
+    ["I'll fuck your skull and wear it as a hat!", "I'll wear your skull as a hat!"],
+    ["Come here so I can tea-bag your corpse!", "Come here and die!"],
+    ["Your mum squealed louder than you will!", "You'll squeal!"],
+    ["I'll use your spine as a back-scratcher!", "I'll use your spine as a back-scratcher!"],
+    ["Smells like fresh meat and stale piss!", "Smells like fresh meat!"],
+    ["I'll shit down your neck hole!", "I'll end you!"],
+    ["Nice arse! I'll eat it last!", "I'll eat you last!"],
+    ["Your guts are going on my fucking mantelpiece!", "Your guts are mine!"]
+  ];
+  var MORE2_FOE_DEATH = [
+    ["Tell... my wife... she was a shit lay...", "Tell... my wife..."],
+    ["I... shat... myself...", "I... am done..."],
+    ["Not... the face... you bastard...", "Not... the face..."],
+    ["Fuck... this... job...", "I... quit..."]
+  ];
+  for (const k2 in MORE2_HERO) (HERO[k2] ||= []).push(...MORE2_HERO[k2]);
+  for (const k2 in MORE2_NPC) (NPC[k2] ||= []).push(...MORE2_NPC[k2]);
+  FOE.push(...MORE2_FOE);
+  FOE_DEATH.push(...MORE2_FOE_DEATH);
   var text = (pair) => Settings.profanity ? pair[0] : pair[1];
   var cd = 0;
   var idleT = 12;
@@ -44356,6 +44499,16 @@ void main(){
     return wrap(SK[key] || SK.attack, glow);
   }
 
+  // src/difficulty.js
+  var DIFFICULTIES = {
+    easy: { name: "Easy", hp: 0.7, dmg: 0.6, xp: 0.85, gold: 1, mf: 0, mobs: 0.85, note: "Weaker foes, a bit less experience" },
+    normal: { name: "Normal", hp: 1, dmg: 1, xp: 1, gold: 1, mf: 0, mobs: 1, note: "The intended challenge" },
+    hard: { name: "Hard", hp: 1.6, dmg: 1.4, xp: 1.6, gold: 1.35, mf: 30, mobs: 1.15, note: "+60% experience, +35% gold, +30% magic find" },
+    nightmare: { name: "Nightmare", hp: 2.6, dmg: 2, xp: 2.4, gold: 1.75, mf: 70, mobs: 1.3, note: "+140% experience, +75% gold, +70% magic find" },
+    hell: { name: "Hell", hp: 4, dmg: 3, xp: 3.5, gold: 2.3, mf: 130, mobs: 1.5, note: "+250% experience, +130% gold, +130% magic find" }
+  };
+  var diff = () => DIFFICULTIES[Settings.difficulty] || DIFFICULTIES.normal;
+
   // src/perf.js
   var phone = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
   var frustum = new Frustum();
@@ -44374,6 +44527,17 @@ void main(){
       if (tris < 450) rc._tiny.push(m3);
     }
     return rc._tiny;
+  }
+  function smallParts(rc) {
+    if (rc._small) return rc._small;
+    rc._small = [];
+    for (const k2 in rc.parts) {
+      const m3 = rc.parts[k2];
+      const g2 = m3.geometry;
+      const tris = g2.index ? g2.index.count / 3 : g2.attributes.position.count / 3;
+      if (tris >= 450 && tris < 1e3) rc._small.push(m3);
+    }
+    return rc._small;
   }
   function setShadow(rc, on) {
     if (rc._shadow === on) return;
@@ -44420,6 +44584,12 @@ void main(){
       rc.lod = d2 > 196 ? 1 : 0;
       if (d2 > 121) {
         for (const m3 of tinyParts(rc)) if (m3.visible) {
+          m3.visible = false;
+          tinyOff.push(m3);
+        }
+      }
+      if (d2 > 324) {
+        for (const m3 of smallParts(rc)) if (m3.visible) {
           m3.visible = false;
           tinyOff.push(m3);
         }
@@ -46278,11 +46448,12 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.floor = floor;
       const f1 = floor - 1;
       const hpMul = 1 + 0.42 * f1 + 4e-3 * f1 * f1, dmgMul = 1 + 0.26 * f1 + 15e-4 * f1 * f1;
-      this.maxHp = d2.hp * hpMul * (elite ? 2.6 : 1);
+      const D3 = diff();
+      this.maxHp = d2.hp * hpMul * (elite ? 2.6 : 1) * D3.hp;
       this.hp = this.maxHp;
-      this.dmg = d2.dmg * dmgMul * (elite ? 1.4 : 1);
+      this.dmg = d2.dmg * dmgMul * (elite ? 1.4 : 1) * D3.dmg;
       this.speed = d2.speed;
-      this.xp = Math.floor(d2.xp * (1 + 0.35 * f1 + 0.012 * f1 * f1) * (elite ? 3 : 1));
+      this.xp = Math.floor(d2.xp * (1 + 0.35 * f1 + 0.012 * f1 * f1) * (elite ? 3 : 1) * D3.xp);
       this.ranged = !!d2.ranged;
       const s2 = boss ? 2.4 : elite ? 1.4 : 1.15;
       const sk = SKEL[d2.shape];
@@ -46376,6 +46547,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.hp -= d2;
       this.lastDmg = d2;
       this.lastCrit = !!crit;
+      if (crit) this.critHit = true;
       this.aggro = true;
       this.hitT = 0.15;
       this.char?.flash?.(crit ? 1.6 : 1);
@@ -46418,7 +46590,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (this.boss) G.main.addFameFromBoss(this.floor);
       G.level.dropLoot(this.pos.clone(), this.floor, this.elite, this.boss);
       G.main.fx.emit(this.pos.clone().setY(0.8), { count: this.boss ? 60 : 16, color: this.isSkel ? 14209208 : this.data.color, speed: 4, life: 0.7, size: 0.5, gravity: 5 });
-      const big = (this.lastDmg || 0) > this.maxHp * 0.55 || this.hp < -this.maxHp * 0.35;
+      const big = !!this.critHit;
       G.main.gore.death(this.pos, goreKind(this.data), (this.boss ? 2.2 : this.elite ? 1.4 : 1) * (this.pickR > 0.8 ? 1.3 : 1), big, G.player ? G.player.pos : null);
       Barks.kill(this, big);
       {
@@ -46432,7 +46604,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (real && Settings.gore !== "off" && gk !== "none") {
         const max = Settings.gore === "max";
         const from = G.player ? G.player.pos : null;
-        const cuts = big ? max ? 3 + (Math.random() * 4 | 0) : 1 : this.boss ? 3 : max ? 1 + (this.lastCrit || Math.random() < 0.45 ? 1 : 0) : Math.random() < 0.3 ? 1 : 0;
+        const cuts = big ? max ? (this.boss ? 5 : 3) + (Math.random() * 4 | 0) : 1 : 0;
         if (cuts) {
           G.main.gore.dismember(this.char, this.pos, gk, 1, cuts, from, enemySkin(this.data.shape), false);
           G.main.sfxGore?.();
@@ -46440,10 +46612,12 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         if (max) {
           const d2 = from ? this.pos.clone().sub(from).setY(0).normalize() : new Vector3(1, 0, 0);
           const sz = Math.max(1, this.char.root.scale.x * 0.9);
-          if (big || this.boss) G.main.gore.carnage(this.pos, d2, sz);
-          else if (Math.random() < 0.6) {
-            G.main.gore.entrails(this.pos, d2, sz);
-          } else G.main.gore.organs(this.pos, d2, sz, 2);
+          if (big) {
+            G.main.gore.carnage(this.pos, d2, sz);
+            if (Math.random() < 0.7) G.main.gore.entrails(this.pos, d2, sz);
+            G.main.gore.organs(this.pos, d2, sz, 3);
+            G.main.shake?.(0.25);
+          }
           G.main.gore.pool(this.pos.x, this.pos.z, 2.2 * sz, gk === "bone" ? "rot" : gk);
         }
       } else if (big && Settings.gore === "max" && gk !== "none") {
@@ -49794,6 +49968,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     if (typeof document === "undefined" || !document.body) return;
     const r = document.documentElement.style, b2 = document.body.classList;
     r.setProperty("--uis", String(Settings.uiScale ?? 1));
+    r.setProperty("--hudz", String(Settings.hudScale ?? 1));
     r.setProperty("--hudop", String(Settings.hudOpacity ?? 1));
     r.setProperty("--tbs", String(Settings.touchSize ?? 1));
     r.setProperty("--tbo", String(Settings.touchOpacity ?? 1));
@@ -49805,6 +49980,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     b2.toggle("no-minimap", Settings.showMinimap === false);
     b2.toggle("no-log", Settings.showLog === false);
     b2.toggle("no-orbs3d", Settings.compactOrbs === true);
+    b2.toggle("no-portrait", Settings.showPortrait === false);
     b2.toggle("lefty", !!Settings.leftHanded);
   }
 
@@ -51916,10 +52092,10 @@ float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
       const pool = ENEMIES.filter((e) => e.minFloor <= f2 && (f2 < 30 || e.minFloor >= f2 - 45));
       for (let i = 1; i < this.rooms.length; i++) {
         const r = this.rooms[i];
-        const packs = 1 + (Math.random() < 0.4 + f2 * 0.03 ? 1 : 0);
+        const packs = 2 + (Math.random() < 0.35 + f2 * 0.03 ? 1 : 0);
         for (let p2 = 0; p2 < packs; p2++) {
           const t = pick(pool);
-          const cnt = randi(2, 4) + Math.min(Math.floor(f2 / 3), 3);
+          const cnt = Math.round((randi(3, 5) + Math.min(Math.floor(f2 / 3), 4)) * diff().mobs);
           const elitePack = Math.random() < 0.12;
           for (let j2 = 0; j2 < cnt; j2++) {
             const e = new Enemy(t, f2, elitePack && j2 === 0, false);
@@ -51947,10 +52123,11 @@ float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
       }
     }
     dropLoot(p2, f2, elite, boss) {
-      const mf = G.main.magicFind();
+      const D3 = diff();
+      const mf = G.main.magicFind() + D3.mf;
       const drops = [];
       if (Math.random() < 0.55 || elite || boss) {
-        let g2 = Math.floor(randi(2, 7) * (1 + f2 * 0.6) * (1 + G.main.goldFind() / 100));
+        let g2 = Math.floor(randi(2, 7) * (1 + f2 * 0.6) * (1 + G.main.goldFind() / 100) * D3.gold);
         if (boss) g2 *= 6;
         drops.push({ gold: g2 });
       }
@@ -52247,6 +52424,14 @@ void main(){
   };
 
   // src/ui.js
+  var setTxt = (el2, v3) => {
+    if (!el2) return;
+    v3 = String(v3);
+    if (el2._t !== v3) {
+      el2._t = v3;
+      el2.textContent = v3;
+    }
+  };
   var $ = (sel, root = document) => root.querySelector(sel);
   var el = (tag, cls, html) => {
     const e = document.createElement(tag);
@@ -52327,7 +52512,7 @@ void main(){
       <div id="lowhp"></div><div id="vignette"></div>
       <div id="hud" class="hidden">
         <div id="hud-top-left">
-          <div id="hud-name"></div><div id="hud-sub"></div>
+          <div id="hud-id"><img id="hud-portrait" src="assets/private/portrait.jpg" alt=""><div><div id="hud-name"></div><div id="hud-sub"></div></div></div>
           <div id="pet-wrap"><div class="bar pet"><div></div><span></span></div></div>
           <div id="hud-points" class="hidden">\u2726 Points to spend: ${isTouch() || /[?&]touch=1/.test(location.search) ? "tap Hero / Skills / Stars" : "C attributes \xB7 K skills \xB7 Z stars"}</div>
           <div id="hud-buffs"></div>
@@ -52336,7 +52521,7 @@ void main(){
         <div id="hud-target" class="hidden"><div id="hud-target-name"></div><div class="bar"><div></div><span></span></div></div>
         <div id="hud-right">
           <div id="mmwrap"><canvas id="minimap" width="208" height="208"></canvas></div>
-          <div id="hud-loc"></div><div id="hud-clock"></div><div id="hud-gold"></div><div id="hud-fame" style="color:#c99bff"></div><div id="hud-quest"></div>
+          <div id="hud-fps" style="display:none;color:#9fd8a0;font-size:12px"></div><div id="hud-loc"></div><div id="hud-clock"></div><div id="hud-gold"></div><div id="hud-fame" style="color:#c99bff"></div><div id="hud-quest"></div>
         </div>
         <div id="log"></div>
         <div id="hud-bottom">
@@ -52354,6 +52539,12 @@ void main(){
       <div id="menu" class="hidden"></div>
       <div id="create" class="hidden"></div>
       <div id="loading"><div class="title" style="font-size:64px">HOLLOWMERE</div><div class="muted" id="load-txt">Loading the Sunken Wells...</div><div class="lb"><div></div></div></div>`;
+      {
+        const pi = this.root.querySelector("#hud-portrait");
+        if (pi) pi.onerror = () => {
+          pi.style.display = "none";
+        };
+      }
       this.hud = $("#hud");
       this.orbHp = new Orb3D($(".orb.hp .orbgl"), [16734784, 9046534, 16756874]);
       this.orbMp = new Orb3D($(".orb.mp .orbgl"), [5937919, 662154, 12116223]);
@@ -52582,8 +52773,8 @@ void main(){
         }
       }
       const cls = CLASSES[G.cls];
-      $("#hud-name").textContent = G.heroName;
-      $("#hud-sub").textContent = `Level ${G.lvl} ${cls ? cls.title : ""} \xB7 ${fameTitle()}`;
+      setTxt($("#hud-name"), G.heroName);
+      setTxt($("#hud-sub"), `Level ${G.lvl} ${cls ? cls.title : ""} \xB7 ${fameTitle()}${Settings.difficulty && Settings.difficulty !== "normal" ? " \xB7 " + diff().name : ""}`);
       const hpF = G.hp / maxHp(), mpF = G.mp / maxMp();
       $(".orb.hp .fill").style.height = clamp2(hpF, 0, 1) * 100 + "%";
       $(".orb.mp .fill").style.height = clamp2(mpF, 0, 1) * 100 + "%";
@@ -52592,8 +52783,8 @@ void main(){
       this.orbMp.set(mpF);
       this.orbHp.draw(dt, now2);
       this.orbMp.draw(dt, now2);
-      $(".orb.hp .txt").textContent = `${Math.ceil(G.hp)} / ${Math.round(maxHp())}`;
-      $(".orb.mp .txt").textContent = `${Math.floor(G.mp)} / ${Math.round(maxMp())}`;
+      setTxt($(".orb.hp .txt"), `${Math.ceil(G.hp)} / ${Math.round(maxHp())}`);
+      setTxt($(".orb.mp .txt"), `${Math.floor(G.mp)} / ${Math.round(maxMp())}`);
       $("#lowhp").style.opacity = hpF < 0.3 ? (0.3 - hpF) * 2.5 * (0.7 + Math.sin(performance.now() / 200) * 0.3) : 0;
       $("#xpbar div").style.width = (G.lvl >= MAX_LEVEL ? 100 : G.xp / xpToNext() * 100) + "%";
       const pet = G.pet;
@@ -52602,10 +52793,10 @@ void main(){
       const petLbl = `${G.petName} \xB7 Lv ${G.pets?.[G.petSpecies]?.lvl || 1} ${PET_SPECIES[G.petSpecies]?.stages[petStage()] || ""}`;
       if (pet && !pet.dead && G.petAwayTime <= 0) {
         pb.firstElementChild.style.width = clamp2(pet.hp / pet.maxHp, 0, 1) * 100 + "%";
-        pb.lastElementChild.textContent = formName ? `${G.petName} \xB7 ${formName} ${Math.ceil(G.petFormTime)}s` : petLbl;
+        setTxt(pb.lastElementChild, formName ? `${G.petName} \xB7 ${formName} ${Math.ceil(G.petFormTime)}s` : petLbl);
       } else {
         pb.firstElementChild.style.width = "0%";
-        pb.lastElementChild.textContent = G.petAwayTime > 0 ? `${G.petName} is selling in town (${Math.ceil(G.petAwayTime)}s)` : `${G.petName} is resting in town`;
+        setTxt(pb.lastElementChild, G.petAwayTime > 0 ? `${G.petName} is selling in town (${Math.ceil(G.petAwayTime)}s)` : `${G.petName} is resting in town`);
       }
       $("#hud-points").classList.toggle("hidden", !(G.statPoints || G.skillPoints || starPoints()));
       const buffs = [];
@@ -52623,32 +52814,38 @@ void main(){
         this._bk = bk;
         $("#hud-buffs").innerHTML = buffs.map(([ic, t, n]) => `<div class="buff" title="${n}">${skillIcon(ic)}<span>${Math.ceil(t)}</span></div>`).join("");
       }
-      $("#hud-loc").textContent = G.level.kind === "town" ? "Hollowmere" : G.level.kind === "interior" ? G.level.title : `Sunken Wells \xB7 Floor ${G.level.floor}`;
-      $("#hud-clock").textContent = G.level.safe ? clockText() : "";
+      setTxt($("#hud-loc"), G.level.kind === "town" ? "Hollowmere" : G.level.kind === "interior" ? G.level.title : `Sunken Wells \xB7 Floor ${G.level.floor}`);
+      setTxt($("#hud-clock"), G.level.safe ? clockText() : "");
       this.updateAutoChip();
       const boss = G.level.kind === "dungeon" && G.level.entities.find((e) => e.type === "enemy" && e.boss && !e.dead && e.aggro && flatDist(e.pos, G.player.pos) < 24);
       const bb = $("#boss-bar");
       bb.classList.toggle("hidden", !boss);
       if (boss) {
         const ph = boss.bb?.phase || 1;
-        bb.querySelector(".bn").innerHTML = `${boss.data.name}${boss.bb?.enraged ? ' <span style="color:#ff4433">\xB7 ENRAGED</span>' : ""} <small>Phase ${ph} / 3</small>`;
+        {
+          const bn = bb.querySelector(".bn"), h2 = `${boss.data.name}${boss.bb?.enraged ? ' <span style="color:#ff4433">\xB7 ENRAGED</span>' : ""} <small>Phase ${ph} / 3</small>`;
+          if (bn._h !== h2) {
+            bn._h = h2;
+            bn.innerHTML = h2;
+          }
+        }
         bb.querySelector(".bf").style.width = clamp2(boss.hp / boss.maxHp, 0, 1) * 100 + "%";
-        bb.querySelector(".bt").textContent = `${Math.ceil(boss.hp).toLocaleString()} / ${Math.ceil(boss.maxHp).toLocaleString()}`;
+        setTxt(bb.querySelector(".bt"), `${Math.ceil(boss.hp).toLocaleString()} / ${Math.ceil(boss.maxHp).toLocaleString()}`);
       }
-      $("#hud-gold").textContent = `${G.gold.toLocaleString()} gold`;
-      $("#hud-fame").textContent = `Fame: ${fameTitle()}`;
+      setTxt($("#hud-gold"), `${G.gold.toLocaleString()} gold`);
+      setTxt($("#hud-fame"), `Fame: ${fameTitle()}`);
       const q = G.quest;
-      $("#hud-quest").textContent = q ? `\u25C6 ${q.title}: ${q.done ? "Complete! Return to town" : q.type === "slay" ? `${q.progress}/${q.count}` : `floor ${q.floor}`}` : "";
+      setTxt($("#hud-quest"), q ? `\u25C6 ${q.title}: ${q.done ? "Complete! Return to town" : q.type === "slay" ? `${q.progress}/${q.count}` : `floor ${q.floor}`}` : "");
       let tg = pl.hover && pl.hover.type === "enemy" && !pl.hover.dead ? pl.hover : pl.lastHit && !pl.lastHit.dead && pl.lastHit.root.parent ? pl.lastHit : null;
       if (tg && tg === boss) tg = null;
       $("#hud-target").classList.toggle("hidden", !tg);
       if (tg) {
         const n = $("#hud-target-name");
-        n.textContent = tg.displayName();
+        setTxt(n, tg.displayName());
         n.style.color = tg.boss ? "#ff6644" : tg.elite ? "#ffcc33" : "#e8dcc0";
         const b2 = $("#hud-target .bar");
         b2.firstElementChild.style.width = clamp2(tg.hp / tg.maxHp, 0, 1) * 100 + "%";
-        b2.lastElementChild.textContent = `${Math.ceil(tg.hp)} / ${Math.round(tg.maxHp)}`;
+        setTxt(b2.lastElementChild, `${Math.ceil(tg.hp)} / ${Math.round(tg.maxHp)}`);
       }
       for (const k2 of SLOTKEYS) {
         const id = G.hotbar[k2];
@@ -52667,7 +52864,7 @@ void main(){
           t = el("span", "cdt");
           s2.appendChild(t);
         }
-        t.textContent = left > 0.05 && cdMax >= 1.5 ? left >= 10 ? Math.ceil(left) : left.toFixed(1) : "";
+        setTxt(t, left > 0.05 && cdMax >= 1.5 ? left >= 10 ? Math.ceil(left) : left.toFixed(1) : "");
         if (s2._wasCd && left <= 0) {
           s2.classList.remove("ready");
           void s2.offsetWidth;
@@ -52675,9 +52872,9 @@ void main(){
         }
         s2._wasCd = left > 0;
       }
-      this.slotEls.hp.querySelector(".cnt").textContent = G.hpPotions;
-      this.slotEls.mp.querySelector(".cnt").textContent = G.mpPotions;
-      this.slotEls.scroll.querySelector(".cnt").textContent = G.scrolls;
+      setTxt(this.slotEls.hp.querySelector(".cnt"), G.hpPotions);
+      setTxt(this.slotEls.mp.querySelector(".cnt"), G.mpPotions);
+      setTxt(this.slotEls.scroll.querySelector(".cnt"), G.scrolls);
       $("#help").classList.toggle("hidden", !Settings.showHelp);
       const padOn = !!this.main.pad?.active;
       if (padOn !== this.helpPad) {
@@ -53493,6 +53690,8 @@ void main(){
       <h3><span>Graphics</span></h3>
       <div class="setrow"><span>Quality</span><select id="set-q"><option value="low">Low (fastest)</option><option value="medium">Medium (glow, SMAA)</option><option value="high">High (ambient occlusion, MSAA, soft shadows)</option><option value="ultra">Ultra (sharper shadows, full resolution)</option></select></div>
       <div class="setrow"><span>Render scale <small class="muted">(lower is faster)</small></span><span><input type="range" min="50" max="100" step="5" value="${Math.round((Settings.renderScale || 1) * 100)}" id="set-rs"> <span id="sv-rs">${Math.round((Settings.renderScale || 1) * 100)}%</span></span></div>
+      ${check("adaptiveRes", "Hold 60 fps (lowers 3D resolution a little only when needed)")}
+      ${check("showFps", "Show frame rate")}
       <div class="setrow"><span>Sharpening</span><span><input type="range" min="0" max="100" value="${Math.round((Settings.sharpen ?? 0.35) * 100)}" id="set-sh"> <span id="sv-sh">${Math.round((Settings.sharpen ?? 0.35) * 100)}%</span></span></div>
       <div class="setrow"><span>Fullscreen</span><button class="small" id="set-fs">Toggle (F11)</button></div>
       <h3><span>Mature content</span></h3>
@@ -53500,14 +53699,18 @@ void main(){
       <div class="setrow"><span>Blood and gore</span><select id="set-gore"><option value="off">Off</option><option value="low">Light</option><option value="max">Maximum</option></select></div>
       ${check("profanity", "Strong language")}${check("barks", "Characters talk while you play")}
       <div class="muted" style="font-size:12px">This game is rated Mature (violence, gore, strong language). You can tone it down here at any time.</div>
-      <h3><span>Gameplay</span></h3>${check("damageNumbers", "Show damage numbers")}${check("screenShake", "Screen shake")}${check("autoLoot", "Auto-pick up potions")}${check("showHelp", "Show key hints")}
+      <h3><span>Gameplay</span></h3>${check("damageNumbers", "Show damage numbers")}${check("screenShake", "Screen shake")}${check("autoLoot", "Auto-pick up potions")}${check("autoEquip", "Auto-equip better armour when picked up (not weapons)")}${check("showHelp", "Show key hints")}
+      <div class="setrow"><span>Difficulty</span><select id="set-diff">${Object.entries(DIFFICULTIES).map(([k2, d2]) => `<option value="${k2}">${d2.name}: ${d2.note}</option>`).join("")}</select></div>
+      <div class="muted" style="font-size:12px">Harder settings give foes more life and damage, add more of them, and pay more experience, gold and magic find. Changes apply to monsters on the next floor you enter.</div>
       <h3><span>Auto-attack</span></h3>${check("autoAttack", "Attack nearby foes automatically (V)")}
       <div class="setrow"><span>Auto-attack with</span><select id="set-am"><option value="basic">Basic attack</option>${["rmb", "q", "w", "e", "r"].map((k2) => `<option value="${k2}">${k2.toUpperCase()} slot${G.hotbar?.[k2] ? ": " + skillName(G.hotbar[k2]) : ""}</option>`).join("")}</select></div>
       <div class="setrow"><span>Auto-attack range</span><span><input type="range" min="3" max="14" value="${Settings.autoRange}" id="set-ar"> <span id="sv-ar">${Settings.autoRange}m</span></span></div>
       <h3><span>Controls</span></h3>${check("pcStick", "Show the on-screen walking joystick (mouse)")}
       <div class="muted" style="font-size:12px">With a skill chosen, it is cast whenever it is ready and you have the mana; otherwise you use your basic attack. Moving by clicking always wins.</div>
       <h3><span>Interface</span></h3>
-      <div class="setrow"><span>Interface size</span><span><input type="range" min="60" max="140" step="5" value="${Math.round((Settings.uiScale ?? 1) * 100)}" data-u="uiScale"> <span id="sv-uiScale">${Math.round((Settings.uiScale ?? 1) * 100)}%</span></span></div>
+      <div class="setrow"><span>HUD size <small class="muted">(orbs, skill bar, name plate, map)</small></span><span><input type="range" min="50" max="200" step="5" value="${Math.round((Settings.hudScale ?? 1) * 100)}" data-u="hudScale"> <span id="sv-hudScale">${Math.round((Settings.hudScale ?? 1) * 100)}%</span></span></div>
+      ${check("showPortrait", "Show my portrait next to the hero name")}
+      <div class="setrow"><span>Menu and window size</span><span><input type="range" min="60" max="140" step="5" value="${Math.round((Settings.uiScale ?? 1) * 100)}" data-u="uiScale"> <span id="sv-uiScale">${Math.round((Settings.uiScale ?? 1) * 100)}%</span></span></div>
       <div class="setrow"><span>HUD opacity</span><span><input type="range" min="30" max="100" step="5" value="${Math.round((Settings.hudOpacity ?? 1) * 100)}" data-u="hudOpacity"> <span id="sv-hudOpacity">${Math.round((Settings.hudOpacity ?? 1) * 100)}%</span></span></div>
       <div class="setrow"><span>Colour theme</span><select id="set-theme">${Object.entries(UI_THEMES).map(([k2, t]) => `<option value="${k2}">${t.name}</option>`).join("")}</select></div>
       ${check("showMinimap", "Show minimap")}${check("showLog", "Show message log")}
@@ -53532,6 +53735,12 @@ void main(){
       $("#set-gore", body).onchange = (e) => {
         Settings.gore = e.target.value;
         saveSettings();
+      };
+      $("#set-diff", body).value = Settings.difficulty || "normal";
+      $("#set-diff", body).onchange = (e) => {
+        Settings.difficulty = e.target.value;
+        saveSettings();
+        msg(`Difficulty: ${diff().name}. ${diff().note}.`, "#ffcc66");
       };
       $("#set-am", body).value = Settings.autoMode;
       $("#set-am", body).onchange = (e) => {
@@ -54136,7 +54345,7 @@ void main(){
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.7.5 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.7.6 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
         if (hasSave()) this.confirmNew();
@@ -54895,7 +55104,8 @@ void main(){
       const q = Settings.quality;
       const rs = Settings.renderScale || 1;
       const prMax = q === "ultra" ? 2 : q === "high" ? 1.5 : q === "medium" ? 1.25 : 1;
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, prMax) * rs);
+      this.basePR = Math.min(window.devicePixelRatio || 1, prMax) * rs;
+      this.renderer.setPixelRatio(this.basePR * (this.dyn || 1));
       this.renderer.shadowMap.enabled = q !== "low";
       this.renderer.shadowMap.type = q === "low" || q === "medium" ? PCFShadowMap : PCFSoftShadowMap;
       this.renderer.shadowMap.needsUpdate = true;
@@ -54976,7 +55186,7 @@ void main(){
         const sz = this.renderer.getDrawingBufferSize(new Vector2());
         if (this.grade) {
           this.grade.uniforms.resolution.value.copy(sz);
-          this.grade.uniforms.sharpen.value = (Settings.sharpen ?? 0.35) + (1 - (Settings.renderScale || 1)) * 0.8;
+          this.grade.uniforms.sharpen.value = (Settings.sharpen ?? 0.35) + (1 - (Settings.renderScale || 1) * (this.dyn || 1)) * 0.8;
         }
       }
       this.camera.aspect = w2 / h2;
@@ -55708,7 +55918,58 @@ void main(){
         w2.material.emissiveIntensity = (i ? 0.8 : 0.5) + Math.sin(t * 1.4 + i) * 0.15;
       });
     }
+    // Adaptive resolution: when frames start taking longer than 60 fps allows, the 3D view renders at a
+    // slightly lower resolution (the HUD stays sharp); when there is headroom again it climbs back to full.
+    dynTick() {
+      const now2 = performance.now(), d2 = now2 - (this._dynLast || now2);
+      this._dynLast = now2;
+      if (this.menuMode || !this.ready || d2 <= 0 || d2 > 120) return;
+      const D3 = this._dyn || (this._dyn = { sum: 0, n: 0, good: 0, coolT: 0, cap: 1 });
+      D3.sum += d2;
+      D3.n++;
+      if (D3.sum < 1e3) return;
+      const avg = D3.sum / D3.n;
+      D3.sum = 0;
+      D3.n = 0;
+      this.fpsAvg = 1e3 / avg;
+      const fe = document.getElementById("hud-fps");
+      if (fe) {
+        fe.style.display = Settings.showFps ? "" : "none";
+        if (Settings.showFps) fe.textContent = `${Math.round(this.fpsAvg)} fps \xB7 3D ${Math.round((this.dyn || 1) * 100)}%`;
+      }
+      if (Settings.adaptiveRes === false) {
+        if (this.dyn && this.dyn !== 1) this.setDyn(1);
+        return;
+      }
+      D3.coolT = Math.max(0, D3.coolT - 1);
+      const cur = this.dyn || 1;
+      if (avg > 18.2) {
+        D3.good = 0;
+        if (cur > 0.6) {
+          D3.cap = cur;
+          D3.coolT = 12;
+          this.setDyn(Math.max(0.6, cur - (avg > 25 ? 0.12 : 0.06)));
+        }
+      } else if (avg < 17.4) {
+        D3.good++;
+        if (D3.coolT <= 0 && D3.good >= 4 && cur < 1) {
+          D3.good = 0;
+          const up = Math.min(1, cur + 0.05);
+          if (up <= D3.cap + 1e-6 || D3.coolT <= 0) {
+            this.setDyn(up);
+            D3.cap = Math.max(D3.cap, up);
+          }
+        }
+      } else D3.good = 0;
+    }
+    setDyn(v3) {
+      this.dyn = v3;
+      if (!this.basePR) return;
+      this.renderer.setPixelRatio(this.basePR * v3);
+      this.resize();
+    }
     frame() {
+      this.dynTick();
       const dt = Math.min(this.maxDt || 0.05, this.clock.getDelta());
       const t = this.clock.elapsedTime;
       const L3 = G.level;
