@@ -16,7 +16,7 @@ import { SIGNS, STARS, starRank, starPoints, starPointsTotal, canLearn, learnSta
 import { Barks } from './barks.js';
 import { BUFF_DEFS, perkDesc } from './perks.js';
 import { REAL_OK, HAIR_STYLES, BEARDS, EYE_COLORS, SKIN_PRESETS, HAIR_COLORS, HIGHLIGHT_COLORS, defaultLook, fullLook } from './realchar.js';
-import { exportSaveCode, parseSaveCode, storeImportedSave } from './state.js';
+import { exportSaveCode, parseSaveCode, storeImportedSave, listChars, deleteChar, MAX_CHARS } from './state.js';
 import { applyUI, UI_THEMES } from './uiprefs.js';
 import { SKIN_TONES, DETAIL_OPTIONS, SCARF_COLORS, CLASS_DETAILS } from './details.js';
 import { clockText } from './daynight.js';
@@ -24,6 +24,7 @@ import { PET_SPECIES, PET_SKILLS, PET_TREES, PET_TIER_LEVEL, PET_MAX_RANK, PET_M
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const SLOTKEYS = ['rmb', 'q', 'w', 'e', 'r'];
 const KEYLABEL = { rmb: 'RMB', q: 'Q', w: 'W', e: 'E', r: 'R' };
 
@@ -1316,14 +1317,26 @@ export class UI {
     const m = $('#menu');
     m.classList.remove('hidden');
     this.open.menu = true;
+    const chars = listChars();
     m.innerHTML = `<div class="logo-wrap"><img class="logo-glow" src="assets/ui/logo.webp" alt=""><img class="logo" src="assets/ui/logo.webp" alt="HOLLOWMERE"></div><div class="subtitle">THE SUNKEN WELLS</div>
-      <button id="m-cont" class="primary" ${hasSave() ? '' : 'disabled'}>Continue</button>
-      <button id="m-new">New Hero</button>
+      ${chars.length ? `<div id="m-chars">${chars.map((c, i) => {
+        const where = c.loc && c.loc.kind === 'dungeon' ? `Floor ${c.loc.floor}` : 'Hollowmere';
+        const ago = c.savedAt ? new Date(c.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+        return `<div class="charcard ${i === 0 ? 'last' : ''}" data-id="${c.id}"><div class="cbadge">${(CLASSES[c.cls] ? CLASSES[c.cls].title : c.cls)[0]}</div>
+          <div class="cinfo"><b>${esc(c.name)}</b><span>Level ${c.lvl} ${CLASSES[c.cls] ? CLASSES[c.cls].title : c.cls}${c.race === 'alien' ? ' · Grey Alien' : ''}</span><span class="muted">${where}${ago ? ' · ' + ago : ''}${i === 0 ? ' · last played' : ''}</span></div>
+          <button class="cplay primary" data-play="${c.id}">Play</button><button class="cdel" data-del="${c.id}" title="Delete this hero">✕</button></div>`;
+      }).join('')}</div>` : ''}
+      <button id="m-new">${chars.length ? 'New Hero' : 'New Hero'}</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ''}
-      <div class="foot">An original action RPG · v0.7.8 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
-    $('#m-new').onclick = () => { sfx('ui'); if (hasSave()) this.confirmNew(); else this.main.openCreation(); };
-    $('#m-cont').onclick = () => { sfx('ui'); this.main.continueGame(); };
+      <div class="foot">An original action RPG · v0.7.9 · 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) · Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+    $('#m-new').onclick = () => { sfx('ui'); if (chars.length >= MAX_CHARS) this.toast(`You can keep ${MAX_CHARS} heroes. Delete one first.`, true); else this.main.openCreation(); };
+    m.querySelectorAll('[data-play]').forEach((b) => (b.onclick = () => { sfx('ui'); this.main.continueGame(b.dataset.play); }));
+    m.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => {
+      sfx('ui'); const c = chars.find((x) => x.id === b.dataset.del); if (!c) return;
+      m.classList.add('hidden');
+      this.choice(`Delete ${c.name}?`, `${c.name}, level ${c.lvl} ${CLASSES[c.cls] ? CLASSES[c.cls].title : c.cls}, will be gone for good.`, [['Delete hero', () => { deleteChar(c.id); this.showMenu(); }], ['Keep', () => this.showMenu()]]);
+    }));
     $('#m-set').onclick = () => { sfx('ui'); m.classList.add('hidden'); this.renderSettings(true); };
     if (window.hm) $('#m-quit').onclick = () => window.close();
   }

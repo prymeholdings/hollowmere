@@ -1,7 +1,7 @@
 {
   "name": "hollowmere",
   "productName": "Hollowmere",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "description": "Hollowmere: The Sunken Wells - an original action RPG dungeon crawler",
   "main": "electron/main.js",
   "author": "Hollowmere",

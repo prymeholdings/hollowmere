@@ -51,6 +51,33 @@ ipcMain.on('hm-load', (e) => {
   }
   e.returnValue = null;
 });
+// one file per hero: userData/characters/<id>.json (atomic write, previous copy kept as .bak)
+const charDir = () => path.join(app.getPath('userData'), 'characters');
+const okId = (id) => typeof id === 'string' && /^[a-z0-9_-]{1,24}$/i.test(id);
+ipcMain.on('hm-slot-save', (e, id, json) => {
+  try {
+    if (!okId(id) || typeof json !== 'string') throw new Error('bad slot');
+    fs.mkdirSync(charDir(), { recursive: true });
+    const f = path.join(charDir(), id + '.json'), tmp = f + '.tmp';
+    fs.writeFileSync(tmp, json);
+    if (fs.existsSync(f)) fs.copyFileSync(f, f.replace(/\.json$/, '.bak.json'));
+    fs.renameSync(tmp, f);
+    e.returnValue = true;
+  } catch (err) { e.returnValue = false; }
+});
+ipcMain.on('hm-slot-load', (e, id) => {
+  if (!okId(id)) { e.returnValue = null; return; }
+  for (const f of [path.join(charDir(), id + '.json'), path.join(charDir(), id + '.bak.json')]) {
+    try { const t = fs.readFileSync(f, 'utf8'); JSON.parse(t); e.returnValue = t; return; } catch (err) { /* try next */ }
+  }
+  e.returnValue = null;
+});
+ipcMain.on('hm-slot-list', (e) => {
+  try { e.returnValue = fs.readdirSync(charDir()).filter((n) => /\.json$/.test(n) && !/\.bak\.json$/.test(n)).map((n) => n.replace(/\.json$/, '')).filter(okId); } catch (err) { e.returnValue = []; }
+});
+ipcMain.on('hm-slot-del', (e, id) => {
+  try { if (okId(id)) for (const n of [id + '.json', id + '.bak.json', id + '.json.tmp']) fs.rmSync(path.join(charDir(), n), { force: true }); e.returnValue = true; } catch (err) { e.returnValue = false; }
+});
 ipcMain.on('hm-quit', () => app.quit());
 
 app.whenReady().then(() => {

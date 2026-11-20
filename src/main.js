@@ -346,9 +346,9 @@ class Main {
     msg(`Left-click to move and attack. Right-click for ${first.name}. Press K to learn new skills.`, '#b8a888');
     saveGame();
   }
-  continueGame() {
-    const loc = savedLoc();
-    if (!loadGame()) { this.ui.toast('No save found', true); return; }
+  continueGame(id) {
+    const loc = savedLoc(id);
+    if (!loadGame(id)) { this.ui.toast('No save found', true); return; }
     if (G.look && G.look.shoulders === undefined) Object.assign(G.look, CLASS_DETAILS[G.cls] || {}, { skin: G.look.skin || '#ffffff' });
     this.ui.hideMenu();
     this.menuMode = false; document.body.classList.remove('cine-on');

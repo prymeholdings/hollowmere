@@ -22,6 +22,7 @@ export function msg(t, c = '#e6e6e6') { G.onMessage(t, c); }
 export function reset() {
   bonusCache = null;
   Object.assign(G, {
+    slotId: null,
     heroName: 'Wanderer', cls: 'Knight', look: { cape: '#8c1f1f', hooded: false, helm: true, gear: 0, tint: '#ffffff', height: 1, capeOn: true, pet: 'fox' }, lvl: 1, xp: 0, statPoints: 0, skillPoints: 1,
     base: { str: 10, dex: 10, vit: 10, mag: 10 },
     skills: { ...SKILL_ZERO },
@@ -320,15 +321,59 @@ export function restockShop() {
 // saving
 const SAVE_FIELDS = ['heroName', 'cls', 'look', 'hotbar', 'lvl', 'xp', 'statPoints', 'skillPoints', 'base', 'skills', 'gold', 'fame', 'fameRank', 'hp', 'mp', 'hpPotions', 'mpPotions', 'scrolls', 'equipment', 'backpack', 'deepest', 'portalFloor', 'quest', 'questOffer', 'petName', 'petForm', 'petFormTime', 'shopStock', 'kills', 'fishCaught', 'fishLuck', 'wellsCleared', 'timeOfDay', 'petSpecies', 'pets', 'stars'];
 export let lastSaved = 0;
-function readSaves() {
+// ---- several heroes: every hero is its own slot (own localStorage key + own file in the PC app), listed on the title menu
+const IDX_KEY = 'hollowmere_chars_v1', MIG_KEY = 'hollowmere_chars_migrated';
+const slotKey = (id) => 'hollowmere_char_' + id;
+const okId = (id) => /^[a-z0-9_-]{1,24}$/i.test(id || '');
+const newSlotId = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+const parseSafe = (r) => { try { const d = r ? JSON.parse(r) : null; return d && typeof d === 'object' ? d : null; } catch (e) { return null; } };
+function readSlot(id) {
+  if (!okId(id)) return null;
   const out = [];
-  try { const r = localStorage.getItem(SAVE_KEY); if (r) out.push(JSON.parse(r)); } catch (e) { /* corrupt local copy */ }
-  try { const r = window.hm && window.hm.loadFile && window.hm.loadFile(); if (r) out.push(JSON.parse(r)); } catch (e) { /* corrupt file copy */ }
+  try { const d = parseSafe(localStorage.getItem(slotKey(id))); if (d) out.push(d); } catch (e) { /* storage blocked */ }
+  try { const d = parseSafe(window.hm && window.hm.slotLoad && window.hm.slotLoad(id)); if (d) out.push(d); } catch (e) { /* ipc */ }
   out.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-  return out;
+  return out[0] || null;
+}
+function slotIds() {
+  const ids = new Set();
+  try { for (const i of JSON.parse(localStorage.getItem(IDX_KEY) || '[]')) if (okId(i)) ids.add(i); } catch (e) { /* none */ }
+  try { for (const i of (window.hm && window.hm.slotList && window.hm.slotList()) || []) if (okId(i)) ids.add(i); } catch (e) { /* ipc */ }
+  return [...ids];
+}
+function writeIndex(ids) { try { localStorage.setItem(IDX_KEY, JSON.stringify([...new Set(ids)])); } catch (e) { /* quota */ } }
+function writeSlot(id, json) {
+  let ok = false;
+  try { localStorage.setItem(slotKey(id), json); ok = localStorage.getItem(slotKey(id)) === json; } catch (e) { /* quota */ }
+  try { if (window.hm && window.hm.slotSave) ok = window.hm.slotSave(id, json) === true || ok; } catch (e) { /* ipc */ }
+  if (ok) writeIndex([...slotIds(), id]);
+  return ok;
+}
+// the single save of older versions becomes the first hero
+function migrateLegacy() {
+  try { if (localStorage.getItem(MIG_KEY)) return; localStorage.setItem(MIG_KEY, '1'); } catch (e) { return; }
+  const old = [];
+  try { const d = parseSafe(localStorage.getItem(SAVE_KEY)); if (d) old.push(d); } catch (e) { /* none */ }
+  try { const d = parseSafe(window.hm && window.hm.loadFile && window.hm.loadFile()); if (d) old.push(d); } catch (e) { /* none */ }
+  old.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  if (old[0] && old[0].heroName && old[0].cls) writeSlot(newSlotId(), JSON.stringify(old[0]));
+}
+export function listChars() {
+  migrateLegacy();
+  return slotIds().map((id) => ({ id, d: readSlot(id) })).filter((x) => x.d && x.d.heroName && x.d.cls)
+    .map(({ id, d }) => ({ id, name: d.heroName, cls: d.cls, lvl: d.lvl || 1, race: d.look && d.look.race, savedAt: d.savedAt || 0, loc: d.loc, deepest: d.deepest || 0, fame: d.fameRank }))
+    .sort((a, b) => b.savedAt - a.savedAt);
+}
+export const MAX_CHARS = 12;
+export function deleteChar(id) {
+  if (!okId(id)) return;
+  try { localStorage.removeItem(slotKey(id)); } catch (e) { /* ignore */ }
+  try { if (window.hm && window.hm.slotDel) window.hm.slotDel(id); } catch (e) { /* ipc */ }
+  writeIndex(slotIds().filter((i) => i !== id));
 }
 export function saveGame() {
   if (!G.heroName || !G.cls) return false;
+  if (!okId(G.slotId)) G.slotId = newSlotId();
   const d = { v: 2, savedAt: Date.now() };
   for (const k of SAVE_FIELDS) d[k] = G[k];
   d.gold += G.petPendingGold || 0;
@@ -338,21 +383,18 @@ export function saveGame() {
   }
   let json;
   try { json = JSON.stringify(d); } catch (e) { msg('Could not save the game!', '#ff5555'); return false; }
-  let ok = false;
-  try { localStorage.setItem(SAVE_KEY, json); ok = localStorage.getItem(SAVE_KEY) === json; } catch (e) { /* quota */ }
-  try { if (window.hm && window.hm.saveFile) ok = window.hm.saveFile(json) === true || ok; } catch (e) { /* ipc */ }
-  if (!ok) { msg('Could not save the game!', '#ff5555'); return false; }
+  if (!writeSlot(G.slotId, json)) { msg('Could not save the game!', '#ff5555'); return false; }
   lastSaved = d.savedAt;
   return true;
 }
-export const hasSave = () => readSaves().length > 0;
+export const hasSave = () => listChars().length > 0;
 // ---- moving a save between devices: a short text code ("HM1:" + gzipped JSON in base64url) or a file holding it
 const b64u = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const unb64u = (t) => { const s = atob(t.replace(/-/g, '+').replace(/_/g, '/')); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; };
 const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
 export async function exportSaveCode() {
   if (G.player) saveGame();
-  const d = readSaves()[0];
+  const d = (G.slotId && readSlot(G.slotId)) || (listChars()[0] && readSlot(listChars()[0].id));
   if (!d) return null;
   const json = new TextEncoder().encode(JSON.stringify(d));
   if (typeof CompressionStream === 'undefined') return 'HM0:' + b64u(json);
@@ -371,17 +413,15 @@ export async function parseSaveCode(text) {
 // write an imported save as the newest save on this device (it wins over older local copies)
 export function storeImportedSave(d) {
   d = { ...d, savedAt: Date.now() };
-  const json = JSON.stringify(d);
-  let ok = false;
-  try { localStorage.setItem(SAVE_KEY, json); ok = localStorage.getItem(SAVE_KEY) === json; } catch (e) { /* quota */ }
-  try { if (window.hm && window.hm.saveFile) ok = window.hm.saveFile(json) === true || ok; } catch (e) { /* ipc */ }
-  return ok;
+  return writeSlot(newSlotId(), JSON.stringify(d));
 }
-export function savedLoc() { const d = readSaves()[0]; return d && d.loc; }
-export function loadGame() {
-  const d = readSaves()[0];
+export function savedLoc(id) { const d = readSlot(id || (listChars()[0] || {}).id); return d && d.loc; }
+export function loadGame(id) {
+  id = id || (listChars()[0] || {}).id;
+  const d = readSlot(id);
   if (!d) return false;
   reset();
+  G.slotId = id;
   const look0 = { ...G.look };
   for (const k of SAVE_FIELDS) if (k in d) G[k] = d[k];
   G.look = { ...look0, ...(d.look || {}) };
