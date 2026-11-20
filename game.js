@@ -34550,6 +34550,7 @@ void main() {
     theme: "bronze",
     showMinimap: true,
     showLog: true,
+    pcStick: true,
     touchSize: 1,
     touchOpacity: 0.9,
     leftHanded: false
@@ -40461,6 +40462,10 @@ void main() {
     Dodge_Forward: "roll_forward",
     Dodge_Left: "dodge_left",
     Dodge_Right: "dodge_right",
+    Running_C: "run",
+    Death_C_Skeletons: "death_backward",
+    Skeletons_Inactive_Floor_Pose: "sleep",
+    Spawn_Ground_Skeletons: "cheer",
     PickUp: "pick_up",
     Lie_Idle: "sleep",
     Wave: "wave",
@@ -40793,6 +40798,18 @@ void main() {
         for (const f2 of this.anims) f2(this.gt, dt);
       }
     }
+    // colour the whole body (undead pallor, ogre green) and give it an inner glow
+    tint(color, emissive = 0, emi = 0) {
+      const c2 = new Color(color);
+      this.scene.traverse((o2) => {
+        if (!o2.isMesh || !o2.material || !o2.material.color) return;
+        o2.material.color.multiply(c2);
+        if (emissive && o2.material.emissive) {
+          o2.material.emissive.set(emissive);
+          o2.material.emissiveIntensity = emi || 0.4;
+        }
+      });
+    }
     applyLook() {
     }
     setGear() {
@@ -41065,6 +41082,31 @@ void main() {
     const res = await buildReal(look || {}, cls, kind, { detail: opts.detail || "medium", garmentStyles: opts.cloth, armor: al });
     return res ? new RealChar(res, { scale: opts.scale ?? (look && look.height || 1), look }) : null;
   }
+  var EL = (o2) => ({ sex: "m", weight: 0.15, muscle: 0.2, skinTone: 1, hairStyle: "short01", hairColor: "#1a1410", beard: "none", eyes: "brown", hairHi: "", ...o2 });
+  var ENEMY_BUILDS = {
+    skel_minion: { look: EL({ weight: 0.05, muscle: 0.1 }), kind: "none", cloth: { tattered_shirt: { pattern: "tattered", color: "#5a5448" }, tattered_pants: { pattern: "tattered", color: "#3e382e" } }, params: { hair: "none", skinTint: "#8f9a86", age: 0.9, facialHair: "none" }, scale: 1.12, weapon: "Skeleton_Blade" },
+    skel_rogue: { look: EL({ weight: 0.1, muscle: 0.3 }), kind: "leathers", cloth: {}, params: { hair: "none", skinTint: "#98a090", age: 0.8, facialHair: "none" }, scale: 1.1, weapon: "Skeleton_Crossbow", hood: true },
+    skel_warrior: { look: EL({ weight: 0.35, muscle: 0.8 }), kind: "plate", cloth: {}, params: { hair: "none", skinTint: "#8a9488", age: 0.8, facialHair: "none" }, scale: 1.22, weapon: "Skeleton_Axe", shield: "Skeleton_Shield_Small_A", plate: 5593700, helm: "Skeleton_Warrior_Helmet" },
+    skel_mage: { look: EL({ weight: 0.1, muscle: 0.15 }), kind: "robe", cloth: {}, params: { hair: "none", skinTint: "#a0a498", age: 0.85, facialHair: "none" }, scale: 1.12, weapon: "Skeleton_Staff", helm: "Skeleton_Mage_Hat" },
+    brute: { look: EL({ weight: 0.9, muscle: 1 }), kind: "furs", cloth: {}, params: { hair: "none", skinTint: "#7e9a6c", age: 0.55, facialHair: "none" }, scale: 1.62, weapon: "Skeleton_Axe" }
+  };
+  async function buildEnemyReal(shape, o2 = {}) {
+    const spec = ENEMY_BUILDS[shape];
+    if (!REAL_OK || !spec) return null;
+    const res = await buildReal(spec.look, "Knight", spec.kind, { detail: "low", garmentStyles: spec.cloth, params: spec.params });
+    if (!res) return null;
+    const rc = new RealChar(res, { scale: (o2.scale || 1) * spec.scale, look: spec.look });
+    if (spec.plate) rc.wearPlates({ tint: spec.plate, glow: 0, rarity: 0 }, "plate");
+    else if (spec.kind === "robe") rc.wearRobeTrim({ tint: 6965920, glow: 2228292 }, "robe");
+    if (spec.helm) rc.wearHelm({ vis: spec.helm, tint: 16777215 });
+    if (spec.kind === "furs") rc.wearPlates({ tint: 8022608, glow: 0, rarity: 0 }, "furs");
+    if (spec.kind === "leathers") rc.wearPlates({ tint: 6969928, glow: 0, rarity: 0 }, "leathers");
+    if (spec.weapon) rc.holdItem({ vis: spec.weapon, tint: o2.weaponTint || 16777215 }, "right");
+    if (spec.shield) rc.holdItem({ vis: spec.shield, tint: 16777215 }, "left");
+    if (o2.tint) rc.tint(o2.tint, o2.emissive || 0, o2.emissiveIntensity || 0.5);
+    return rc;
+  }
+  var prewarmEnemies = () => Promise.all(Object.keys(ENEMY_BUILDS).map((k2) => buildReal(ENEMY_BUILDS[k2].look, "Knight", ENEMY_BUILDS[k2].kind, { detail: "low", garmentStyles: ENEMY_BUILDS[k2].cloth, params: ENEMY_BUILDS[k2].params })));
 
   // node_modules/three/examples/jsm/shaders/GTAOShader.js
   var GTAOShader = {
@@ -44341,15 +44383,17 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     face(p2, dt = 0) {
       const dx = p2.x - this.pos.x, dz = p2.z - this.pos.z;
       if (dx * dx + dz * dz < 1e-4) return;
-      const target = Math.atan2(dx, dz);
+      const rot = this.body || this.root;
+      const base = this.body ? this.root.rotation.y : 0;
+      const target = Math.atan2(dx, dz) - base;
       if (!dt) {
-        this.root.rotation.y = target;
+        rot.rotation.y = target;
         return;
       }
-      let d2 = target - this.root.rotation.y;
+      let d2 = target - rot.rotation.y;
       while (d2 > Math.PI) d2 -= Math.PI * 2;
       while (d2 < -Math.PI) d2 += Math.PI * 2;
-      this.root.rotation.y += d2 * Math.min(1, dt * 14);
+      rot.rotation.y += d2 * Math.min(1, dt * 14);
     }
     followPath(path, speed, dt) {
       if (!path.length) return false;
@@ -44595,57 +44639,130 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     switch (shape) {
       case "blob": {
         g2 = new Group();
-        const b2 = sphere(0.55, color);
-        b2.scale.set(1, 0.7, 1);
-        b2.position.y = 0.4;
+        const col2 = new Color(color);
+        const b2 = sphere(0.7, color);
+        b2.scale.set(1, 0.72, 1);
+        b2.position.y = 0.5;
+        b2.material.transparent = true;
+        b2.material.opacity = 0.82;
+        b2.material.roughness = 0.15;
         g2.add(b2);
-        for (const x2 of [-0.18, 0.18]) {
-          const e = sphere(0.07, 16777062, 3);
-          e.position.set(x2, 0.6, 0.45);
+        const core = sphere(0.28, col2.clone().multiplyScalar(1.6).getHex(), 1.4);
+        core.position.set(0, 0.5, 0);
+        core.castShadow = false;
+        g2.add(core);
+        for (let i = 0; i < 7; i++) {
+          const a2 = i / 7 * Math.PI * 2;
+          const bub = sphere(0.1 + i % 3 * 0.04, col2.clone().multiplyScalar(1.2).getHex(), 0.3);
+          bub.position.set(Math.cos(a2) * 0.45, 0.4 + i % 3 * 0.15, Math.sin(a2) * 0.45);
+          bub.material.transparent = true;
+          bub.material.opacity = 0.7;
+          bub.castShadow = false;
+          g2.add(bub);
+        }
+        for (const x2 of [-0.22, 0.22]) {
+          const w2 = sphere(0.1, 16777215, 0.3);
+          w2.position.set(x2, 0.72, 0.56);
+          g2.add(w2);
+          const e = sphere(0.05, 1114112, 0);
+          e.position.set(x2, 0.72, 0.65);
           g2.add(e);
         }
+        const mouth = box(0.3, 0.05, 0.05, 2230280);
+        mouth.position.set(0, 0.52, 0.66);
+        g2.add(mouth);
         break;
       }
       case "beast": {
         g2 = new Group();
-        const b2 = box(0.55, 0.45, 1, color);
-        b2.position.y = 0.45;
-        g2.add(b2);
-        const hd = sphere(0.26, color);
-        hd.position.set(0, 0.6, 0.6);
+        const fur = new Color(color), dark = fur.clone().multiplyScalar(0.55).getHex();
+        const torso = sphere(0.42, color);
+        torso.scale.set(0.8, 0.85, 1.55);
+        torso.position.set(0, 0.8, 0);
+        g2.add(torso);
+        const chest = sphere(0.4, color);
+        chest.scale.set(0.95, 1, 1);
+        chest.position.set(0, 0.85, 0.5);
+        g2.add(chest);
+        const neck = cyl(0.17, 0.24, 0.5, color);
+        neck.position.set(0, 1, 0.85);
+        neck.rotation.x = -0.9;
+        g2.add(neck);
+        const hd = sphere(0.27, color);
+        hd.scale.set(0.95, 0.85, 1.15);
+        hd.position.set(0, 1.12, 1.15);
         g2.add(hd);
-        for (const x2 of [-0.1, 0.1]) {
-          const e = sphere(0.05, 16724770, 3);
-          e.position.set(x2, 0.68, 0.82);
+        const snout = box(0.2, 0.17, 0.4, dark);
+        snout.position.set(0, 1.03, 1.45);
+        g2.add(snout);
+        for (const x2 of [-0.07, 0.07]) {
+          const fang = cone(0.03, 0.14, 15788760);
+          fang.rotation.x = Math.PI;
+          fang.position.set(x2, 0.9, 1.55);
+          g2.add(fang);
+        }
+        for (const x2 of [-0.14, 0.14]) {
+          const ear = cone(0.08, 0.22, dark);
+          ear.position.set(x2, 1.38, 1.05);
+          g2.add(ear);
+          const e = sphere(0.045, 16726548, 4);
+          e.position.set(x2 * 0.85, 1.2, 1.37);
           g2.add(e);
         }
-        for (const [x2, z2] of [[-0.2, -0.35], [0.2, -0.35], [-0.2, 0.35], [0.2, 0.35]]) {
-          const l2 = box(0.12, 0.3, 0.12, new Color(color).multiplyScalar(0.6));
-          l2.position.set(x2, 0.15, z2);
-          g2.add(l2);
+        for (let i = 0; i < 6; i++) {
+          const sp = cone(0.07, 0.26, dark);
+          sp.position.set(0, 1.28 - i * 0.03, 0.7 - i * 0.28);
+          sp.rotation.x = -0.25;
+          g2.add(sp);
         }
-        const tail = box(0.06, 0.06, 0.6, color);
-        tail.position.set(0, 0.55, -0.75);
-        tail.rotation.x = 0.4;
+        for (const [x2, z2, f2] of [[-0.24, -0.55, 1], [0.24, -0.55, 1], [-0.24, 0.55, 0], [0.24, 0.55, 0]]) {
+          const up = cyl(0.09, 0.12, 0.45, color);
+          up.position.set(x2, 0.55, z2);
+          up.rotation.x = f2 ? 0.35 : -0.25;
+          g2.add(up);
+          const lo = cyl(0.06, 0.08, 0.42, dark);
+          lo.position.set(x2, 0.22, z2 + (f2 ? -0.1 : 0.06));
+          lo.rotation.x = f2 ? -0.3 : 0.2;
+          g2.add(lo);
+          const paw = box(0.14, 0.07, 0.22, dark);
+          paw.position.set(x2, 0.03, z2 + 0.04);
+          g2.add(paw);
+        }
+        const tail = cone(0.1, 0.9, color);
+        tail.position.set(0, 0.95, -1.15);
+        tail.rotation.x = -1.2;
         g2.add(tail);
         break;
       }
       case "wisp": {
         g2 = new Group();
-        const core = sphere(0.35, color, 2.5);
-        core.position.y = 1.1;
+        const core = sphere(0.3, color, 3);
+        core.position.y = 1.2;
         core.castShadow = false;
         g2.add(core);
-        const halo = sphere(0.55, color, 0.6);
-        halo.material.transparent = true;
-        halo.material.opacity = 0.3;
-        halo.position.y = 1.1;
-        halo.castShadow = false;
-        g2.add(halo);
-        const tail = cone(0.3, 0.8, color, 1.5);
-        tail.rotation.x = Math.PI;
-        tail.position.y = 0.55;
-        g2.add(tail);
+        for (let i = 0; i < 3; i++) {
+          const halo = sphere(0.5 + i * 0.18, color, 0.5);
+          halo.material.transparent = true;
+          halo.material.opacity = 0.22 - i * 0.05;
+          halo.position.y = 1.2;
+          halo.castShadow = false;
+          g2.add(halo);
+        }
+        for (let i = 0; i < 5; i++) {
+          const w2 = cone(0.16 - i * 0.02, 0.7, color, 1.2);
+          w2.material.transparent = true;
+          w2.material.opacity = 0.55;
+          w2.rotation.x = Math.PI;
+          w2.position.set(Math.sin(i * 1.7) * 0.2, 0.7 - i * 0.12, Math.cos(i * 1.7) * 0.2);
+          w2.castShadow = false;
+          g2.add(w2);
+        }
+        for (const x2 of [-0.1, 0.1]) {
+          const e = sphere(0.05, 16777215, 5);
+          e.position.set(x2, 1.25, 0.26);
+          e.castShadow = false;
+          g2.add(e);
+        }
         g2.userData.float = true;
         break;
       }
@@ -44693,6 +44810,24 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     skel_rogue: { model: "Skeleton_Rogue", weapon: "Skeleton_Crossbow" },
     brute: { model: "Barbarian", hero: true }
   };
+  function upgradeEnemy(e, d2, boss, elite) {
+    const fallback = () => {
+      if (!e.dead && e.model) e.model.visible = true;
+    };
+    const timer = setTimeout(fallback, 6e3);
+    buildEnemyReal(d2.shape, { scale: e.realScale / 1.15, tint: d2.tint, emissive: boss ? d2.final ? 3803770 : 5574912 : elite ? 3351040 : d2.emissive, emissiveIntensity: 0.5 }).then((rc) => {
+      clearTimeout(timer);
+      if (!rc || !e.root.parent && e.removed) return fallback();
+      const old = e.char, oldModel = e.model;
+      e.root.remove(oldModel);
+      e.char = rc;
+      e.model = rc.root;
+      e.root.add(rc.root);
+      if (e.dormant) rc.once("Skeletons_Inactive_Floor_Pose", { hold: true });
+      else rc.play("Idle");
+      old?.dispose?.();
+    }).catch(fallback);
+  }
   var Enemy = class extends Entity {
     constructor(d2, floor, elite, boss) {
       super("enemy");
@@ -44709,7 +44844,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.speed = d2.speed;
       this.xp = Math.floor(d2.xp * (1 + 0.35 * f1 + 0.012 * f1 * f1) * (elite ? 3 : 1));
       this.ranged = !!d2.ranged;
-      const s2 = boss ? 1.9 : elite ? 1.2 : 1;
+      const s2 = boss ? 2.4 : elite ? 1.4 : 1.15;
       const sk = SKEL[d2.shape];
       if (sk) {
         this.char = new CharModel(sk.model, { scale: 0.72 * s2 * (d2.shape === "brute" ? 1.25 : 1), tint: d2.tint, emissive: boss || elite ? boss ? d2.final ? 3803770 : 5574912 : 3351040 : d2.emissive, emissiveIntensity: 0.5 });
@@ -44718,6 +44853,11 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         if (sk.shield) this.char.attach(sk.shield, true);
         this.model = this.char.root;
         this.isSkel = !sk.hero;
+        this.realScale = s2;
+        if (REAL_OK && Settings.realistic !== false) {
+          this.model.visible = false;
+          this.wantReal = true;
+        }
       } else {
         this.model = buildEnemyModel(d2.shape, d2.color, s2);
       }
@@ -44729,6 +44869,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         ring(this.root, 0.9 * s2, boss ? 16724770 : 16763955);
         this.label = { text: boss ? d2.name : `Champion ${d2.name}`, color: boss ? "#ff6644" : "#ffcc33", y: 2.4 * s2, always: true };
       }
+      if (this.wantReal) upgradeEnemy(this, d2, boss, elite);
       this.aggro = false;
       this.atkCd = rand(0.5, 1.5);
       this.repath = 0;
@@ -45028,6 +45169,22 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.target = null;
       this.char.once("Spawn_Ground_Skeletons", { timeScale: 1.5 });
       this.spawnT = 0.8;
+      if (REAL_OK && Settings.realistic !== false) {
+        this.char.root.visible = false;
+        buildEnemyReal("skel_minion", { scale: 1.1, tint: 10092475, emissive: 2783818, emissiveIntensity: 0.8 }).then((rc) => {
+          if (!rc) {
+            this.char.root.visible = true;
+            return;
+          }
+          this.root.remove(this.char.root);
+          this.char = rc;
+          this.root.add(rc.root);
+          if (this.dead) rc.once("Death_C_Skeletons", { hold: true });
+          else rc.play("Idle");
+        }).catch(() => {
+          this.char.root.visible = true;
+        });
+      }
     }
     takeDamage(d2) {
       if (this.dead) return;
@@ -45926,7 +46083,10 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
           this.char = new CharModel(L3.model, { scale: 0.75 });
           this.char.setGear(L3.gear, L3.gear);
           this.char.setCapeColor(L3.cape);
-          add(this.char.root);
+          this.body = new Group();
+          this.root.add(this.body);
+          this.body.add(this.char.root);
+          if (REAL_OK && Settings.realistic !== false) this.char.root.visible = false;
           if (kind === "merchant") {
             const t = add(prop("crates_stacked"));
             t.scale.setScalar(0.4);
@@ -46150,33 +46310,30 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       if (this.kind === "relic") G.level.remove(this);
     }
   };
-  var realNpcs = 0;
   function resetRealNpcBudget() {
-    realNpcs = 0;
   }
   async function upgradeNpc(ent, specKey, scale = 1, gear = null, helm = false, d2 = null) {
     const spec = NPC_SPECS[specKey];
     if (!REAL_OK || Settings.realistic === false || !spec) return;
     const phone = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
     const key = ["merchant", "quest", "healer", "blacksmith", "beastmaster"].includes(specKey);
-    const budget = phone ? 6 : Settings.quality === "low" ? 10 : Settings.quality === "ultra" ? 40 : 24;
-    if (!key && !(d2 && d2.indoor) && realNpcs >= budget) return;
-    if (phone && !key && !(d2 && d2.indoor)) return;
-    realNpcs++;
-    if (phone) {
-      await new Promise((r) => setTimeout(r, 6e3));
-      if (ent.gone) return;
-    }
+    await new Promise((r) => setTimeout(r, phone ? key ? 4e3 : 9e3 : key ? 300 : 1500));
+    if (ent.gone) return;
     const rc = await realFor(spec.look, "Knight", null, lookOf, { kind: spec.kind, cloth: spec.cloth, scale, detail: "low" });
-    if (!rc || ent.gone || !ent.root.parent && !ent.root) return;
+    if (!rc) {
+      if (ent.char?.root) ent.char.root.visible = true;
+      return;
+    }
+    if (ent.gone) return;
     if (spec.armor) {
       rc.wearPlates({ tint: 14674164, glow: 0, rarity: 0 }, "plate");
       if (helm) rc.wearHelm({ vis: "Knight_Helmet", tint: 14674164 });
     }
     for (const g2 of gear && gear.weapon || []) rc.holdItem({ vis: g2, tint: 14674164 }, "right");
     for (const g2 of gear && gear.offhand || []) rc.holdItem({ vis: g2, tint: 14674164 }, "left");
-    ent.root.remove(ent.char.root);
-    ent.root.add(rc.root);
+    const host = ent.body || ent.root;
+    host.remove(ent.char.root);
+    host.add(rc.root);
     ent.char = rc;
     rc.play(ent.idleAnim || "Idle", 0);
   }
@@ -46196,6 +46353,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       this.char = new CharModel(d2.model, { scale: 0.72 * (d2.scale || 1), tint: d2.tint });
       this.char.applyLook({ gear: d2.gear ? [d2.gear] : [{ weapon: [], offhand: [] }], headgear: d2.headgear, cape: d2.cape || "#6a4a2a" }, { helm: !!d2.helm, capeOn: d2.capeOn !== false, cape: d2.cape, gear: 0 });
       this.root.add(this.char.root);
+      if (REAL_OK && Settings.realistic !== false && NPC_SPECS[d2.spec || VILLAGER_SPEC[d2.name] || "v_m1"]) this.char.root.visible = false;
       this.label = { text: d2.name, color: "#e8dcc0", y: 2.2 * (d2.scale || 1), always: false };
       this.idleAnim = { sit: "Sit_Floor_Idle", fish: "Sit_Floor_Idle", chair: "Sit_Chair_Idle", guard: "2H_Melee_Idle", perform: "Spellcasting" }[this.mode] || "Idle";
       this.char.play(this.idleAnim, 0);
@@ -47846,9 +48004,12 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     constructor(main) {
       this.main = main;
       this.on = isTouch() || /[?&]touch=1/.test(location.search);
-      if (!this.on) return;
+      this.stick = { id: null, x: 0, y: 0, ox: 0, oy: 0, rad: 55 };
+      if (!this.on) {
+        this.pcStick();
+        return;
+      }
       document.body.classList.add("touch");
-      this.stick = { id: null, x: 0, y: 0, ox: 0, oy: 0 };
       this.attackHeld = false;
       this.holdT = 0;
       this.build();
@@ -47890,7 +48051,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       const stick = root.querySelector("#t-stick"), knob = stick.querySelector(".knob");
       const S3 = this.stick;
       const setKnob = () => {
-        knob.style.transform = `translate(${S3.x * 42}px, ${S3.y * 42}px)`;
+        knob.style.transform = `translate(${S3.x * S3.rad * 0.76}px, ${S3.y * S3.rad * 0.76}px)`;
       };
       stick.addEventListener("touchstart", (e) => {
         e.preventDefault();
@@ -47899,6 +48060,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         const r = stick.getBoundingClientRect();
         S3.ox = r.left + r.width / 2;
         S3.oy = r.top + r.height / 2;
+        S3.rad = r.width * 0.4;
         this.moveStick(t);
         setKnob();
       }, { passive: false });
@@ -47931,6 +48093,49 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         b2.addEventListener("touchcancel", up, { passive: false });
       }
       for (const b2 of root.querySelectorAll("#t-top button")) b2.addEventListener("click", () => this.panel(b2.dataset.p));
+    }
+    // a small joystick for mouse users on PC (hold it with the mouse to walk; clicking the world still works)
+    pcStick() {
+      const root = document.createElement("div");
+      root.id = "touch";
+      root.innerHTML = '<div id="t-stick" title="Hold to walk"><div class="knob"></div></div>';
+      document.body.appendChild(root);
+      document.body.classList.add("pcstick");
+      this.root = root;
+      const stick = root.querySelector("#t-stick"), knob = stick.querySelector(".knob"), S3 = this.stick;
+      const setKnob = () => {
+        knob.style.transform = `translate(${S3.x * S3.rad * 0.76}px, ${S3.y * S3.rad * 0.76}px)`;
+      };
+      const stop = (e) => {
+        e.stopPropagation();
+      };
+      stick.addEventListener("mousedown", (e) => {
+        stop(e);
+        e.preventDefault();
+        const r = stick.getBoundingClientRect();
+        S3.ox = r.left + r.width / 2;
+        S3.oy = r.top + r.height / 2;
+        S3.rad = r.width * 0.4;
+        S3.id = "mouse";
+        this.moveStick(e);
+        setKnob();
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (S3.id === "mouse") {
+          this.moveStick(e);
+          setKnob();
+        }
+      });
+      window.addEventListener("mouseup", () => {
+        if (S3.id === "mouse") {
+          S3.id = null;
+          S3.x = S3.y = 0;
+          setKnob();
+        }
+      });
+      stick.addEventListener("mouseup", stop);
+      stick.addEventListener("click", stop);
+      this.applyPrefs = () => document.body.classList.toggle("pcstick-off", Settings.pcStick === false);
     }
     // two-finger pinch on the game view zooms the camera (also +/- buttons); remembered between sessions
     pinch() {
@@ -47974,7 +48179,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     }
     moveStick(t) {
       const S3 = this.stick;
-      let dx = (t.clientX - S3.ox) / 55, dy = (t.clientY - S3.oy) / 55;
+      let dx = (t.clientX - S3.ox) / S3.rad, dy = (t.clientY - S3.oy) / S3.rad;
       const l2 = Math.hypot(dx, dy);
       if (l2 > 1) {
         dx /= l2;
@@ -48028,11 +48233,15 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       document.body.classList.toggle("portrait", h2 > w2);
     }
     update(dt) {
-      if (!this.on) return;
       const m3 = this.main, p2 = G.player;
-      this.root.classList.toggle("hidden", !!(m3.menuMode || !p2));
-      document.body.classList.toggle("panel-open", m3.ui.anyPanel());
-      for (const b2 of this.root.querySelectorAll(".sk")) {
+      if (!this.on) {
+        this.root.classList.toggle("hidden", !!(m3.menuMode || !p2) || Settings.pcStick === false);
+        document.body.classList.toggle("panel-open", m3.ui.anyPanel());
+      } else {
+        this.root.classList.toggle("hidden", !!(m3.menuMode || !p2));
+        document.body.classList.toggle("panel-open", m3.ui.anyPanel());
+      }
+      if (this.on) for (const b2 of this.root.querySelectorAll(".sk")) {
         const id = G.hotbar?.[b2.dataset.slot];
         const key = id && (G.skills[id] || 0) > 0 ? id : "";
         if (b2.dataset.id !== key) {
@@ -48067,7 +48276,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         this.moving = false;
         if (!p2.target) p2.path = [];
       }
-      if (this.attackHeld) {
+      if (this.on && this.attackHeld) {
         this.holdT -= dt;
         if (this.holdT <= 0) {
           this.holdT = 0.25;
@@ -48942,6 +49151,42 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
     t.anisotropy = 8;
     return t;
   }
+  var WEATHER = /* @__PURE__ */ new WeakMap();
+  function weatherMaterial(src, strength = 1) {
+    let m3 = WEATHER.get(src);
+    if (m3) return m3;
+    m3 = src.clone();
+    m3.roughness = Math.min(1, (src.roughness ?? 0.8) * 0.2 + 0.82);
+    m3.metalness = 0;
+    m3.onBeforeCompile = (sh) => {
+      sh.uniforms.wStr = { value: strength };
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWp; varying vec3 vWn;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvec4 wp4 = modelMatrix * vec4(position, 1.0); vWp = wp4.xyz; vWn = normalize(mat3(modelMatrix) * normal);");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+uniform float wStr; varying vec3 vWp; varying vec3 vWn;
+float wh(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float wn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(wh(i), wh(i + vec3(1,0,0)), f.x), mix(wh(i + vec3(0,1,0)), wh(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(wh(i + vec3(0,0,1)), wh(i + vec3(1,0,1)), f.x), mix(wh(i + vec3(0,1,1)), wh(i + vec3(1,1,1)), f.x), f.y), f.z); }`).replace("#include <map_fragment>", `#include <map_fragment>
+{ vec3 q = vWp; float n1 = wn(q * 2.2), n2 = wn(q * 7.0), n3 = wn(q * 19.0);
+  float stone = n1 * 0.5 + n2 * 0.33 + n3 * 0.17;
+  float ground = 1.0 - smoothstep(0.0, 1.6, vWp.y);
+  float side = 1.0 - abs(vWn.y);
+  float streak = wn(vec3(q.x * 5.0 + q.z * 5.0, q.y * 0.6, 0.0)) * smoothstep(0.0, 3.0, vWp.y) * side;
+  float tone = 0.72 + stone * 0.62;
+  tone *= 1.0 - ground * side * 0.38 * (0.6 + n2);
+  tone *= 1.0 - streak * 0.18;
+  diffuseColor.rgb *= mix(1.0, tone, 0.9 * wStr);
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.86, 0.7), ground * side * 0.35 * n1); }`);
+    };
+    m3.customProgramCacheKey = () => "weather";
+    WEATHER.set(src, m3);
+    return m3;
+  }
+  function weatherize(root, strength = 1) {
+    root.traverse((o2) => {
+      if (o2.isMesh && o2.material && !o2.material.isShaderMaterial && !o2.material.transparent) o2.material = Array.isArray(o2.material) ? o2.material.map((x2) => weatherMaterial(x2, strength)) : weatherMaterial(o2.material, strength);
+    });
+  }
 
   // src/level.js
   var CELL2 = 2;
@@ -49535,6 +49780,9 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
       o2.position.copy(p2);
       o2.scale.setScalar(scale);
       o2.rotation.y = ry;
+      if (this.kind !== "dungeon" || /^(pillar|wall|floor)/.test(name)) {
+        if (/^(building_|fence|tent|tree|crate|barrel|wall|floor|pillar|weaponrack|resource_|pallet|well)/.test(name)) weatherize(o2, /^building_/.test(name) ? 1 : 0.7);
+      }
       this.root.add(o2);
       return o2;
     }
@@ -49998,10 +50246,15 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         const [cx, cy] = this.cellOf(b2.door);
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) doorCells.add(cx + dx + "," + (cy + dy));
       }
+      this.decoObjs = [];
       for (const [n, [x2, y2], sc] of deco) {
-        if (doorCells.has(Math.round(x2) + "," + Math.round(y2))) continue;
-        this.placeProp(n, this.toWorld(x2, y2), sc, rand(0, 6));
-        this.cells[this.idx(Math.round(x2), Math.round(y2))] = 2;
+        const cx = Math.round(x2), cy = Math.round(y2);
+        if (doorCells.has(cx + "," + cy)) continue;
+        if (this.cells[this.idx(cx, cy)] === 0) continue;
+        if (this.decoObjs.some((o3) => Math.hypot(o3.x - x2, o3.y - y2) < 0.85)) continue;
+        const o2 = this.placeProp(n, this.toWorld(x2, y2), sc, rand(0, 6));
+        this.cells[this.idx(cx, cy)] = 2;
+        this.decoObjs.push({ x: x2, y: y2, o: o2 });
       }
       for (let x2 = 2.5; x2 < 10; x2 += 1.5) {
         this.placeProp("fence_wood_straight", this.toWorld(x2, 33.2), 3.2, 0);
@@ -50060,6 +50313,7 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         [37, 76.2],
         [46.5, 76.2]
       ]) {
+        if (this.cells[this.idx(Math.round(x2), Math.round(y2))] === 0 || this.decoObjs.some((o2) => Math.hypot(o2.x - x2, o2.y - y2) < 0.9)) continue;
         const p2 = this.toWorld(x2, y2);
         const post = cyl(0.07, 0.09, 2.6, 2500134);
         post.position.copy(p2).setY(1.3);
@@ -50107,6 +50361,14 @@ void main(){ vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) dis
         e.root.position.copy(this.toWorld(...v2.at));
         if (v2.ry !== void 0) e.root.rotation.y = v2.ry;
         this.add(e);
+      }
+      for (const d2 of this.decoObjs || []) {
+        const w2 = this.toWorld(d2.x, d2.y);
+        if (this.entities.some((e) => e.kind && e.kind !== "well" && e.kind !== "portal" && Math.hypot(e.pos.x - w2.x, e.pos.z - w2.z) < 1.6)) {
+          d2.o.visible = false;
+          d2.o.parent && d2.o.parent.remove(d2.o);
+          this.cells[this.idx(Math.round(d2.x), Math.round(d2.y))] = 1;
+        }
       }
       for (const e of this.entities) if (e.kind && e.kind !== "well" && e.kind !== "portal" && e.kind !== "door") {
         const [x2, y2] = this.cellOf(e.pos);
@@ -51712,6 +51974,7 @@ void main(){
       <h3><span>Auto-attack</span></h3>${check("autoAttack", "Attack nearby foes automatically (V)")}
       <div class="setrow"><span>Auto-attack with</span><select id="set-am"><option value="basic">Basic attack</option>${["rmb", "q", "w", "e", "r"].map((k2) => `<option value="${k2}">${k2.toUpperCase()} slot${G.hotbar?.[k2] ? ": " + skillName(G.hotbar[k2]) : ""}</option>`).join("")}</select></div>
       <div class="setrow"><span>Auto-attack range</span><span><input type="range" min="3" max="14" value="${Settings.autoRange}" id="set-ar"> <span id="sv-ar">${Settings.autoRange}m</span></span></div>
+      <h3><span>Controls</span></h3>${check("pcStick", "Show the on-screen walking joystick (mouse)")}
       <div class="muted" style="font-size:12px">With a skill chosen, it is cast whenever it is ready and you have the mana; otherwise you use your basic attack. Moving by clicking always wins.</div>
       <h3><span>Interface</span></h3>
       <div class="setrow"><span>Interface size</span><span><input type="range" min="60" max="140" step="5" value="${Math.round((Settings.uiScale ?? 1) * 100)}" data-u="uiScale"> <span id="sv-uiScale">${Math.round((Settings.uiScale ?? 1) * 100)}%</span></span></div>
@@ -52349,7 +52612,7 @@ void main(){
       <button id="m-new">New Hero</button>
       <button id="m-set">Settings</button>
       ${window.hm ? '<button id="m-quit">Quit</button>' : ""}
-      <div class="foot">An original action RPG \xB7 v0.7.0 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
+      <div class="foot">An original action RPG \xB7 v0.7.1 \xB7 3D models by Kay Lousberg (KayKit, CC0), MakeHuman + ara3d humans (CC0/MIT) \xB7 Music: owner-supplied tracks, boss theme by cynicmusic (CC0)</div>`;
       $("#m-new").onclick = () => {
         sfx("ui");
         if (hasSave()) this.confirmNew();
@@ -53063,6 +53326,12 @@ void main(){
       this.ui = new UI(this);
       this.pad = new Pad(this);
       this.touch = new Touch(this);
+      setTimeout(() => {
+        try {
+          prewarmEnemies();
+        } catch (e) {
+        }
+      }, 2500);
       this.clock = new Clock();
       this.applyQuality();
       this.resize();
