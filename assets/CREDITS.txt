@@ -34,3 +34,15 @@ More Medieval Hexagon buildings and props (colour variants of taverns, markets, 
 wells, stages, crates, flags) and house furniture from KayKit Dungeon Remastered (beds, tables, chairs, shelves, kegs, plates,
 bottles, candles, trunks, banners, wooden floors, walls, doors and windows), all by Kay Lousberg under CC0 1.0.
 Building interiors, townsfolk routines and the expanded town layout are original work.
+
+---- Version 0.7.7 additions ----
+Skill and spell emblems: the shapes are icons from game-icons.net (https://game-icons.net) by Lorc, Delapouite and other
+contributors, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). The game extrudes them into 3D relief
+medallions at runtime (src/skillicon3d.js); the original vector shapes are in assets/icons/skill-icons.json.
+Sound effects: layered sample files (assets/sfx/*.ogg) from the Kenney audio packs (https://kenney.nl), CC0 1.0, mixed with the
+game's own synthesised sounds.
+Alien enemies (Grey Wretch, Grey Zapper, Void Grey, Abyssal Grey, The Pale Visitor): the alien character model, rig and texture were
+supplied by the owner (itch.io, GamesFromUnderground, "alien retro PS2 style model"). The owner is responsible for holding the rights to
+distribute this model. Its walk, run, attack, cast, hit and death animations were authored for Hollowmere.
+HOLLOWMERE title logo and installer / app icon: supplied by the owner.
+Title cinematic, 3D emblem renderer, walk-speed matching and all new gore, barks and difficulty settings: original work.
